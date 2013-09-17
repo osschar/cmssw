@@ -3,7 +3,11 @@ import FWCore.ParameterSet.Config as cms
 from RecoLuminosity.LumiProducer.lumiProducer_cff import *
 from RecoLocalMuon.Configuration.RecoLocalMuon_cff import *
 from RecoLocalCalo.Configuration.RecoLocalCalo_cff import *
-from RecoTracker.Configuration.RecoTracker_cff import *
+
+# MT as told by GC -- use post LS1 tracking
+# from RecoTracker.Configuration.RecoTracker_cff import *
+from RecoTracker.Configuration.RecoTrackerPostLS1_cff import *
+
 from RecoParticleFlow.PFClusterProducer.particleFlowCluster_cff import *
 from TrackingTools.Configuration.TrackingTools_cff import *
 # Global  reco
