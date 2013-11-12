@@ -13,7 +13,6 @@
 //
 // Original Author:  Ricardo Vasquez Sierra
 //         Created:  Wed Apr  9 12:43:02 CEST 2008
-// $Id: SiPixelErrorsDigisToCalibDigis.cc,v 1.9 2010/08/10 08:57:54 ursl Exp $
 //
 //
 
@@ -53,6 +52,8 @@ SiPixelErrorsDigisToCalibDigis::SiPixelErrorsDigisToCalibDigis(const edm::Parame
   daqBE_ = &*edm::Service<DQMStore>();
   folderMaker_ = new SiPixelFolderOrganizer();
 
+  tPixelCalibDigiError = consumes <edm::DetSetVector<SiPixelCalibDigiError> >(siPixelProducerLabel_);
+
 //  std::cout<<"siPixelProducerLabel_ = "<<siPixelProducerLabel_<<std::endl;
 //  std::cout<<"createOutputFile_= "<< createOutputFile_<<std::endl;
 //  std::cout<<"outpuFilename_= "<< outputFilename_<< std::endl;
@@ -86,7 +87,7 @@ SiPixelErrorsDigisToCalibDigis::analyze(const edm::Event& iEvent, const edm::Eve
   }
   
   Handle<DetSetVector<SiPixelCalibDigiError> > thePlaquettes;
-  iEvent.getByLabel(siPixelProducerLabel_, thePlaquettes);
+  iEvent.getByToken(tPixelCalibDigiError, thePlaquettes);
   // iEvent.getByLabel("siPixelCalibDigis", thePlaquettes);
   
   

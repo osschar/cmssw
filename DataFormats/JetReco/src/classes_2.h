@@ -1,5 +1,5 @@
-#ifndef JetObjects_classes_h
-#define JetObjects_classes_h
+#ifndef JetObjects2_classes_h
+#define JetObjects2_classes_h
 
 #include "DataFormats/JetReco/interface/BasicJetCollection.h"
 #include "DataFormats/JetReco/interface/BasicJet.h" 
@@ -53,7 +53,7 @@
 #include "DataFormats/Common/interface/Ptr.h"
 
 namespace {
-  struct dictionary {
+  struct dictionary2 {
     reco::FFTBasicJet jet_fft_3;
     reco::FFTBasicJetCollection o2_fft_3;
     reco::FFTBasicJetRef r2_fft_3;

@@ -59,9 +59,8 @@
 #include "DQMServices/Core/interface/MonitorElement.h"
 
 
-// Trigger Headers
-
-
+// GCT and RCT data formats
+#include "DataFormats/L1CaloTrigger/interface/L1CaloCollections.h"
 
 //
 // class declaration
@@ -80,6 +79,9 @@ public:
 protected:
 // Analyze
  void analyze(const edm::Event& e, const edm::EventSetup& c);
+
+// BeginRun
+  void beginRun(edm::Run const& iRun, edm::EventSetup const& iSetup);
 
 // BeginJob
  void beginJob(void);
@@ -134,10 +136,11 @@ private:
   std::string outputFile_; //file name for ROOT ouput
   bool verbose_;
   bool monitorDaemon_;
-  ofstream logFile_;
-
-  edm::InputTag rctSource_;
-
+  std::ofstream logFile_;
+  
+  edm::EDGetTokenT<L1CaloRegionCollection> rctSource_L1CRCollection_;
+  edm::EDGetTokenT<L1CaloEmCollection> rctSource_L1CEMCollection_;
+  
   /// filter TriggerType
   int filterTriggerType_;
 

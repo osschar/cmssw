@@ -2,8 +2,6 @@
  *
  * See header file for documentation
  *
- *  $Date: 2011/11/07 11:50:49 $
- *  $Revision: 1.4 $
  *
  *  \author Mika Huhtinen
  *
@@ -14,11 +12,10 @@
 #include "FWCore/Framework/interface/Event.h"
 #include "FWCore/Framework/interface/EventSetup.h"
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
+#include "FWCore/ParameterSet/interface/ConfigurationDescriptions.h"
+#include "FWCore/ParameterSet/interface/ParameterSetDescription.h"
 
 #include "DataFormats/Common/interface/Handle.h"
-
-#include "DataFormats/RecoCandidate/interface/RecoChargedCandidate.h"
-#include "DataFormats/RecoCandidate/interface/RecoChargedCandidateFwd.h"
 
 #include "DataFormats/HLTReco/interface/TriggerFilterObjectWithRefs.h"
 
@@ -30,7 +27,7 @@
 //
 // constructors and destructor
 //
- 
+
 HLTPixlMBForAlignmentFilter::HLTPixlMBForAlignmentFilter(const edm::ParameterSet& iConfig) : HLTFilter(iConfig),
     pixlTag_ (iConfig.getParameter<edm::InputTag>("pixlTag")),
     min_Pt_  (iConfig.getParameter<double>("MinPt")),
@@ -39,6 +36,7 @@ HLTPixlMBForAlignmentFilter::HLTPixlMBForAlignmentFilter(const edm::ParameterSet
     min_isol_  (iConfig.getParameter<double>("MinIsol"))
 
 {
+  pixlToken_ = consumes<reco::RecoChargedCandidateCollection>(pixlTag_);
   LogDebug("") << "MinPt cut " << min_Pt_   << "pixl: " << pixlTag_.encode();
   LogDebug("") << "Requesting : " << min_trks_ << " tracks from same vertex ";
   LogDebug("") << "Requesting tracks from same vertex eta-phi separation by " << min_sep_;
@@ -49,12 +47,24 @@ HLTPixlMBForAlignmentFilter::~HLTPixlMBForAlignmentFilter()
 {
 }
 
+void
+HLTPixlMBForAlignmentFilter::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
+  edm::ParameterSetDescription desc;
+  makeHLTFilterDescription(desc);
+  desc.add<edm::InputTag>("pixlTag",edm::InputTag("hltPixelCands"));
+  desc.add<double>("MinPt",5.0);
+  desc.add<unsigned int>("MinTrks",2);
+  desc.add<double>("MinSep",1.0);
+  desc.add<double>("MinIsol",0.05);
+  descriptions.add("hltPixlMBForAlignmentFilter",desc);
+}
+
 //
 // member functions
 //
 
 // ------------ method called to produce the data  ------------
-bool HLTPixlMBForAlignmentFilter::hltFilter(edm::Event& iEvent, const edm::EventSetup& iSetup, trigger::TriggerFilterObjectWithRefs & filterproduct)
+bool HLTPixlMBForAlignmentFilter::hltFilter(edm::Event& iEvent, const edm::EventSetup& iSetup, trigger::TriggerFilterObjectWithRefs & filterproduct) const
 {
    using namespace std;
    using namespace edm;
@@ -72,9 +82,7 @@ bool HLTPixlMBForAlignmentFilter::hltFilter(edm::Event& iEvent, const edm::Event
    // get hold of products from Event
 
    Handle<RecoChargedCandidateCollection> tracks;
-
-   iEvent.getByLabel(pixlTag_,tracks);
-
+   iEvent.getByToken(pixlToken_,tracks);
 
    // pixel tracks
    vector<double> etastore;
@@ -92,8 +100,8 @@ bool HLTPixlMBForAlignmentFilter::hltFilter(edm::Event& iEvent, const edm::Event
      etastore.clear();
      phistore.clear();
      itstore.clear();
-     for (ipixl=apixl; ipixl!=epixl; ipixl++){ 
-       const double& ztrk1 = ipixl->vz();                    
+     for (ipixl=apixl; ipixl!=epixl; ipixl++){
+       const double& ztrk1 = ipixl->vz();
        const double& etatrk1 = ipixl->momentum().eta();
        const double& phitrk1 = ipixl->momentum().phi();
        const double& pttrk1 = ipixl->pt();
@@ -123,7 +131,7 @@ bool HLTPixlMBForAlignmentFilter::hltFilter(edm::Event& iEvent, const edm::Event
        for (unsigned int i=0; i<itstore.size(); i++) {
          int nincone=0;
 //       check isolation wrt ALL tracks, not only those above ptcut
-         for (ipixl=apixl; ipixl!=epixl; ipixl++){ 
+         for (ipixl=apixl; ipixl!=epixl; ipixl++){
            double phidist=std::abs( phistore.at(i) - ipixl->momentum().phi() );
            double etadist=std::abs( etastore.at(i) - ipixl->momentum().eta() );
            double trkdist = sqrt(phidist*phidist + etadist*etadist);
@@ -163,7 +171,7 @@ bool HLTPixlMBForAlignmentFilter::hltFilter(edm::Event& iEvent, const edm::Event
              if (is_separated) itsep.push_back(locisol.at(j));
            }
          }
-         if (itsep.size() >= min_trks_) { 
+         if (itsep.size() >= min_trks_) {
            accept = true;
            break;
          }

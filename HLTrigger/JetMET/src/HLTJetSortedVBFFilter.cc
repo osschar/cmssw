@@ -2,10 +2,8 @@
  *
  * See header file for documentation
  *
- *  $Date: 2012/02/12 09:34:06 $
 
 
- *  $Revision: 1.5 $
  *
  *  \author Jacopo Bernardini
  *
@@ -77,8 +75,8 @@ HLTJetSortedVBFFilter<T>::fillDescriptions(edm::ConfigurationDescriptions& descr
 
 // ------------ method called to produce the data  ------------
 template<typename T>
-bool 
-HLTJetSortedVBFFilter<T>::hltFilter(edm::Event& event, const edm::EventSetup& setup,trigger::TriggerFilterObjectWithRefs& filterproduct)
+bool
+HLTJetSortedVBFFilter<T>::hltFilter(edm::Event& event, const edm::EventSetup& setup,trigger::TriggerFilterObjectWithRefs& filterproduct) const
 {
 
    using namespace std;
@@ -88,7 +86,7 @@ HLTJetSortedVBFFilter<T>::hltFilter(edm::Event& event, const edm::EventSetup& se
 
    typedef vector<T> TCollection;
    typedef Ref<TCollection> TRef;
-     
+
    bool accept(false);
 
    if (saveTags()) filterproduct.addCollectionTag(inputJets_);
@@ -157,8 +155,8 @@ HLTJetSortedVBFFilter<T>::hltFilter(edm::Event& event, const edm::EventSetup& se
    double ptsqq_bs   = (q1+q2).Pt();
    double ptsbb_bs   = (b1+b2).Pt();
    double signeta    = q1.Eta()*q2.Eta();
-   
-   if ( 
+
+   if (
 	(mqq_bs     > mqq_    ) &&
 	(deltaetaqq > detaqq_ ) &&
 	(deltaetabb < detabb_ ) &&

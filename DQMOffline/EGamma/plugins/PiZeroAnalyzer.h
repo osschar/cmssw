@@ -62,7 +62,6 @@
  **  
  **
  **  $Id: PiZeroAnalyzer
- **  $Date: 2010/03/10 16:03:10 $ 
  **  authors: 
  **   Nancy Marinelli, U. of Notre Dame, US  
  **   Jamie Antonelli, U. of Notre Dame, US
@@ -111,11 +110,10 @@ class PiZeroAnalyzer : public edm::EDAnalyzer
 
   edm::ParameterSet parameters_;
 
-  edm::InputTag barrelEcalHits_;
-  edm::InputTag endcapEcalHits_;  
-
-
-
+  //  edm::InputTag barrelEcalHits_;
+  //edm::InputTag endcapEcalHits_;  
+  edm::EDGetTokenT<edm::SortedCollection<EcalRecHit,edm::StrictWeakOrdering<EcalRecHit> > > barrelEcalHits_token_;
+  edm::EDGetTokenT<edm::SortedCollection<EcalRecHit,edm::StrictWeakOrdering<EcalRecHit> > > endcapEcalHits_token_;
   double minPhoEtCut_;
 
   double cutStep_;

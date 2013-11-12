@@ -24,6 +24,7 @@
 #include "TH1.h"
 #include "TH3.h"
 #include "TFile.h"
+#include <iostream>
 #include <string>
 #include <algorithm>
 #include <boost/shared_ptr.hpp>
@@ -67,7 +68,7 @@ Lumi3DReWeighting::Lumi3DReWeighting( std::string generatedFile,
 
 }
 
-Lumi3DReWeighting::Lumi3DReWeighting( std::vector< float > MC_distr, std::vector< float > Lumi_distr,
+Lumi3DReWeighting::Lumi3DReWeighting( const std::vector< float >& MC_distr, const std::vector< float >& Lumi_distr,
 				      std::string WeightOutputFile ="") {
 
   weightFileName_ = WeightOutputFile;

@@ -16,6 +16,9 @@
 #include "G4GFlashSpot.hh"
 #include "G4ParticleTable.hh"
 
+#include "G4SystemOfUnits.hh"
+#include "G4PhysicalConstants.hh"
+
 //#define DebugLog
 
 CaloSD::CaloSD(G4String name, const DDCompactView & cpv,
@@ -290,14 +293,14 @@ bool CaloSD::getStepInfo(G4Step* aStep) {
   return flag;
 }
 
-G4ThreeVector CaloSD::setToLocal(G4ThreeVector global, const G4VTouchable* touch) {
+G4ThreeVector CaloSD::setToLocal(const G4ThreeVector& global, const G4VTouchable* touch) {
 
   G4ThreeVector localPoint = touch->GetHistory()->GetTopTransform().TransformPoint(global);
   
   return localPoint;  
 }
 
-G4ThreeVector CaloSD::setToGlobal(G4ThreeVector local, const G4VTouchable* touch) {
+G4ThreeVector CaloSD::setToGlobal(const G4ThreeVector& local, const G4VTouchable* touch) {
 
   G4ThreeVector globalPoint = touch->GetHistory()->GetTopTransform().Inverse().TransformPoint(local);
   
@@ -448,7 +451,7 @@ void CaloSD::updateHit(CaloG4Hit* aHit) {
   previousID = currentID;
 }
 
-void CaloSD::resetForNewPrimary(G4ThreeVector point, double energy) { 
+void CaloSD::resetForNewPrimary(const G4ThreeVector& point, double energy) { 
   entrancePoint  = point;
   entranceLocal  = setToLocal(entrancePoint, preStepPoint->GetTouchable());
   incidentEnergy = energy;

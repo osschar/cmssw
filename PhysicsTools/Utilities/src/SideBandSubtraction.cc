@@ -49,7 +49,7 @@ inline std::string stringify(const T& t)
     return "err";
   return o.str();
 } 
-Double_t SideBandSubtract::getYield(std::vector<SbsRegion> Regions, RooAbsPdf *PDF)
+Double_t SideBandSubtract::getYield(const std::vector<SbsRegion>& Regions, RooAbsPdf *PDF)
 {
   if(PDF==NULL || SeparationVariable==NULL)
     return 0.0;
@@ -193,7 +193,7 @@ void SideBandSubtract::printResults(string prefix)
     cerr <<"ERROR: printResults, Data or ModelPDF is NULL!\n";
 
   string result_outname = prefix + "_fit_results.txt";
-  ofstream output(result_outname.c_str(),std::ios::out);
+  std::ofstream output(result_outname.c_str(),std::ios::out);
   if(!output)
     {
       cout <<"ERROR: Could not open file for writing!\n";
@@ -335,7 +335,7 @@ SideBandSubtract::SideBandSubtract(RooAbsPdf *model_shape,
 				   RooAbsPdf *bkg_shape, 
 				   RooDataSet* data,
 				   RooRealVar* sep_var,
-				   vector<TH1F*> base,
+				   const vector<TH1F*>& base,
 				   bool verb
 				   )
   : BackgroundPDF(bkg_shape), 

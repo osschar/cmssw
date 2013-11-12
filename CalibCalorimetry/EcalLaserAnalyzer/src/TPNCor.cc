@@ -1,7 +1,6 @@
 /* 
  *  \class TPNCor
  *
- *  $Date: 2009/06/02 12:55:21 $
  *  \author: Julie Malcles - CEA/Saclay
  */
 
@@ -12,7 +11,7 @@
 #include <iomanip>
 #include <fstream>
 
-#include "math.h"
+#include <cmath>
 
 using namespace std;
 //using namespace edm;
@@ -40,7 +39,7 @@ TPNCor::TPNCor(string filename)
   char c;
   int gain;
   double aa, bb, cc;
-  ifstream fin;
+  std::ifstream fin;
   
   if( test ) {
     fclose( test );

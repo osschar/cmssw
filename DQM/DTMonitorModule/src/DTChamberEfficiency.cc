@@ -208,7 +208,7 @@ void DTChamberEfficiency::analyze(const Event & event,
       const DetLayer *initialLayer = theService->detLayerGeometry()->idToLayer(id);
 
       TrajectoryStateOnSurface init_fs = trans_track.innermostMeasurementState();
-      FreeTrajectoryState *init_fs_free = init_fs.freeState();
+      const FreeTrajectoryState *init_fs_free = init_fs.freeState();
 
       //get the list of compatible layers
       vector<const DetLayer*> layer_list = compatibleLayers(initialLayer,*init_fs_free,alongMomentum);
@@ -287,7 +287,7 @@ bool DTChamberEfficiency::chamberSelection(const DetId& idDetLay, reco::Transien
 
 //riempi una per ogni segmento e una per segmento sopra 12 hit
 
-MeasurementContainer DTChamberEfficiency::segQualityCut(const MeasurementContainer seg_list) const
+MeasurementContainer DTChamberEfficiency::segQualityCut(const MeasurementContainer& seg_list) const
 {
 
   MeasurementContainer result;

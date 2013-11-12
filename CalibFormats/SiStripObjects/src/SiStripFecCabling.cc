@@ -1,4 +1,3 @@
-// Last commit: $Id: SiStripFecCabling.cc,v 1.28 2008/11/28 14:17:43 bainbrid Exp $
 
 #include "FWCore/Utilities/interface/typelookup.h"
 #include "CalibFormats/SiStripObjects/interface/SiStripFecCabling.h"
@@ -178,7 +177,7 @@ const SiStripModule& SiStripFecCabling::module( const uint32_t& dcu_id ) const {
       }
     }
   }
-  static FedChannelConnection temp;
+  static const FedChannelConnection temp;
   static const SiStripModule module(temp);
   return module;
 }

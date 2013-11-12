@@ -3,7 +3,6 @@
 // Class  :     SiStripDetCabling
 // Original Author:  dkcira
 //         Created:  Wed Mar 22 12:24:33 CET 2006
-// $Id: SiStripDetCabling.cc,v 1.24 2011/09/16 13:49:22 demattia Exp $
 #include "FWCore/Utilities/interface/typelookup.h"
 #include "CalibFormats/SiStripObjects/interface/SiStripDetCabling.h"
 #include "FWCore/MessageLogger/interface/MessageLogger.h"
@@ -144,7 +143,7 @@ const std::vector<const FedChannelConnection *>& SiStripDetCabling::getConnectio
   if( ! (detcabl_it==fullcabling_.end()) ){  // found detid in fullcabling_
     return ( detcabl_it->second );
   }else{ // DKwarn : is there need for output message here telling det_id does not exist?
-    static std::vector<const FedChannelConnection *> default_empty_fedchannelconnection;
+    const static std::vector<const FedChannelConnection *> default_empty_fedchannelconnection;
     return default_empty_fedchannelconnection;
   }
 }
@@ -158,7 +157,7 @@ const FedChannelConnection& SiStripDetCabling::getConnection( uint32_t det_id, u
     }
   }
   // if did not match none of the above, return some default value - DKwarn : also output message?
-  static FedChannelConnection default_empty_fedchannelconnection;
+  const static FedChannelConnection default_empty_fedchannelconnection;
   return default_empty_fedchannelconnection;
 }
 

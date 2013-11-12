@@ -13,6 +13,7 @@ Test of the EventPrincipal class.
 #include "DataFormats/Provenance/interface/ParameterSetID.h"
 #include "DataFormats/Provenance/interface/Parentage.h"
 #include "DataFormats/Provenance/interface/ProcessConfiguration.h"
+#include "DataFormats/Provenance/interface/ProcessHistoryRegistry.h"
 #include "DataFormats/Provenance/interface/ProductID.h"
 #include "DataFormats/Provenance/interface/ProductRegistry.h"
 #include "DataFormats/Provenance/interface/Timestamp.h"
@@ -156,7 +157,7 @@ void test_ep::setUp() {
   pProductRegistry_->addProduct(*fake_single_process_branch("rick", "USER2", "rick"));
   pProductRegistry_->setFrozen();
   boost::shared_ptr<edm::BranchIDListHelper> branchIDListHelper(new edm::BranchIDListHelper());
-  branchIDListHelper->updateRegistries(*pProductRegistry_);
+  branchIDListHelper->updateFromRegistry(*pProductRegistry_);
 
   // Put products we'll look for into the EventPrincipal.
   {
@@ -192,7 +193,8 @@ void test_ep::setUp() {
     lbp->setRunPrincipal(rp);
     edm::EventAuxiliary eventAux(eventID_, uuid, now, true);
     pEvent_.reset(new edm::EventPrincipal(pProductRegistry_, branchIDListHelper, *process, &historyAppender_,edm::StreamID::invalidStreamID()));
-    pEvent_->fillEventPrincipal(eventAux);
+    edm::ProcessHistoryRegistry phr;
+    pEvent_->fillEventPrincipal(eventAux, phr);
     pEvent_->setLuminosityBlockPrincipal(lbp);
     pEvent_->put(branchFromRegistry, product, prov);
   }

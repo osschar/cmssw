@@ -11,7 +11,6 @@
  **
  **
  **  $Id: PiZeroAnalyzer
- **  $Date: 2011/04/08 15:55:00 $
  **  authors:
  **   Nancy Marinelli, U. of Notre Dame, US
  **   Jamie Antonelli, U. of Notre Dame, US
@@ -33,8 +32,8 @@ PiZeroAnalyzer::PiZeroAnalyzer( const edm::ParameterSet& pset )
 
 
 
-    barrelEcalHits_     = pset.getParameter<edm::InputTag>("barrelEcalHits");
-    endcapEcalHits_     = pset.getParameter<edm::InputTag>("endcapEcalHits");
+    barrelEcalHits_token_ = consumes<edm::SortedCollection<EcalRecHit,edm::StrictWeakOrdering<EcalRecHit> > >(pset.getParameter<edm::InputTag>("barrelEcalHits"));
+    endcapEcalHits_token_ = consumes<edm::SortedCollection<EcalRecHit,edm::StrictWeakOrdering<EcalRecHit> > >(pset.getParameter<edm::InputTag>("endcapEcalHits"));
 
 
     standAlone_         = pset.getParameter<bool>("standAlone");
@@ -155,17 +154,17 @@ void PiZeroAnalyzer::analyze( const edm::Event& e, const edm::EventSetup& esup )
   bool validEcalRecHits=true;
   Handle<EcalRecHitCollection> barrelHitHandle;
   EcalRecHitCollection barrelRecHits;
-  e.getByLabel(barrelEcalHits_, barrelHitHandle);
+  e.getByToken(barrelEcalHits_token_, barrelHitHandle);
   if (!barrelHitHandle.isValid()) {
-    edm::LogError("PhotonProducer") << "Error! Can't get the product "<<barrelEcalHits_.label();
+    edm::LogError("PhotonProducer") << "Error! Can't get the product: barrelEcalHits_token_";
     validEcalRecHits=false;
   }
 
   Handle<EcalRecHitCollection> endcapHitHandle;
-  e.getByLabel(endcapEcalHits_, endcapHitHandle);
+  e.getByToken(endcapEcalHits_token_, endcapHitHandle);
   EcalRecHitCollection endcapRecHits;
   if (!endcapHitHandle.isValid()) {
-    edm::LogError("PhotonProducer") << "Error! Can't get the product "<<endcapEcalHits_.label();
+    edm::LogError("PhotonProducer") << "Error! Can't get the product: endcapEcalHits_token_";
     validEcalRecHits=false;
   }
 

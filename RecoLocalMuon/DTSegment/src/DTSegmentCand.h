@@ -42,11 +42,11 @@ class DTSegmentCand{
     DTSegmentCand(AssPointCont& hits,
                   const DTSuperLayer* sl) ;
 
-    DTSegmentCand(AssPointCont hits,
+    DTSegmentCand(const AssPointCont& hits,
                   LocalPoint& position,
                   LocalVector& direction,
                   double chi2,
-                  AlgebraicSymMatrix covMat,
+                  const AlgebraicSymMatrix& covMat,
                   const DTSuperLayer* sl);
 
 /// Destructor
@@ -146,8 +146,8 @@ class DTSegmentCand{
     AssPointCont theHits; // the used hits
 
   protected:
-    static double chi2max; // to be tuned!!
-    static unsigned int nHitsMin; // to be tuned!!
+    static const double chi2max; // to be tuned!!
+    static const unsigned int nHitsMin; // to be tuned!!
 };
 
 std::ostream& operator<<(std::ostream& out, const DTSegmentCand& seg) ;

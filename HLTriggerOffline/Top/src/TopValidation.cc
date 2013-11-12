@@ -13,7 +13,6 @@
 //
 // Original Author:  Patricia LOBELLE PARDO ()
 //         Created:  Tue Sep 23 11:06:32 CEST 2008
-// $Id: TopValidation.cc,v 1.12 2011/10/13 14:58:07 eulisse Exp $
 //
 //
 
@@ -36,7 +35,9 @@ TopValidation::TopValidation(const edm::ParameterSet& iConfig)
   //   triggerTag_         = iConfig.getUntrackedParameter<string>("DQMFolder","HLT/Top");
      outputFileName      = iConfig.getParameter<std::string>("OutputFileName");
      outputMEsInRootFile = iConfig.getParameter<bool>("OutputMEsInRootFile");
-      FolderName_ = iConfig.getParameter<std::string>("FolderName");
+     FolderName_ = iConfig.getParameter<std::string>("FolderName");
+     offlineElectrons = 
+       iConfig.getParameter<edm::InputTag>("offlineElectrons");
    
       topFolder << FolderName_ ;  
 
@@ -83,7 +84,7 @@ TopValidation::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
   // electron collection
   Handle<reco::GsfElectronCollection> electronsH;
   //  iEvent.getByLabel("pixelMatchGsfElectrons",electronsH);
-  iEvent.getByLabel("gsfElectrons",electronsH);
+  iEvent.getByLabel(offlineElectrons,electronsH);
 
   // Trigger 
   Handle<TriggerResults> trh;

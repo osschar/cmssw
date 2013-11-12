@@ -33,7 +33,6 @@ namespace edm {
     virtual ~StreamerInputSource();
     static void fillDescription(ParameterSetDescription& description);
 
-    static
     std::auto_ptr<SendJobHeader> deserializeRegistry(InitMsgView const& initView);
 
     void deserializeAndMergeWithRegistry(InitMsgView const& initView, bool subsequent = false);
@@ -62,21 +61,23 @@ namespace edm {
 
   private:
 
-    class ProductGetter : public EDProductGetter {
+    class EventPrincipalHolder : public EDProductGetter {
     public:
-      ProductGetter();
-      virtual ~ProductGetter();
+      EventPrincipalHolder();
+      virtual ~EventPrincipalHolder();
 
-      virtual WrapperHolder getIt(edm::ProductID const& id) const;
+      virtual WrapperHolder getIt(edm::ProductID const& id) const override;
+ 
+      virtual unsigned int transitionIndex_() const override;
 
-      void setEventPrincipal(EventPrincipal *ep);
+      void setEventPrincipal(EventPrincipal* ep);
 
     private:
       // We don't own the principal.  The lifetime must be managed externally.
       EventPrincipal const* eventPrincipal_;
     };
 
-    virtual EventPrincipal* read(EventPrincipal& eventPrincipal);
+    virtual void read(EventPrincipal& eventPrincipal);
 
     virtual void setRun(RunNumber_t r);
 
@@ -86,12 +87,11 @@ namespace edm {
     std::vector<unsigned char> dest_;
     TBufferFile xbuf_;
     std::unique_ptr<SendEvent> sendEvent_;
-    ProductGetter productGetter_;
+    EventPrincipalHolder eventPrincipalHolder_;
     bool adjustEventToNewProductRegistry_;
 
-    //Do not like these to be static, but no choice as deserializeRegistry() that sets it is a static memeber 
-    static std::string processName_;
-    static unsigned int protocolVersion_;
+    std::string processName_;
+    unsigned int protocolVersion_;
   }; //end-of-class-def
 } // end of namespace-edm
   

@@ -7,7 +7,6 @@ RootFile.h // used by ROOT input sources
 
 ----------------------------------------------------------------------*/
 
-#include "InputType.h"
 #include "RootTree.h"
 #include "DataFormats/Provenance/interface/BranchChildren.h"
 #include "DataFormats/Provenance/interface/BranchIDList.h"
@@ -23,6 +22,7 @@ RootFile.h // used by ROOT input sources
 #include "DataFormats/Provenance/interface/IndexIntoFile.h"
 #include "FWCore/Framework/interface/Frameworkfwd.h"
 #include "FWCore/Framework/interface/InputSource.h"
+#include "FWCore/Utilities/interface/InputType.h"
 
 #include <array>
 #include <map>
@@ -36,10 +36,11 @@ namespace edm {
   // Class RootFile: supports file reading.
 
   class BranchIDListHelper;
-  class BranchMapper;
+  class ProductProvenanceRetriever;
   class DaqProvenanceHelper;
   class DuplicateChecker;
   class EventSkipperByID;
+  class ProcessHistoryRegistry;
   class ProductSelectorRules;
   class InputFile;
   class ProvenanceReaderBase;
@@ -62,16 +63,18 @@ namespace edm {
              bool skipAnyEvents,
              int remainingEvents,
              int remainingLumis,
+             unsigned int nStreams,
              unsigned int treeCacheSize,
              int treeMaxVirtualSize,
              InputSource::ProcessingMode processingMode,
              RunNumber_t const& forcedRunNumber,
              bool noEventSort,
              ProductSelectorRules const& productSelectorRules,
-             InputType::InputType inputType,
+             InputType inputType,
              boost::shared_ptr<BranchIDListHelper> branchIDListHelper,
              boost::shared_ptr<DuplicateChecker> duplicateChecker,
              bool dropDescendantsOfDroppedProducts,
+             ProcessHistoryRegistry& processHistoryRegistry,
              std::vector<boost::shared_ptr<IndexIntoFile> > const& indexesIntoFiles,
              std::vector<boost::shared_ptr<IndexIntoFile> >::size_type currentIndexIntoFile,
              std::vector<ProcessHistoryID>& orderedProcessHistoryIDs,
@@ -85,13 +88,13 @@ namespace edm {
 
     void reportOpened(std::string const& inputType);
     void close();
-    EventPrincipal* readCurrentEvent(EventPrincipal& cache);
-    EventPrincipal* readEvent(EventPrincipal& cache);
+    bool readCurrentEvent(EventPrincipal& cache);
+    void readEvent(EventPrincipal& cache);
 
     boost::shared_ptr<LuminosityBlockAuxiliary> readLuminosityBlockAuxiliary_();
     boost::shared_ptr<RunAuxiliary> readRunAuxiliary_();
-    boost::shared_ptr<RunPrincipal> readRun_(boost::shared_ptr<RunPrincipal> runPrincipal);
-    boost::shared_ptr<LuminosityBlockPrincipal> readLumi(boost::shared_ptr<LuminosityBlockPrincipal> lumiPrincipal);
+    void readRun_(RunPrincipal& runPrincipal);
+    void readLuminosityBlock_(LuminosityBlockPrincipal& lumiPrincipal);
     std::string const& file() const {return file_;}
     boost::shared_ptr<ProductRegistry const> productRegistry() const {return productRegistry_;}
     boost::shared_ptr<BranchIDListHelper const> branchIDListHelper() const {return branchIDListHelper_;}
@@ -113,6 +116,7 @@ namespace edm {
     bool setEntryAtItem(RunNumber_t run, LuminosityBlockNumber_t lumi, EventNumber_t event) {
       return event ? setEntryAtEvent(run, lumi, event) : (lumi ? setEntryAtLumi(run, lumi) : setEntryAtRun(run));
     }
+    bool containsItem(RunNumber_t run, LuminosityBlockNumber_t lumi, EventNumber_t event) const;
     bool setEntryAtEvent(RunNumber_t run, LuminosityBlockNumber_t lumi, EventNumber_t event);
     bool setEntryAtLumi(RunNumber_t run, LuminosityBlockNumber_t lumi);
     bool setEntryAtRun(RunNumber_t run);
@@ -132,7 +136,7 @@ namespace edm {
     bool skipEvents(int& offset);
     bool goToEvent(EventID const& eventID);
     bool nextEventEntry() {return eventTree_.next();}
-    IndexIntoFile::EntryType getNextEntryTypeWanted();
+    IndexIntoFile::EntryType getNextItemType(RunNumber_t& run, LuminosityBlockNumber_t& lumi, EventNumber_t& event);
     boost::shared_ptr<IndexIntoFile> indexIntoFileSharedPtr() const {
       return indexIntoFileSharedPtr_;
     }
@@ -144,34 +148,34 @@ namespace edm {
   private:
     RootTreePtrArray& treePointers() {return treePointers_;}
     bool skipThisEntry();
-    IndexIntoFile::EntryType getEntryTypeWithSkipping();
     void setIfFastClonable(int remainingEvents, int remainingLumis);
-    void validateFile(InputType::InputType inputType, bool usingGoToEvent);
+    void validateFile(InputType inputType, bool usingGoToEvent);
     void fillIndexIntoFile();
-    void fillEventAuxiliary();
+    bool fillEventAuxiliary(IndexIntoFile::EntryNumber_t entry);
     void fillThisEventAuxiliary();
-    void fillHistory();
+    void fillEventHistory();
     boost::shared_ptr<LuminosityBlockAuxiliary> fillLumiAuxiliary();
     boost::shared_ptr<RunAuxiliary> fillRunAuxiliary();
     void overrideRunNumber(RunID& id);
     void overrideRunNumber(LuminosityBlockID& id);
     void overrideRunNumber(EventID& id, bool isRealData);
     std::string const& newBranchToOldBranch(std::string const& newBranch) const;
-    void dropOnInput(ProductRegistry& reg, ProductSelectorRules const& rules, bool dropDescendants, InputType::InputType inputType);
-    void readParentageTree();
-    void readEntryDescriptionTree(EntryDescriptionMap&); // backward compatibility
+    void dropOnInput(ProductRegistry& reg, ProductSelectorRules const& rules, bool dropDescendants, InputType inputType);
+    void readParentageTree(InputType inputType);
+    void readEntryDescriptionTree(EntryDescriptionMap& entryDescriptionMap, InputType inputType); // backward compatibility
     void readEventHistoryTree();
     bool isDuplicateEvent();
 
     void initializeDuplicateChecker(std::vector<boost::shared_ptr<IndexIntoFile> > const& indexesIntoFiles,
                                     std::vector<boost::shared_ptr<IndexIntoFile> >::size_type currentIndexIntoFile);
 
-    std::unique_ptr<MakeProvenanceReader> makeProvenanceReaderMaker();
-    boost::shared_ptr<BranchMapper> makeBranchMapper();
+    std::unique_ptr<MakeProvenanceReader> makeProvenanceReaderMaker(InputType inputType);
+    boost::shared_ptr<ProductProvenanceRetriever> makeProductProvenanceRetriever();
 
     std::string const file_;
     std::string const logicalFile_;
     ProcessConfiguration const& processConfiguration_;
+    ProcessHistoryRegistry* processHistoryRegistry_;  // We don't own this
     boost::shared_ptr<InputFile> filePtr_;
     boost::shared_ptr<EventSkipperByID> eventSkipperByID_;
     FileFormatVersion fileFormatVersion_;
@@ -203,14 +207,14 @@ namespace edm {
     int forcedRunOffset_;
     std::map<std::string, std::string> newBranchToOldBranch_;
     TTree* eventHistoryTree_;			// backward compatibility
-    boost::shared_ptr<EventSelectionIDVector> eventSelectionIDs_;
-    boost::shared_ptr<BranchListIndexes> branchListIndexes_;
+    EventSelectionIDVector eventSelectionIDs_;
+    BranchListIndexes branchListIndexes_;
     std::unique_ptr<History> history_; // backward compatibility
     boost::shared_ptr<BranchChildren> branchChildren_;
     boost::shared_ptr<DuplicateChecker> duplicateChecker_;
     std::unique_ptr<ProvenanceAdaptor> provenanceAdaptor_; // backward comatibility
     std::unique_ptr<MakeProvenanceReader> provenanceReaderMaker_;
-    mutable boost::shared_ptr<BranchMapper> eventBranchMapper_;
+    mutable boost::shared_ptr<ProductProvenanceRetriever> eventProductProvenanceRetriever_;
     std::vector<ParentageID> parentageIDLookup_;
     std::unique_ptr<DaqProvenanceHelper> daqProvenanceHelper_;
   }; // class RootFile

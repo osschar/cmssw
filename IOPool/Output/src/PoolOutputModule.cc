@@ -1,6 +1,5 @@
 #include "IOPool/Output/interface/PoolOutputModule.h"
 
-#include "FWCore/MessageLogger/interface/JobReport.h"
 #include "IOPool/Output/src/RootOutputFile.h"
 
 #include "FWCore/Framework/interface/EventPrincipal.h"
@@ -29,7 +28,8 @@
 
 namespace edm {
   PoolOutputModule::PoolOutputModule(ParameterSet const& pset) :
-    OutputModule(pset),
+  edm::one::OutputModuleBase::OutputModuleBase(pset),
+  one::OutputModule<WatchInputFiles>(pset),
     rootServiceChecker_(),
     auxItems_(),
     selectedOutputItemList_(),
@@ -91,8 +91,8 @@ namespace edm {
   void PoolOutputModule::beginJob() {
     for(int i = InEvent; i < NumBranchTypes; ++i) {
       BranchType branchType = static_cast<BranchType>(i);
-      Selections const& keptVector = keptProducts()[branchType];
-      for(Selections::const_iterator it = keptVector.begin(), itEnd = keptVector.end(); it != itEnd; ++it) {
+      SelectedProducts const& keptVector = keptProducts()[branchType];
+      for(SelectedProducts::const_iterator it = keptVector.begin(), itEnd = keptVector.end(); it != itEnd; ++it) {
         BranchDescription const& prod = **it;
         checkDictionaries(prod.fullClassName(), true);
         checkDictionaries(wrappedClassName(prod.fullClassName()), true);
@@ -154,7 +154,7 @@ namespace edm {
 
   void PoolOutputModule::fillSelectedItemList(BranchType branchType, TTree* theInputTree) {
 
-    Selections const& keptVector = keptProducts()[branchType];
+    SelectedProducts const& keptVector = keptProducts()[branchType];
     OutputItemList&   outputItemList = selectedOutputItemList_[branchType];
     AuxItem&   auxItem = auxItems_[branchType];
 
@@ -171,7 +171,7 @@ namespace edm {
     }
 
     // Fill outputItemList with an entry for each branch.
-    for(Selections::const_iterator it = keptVector.begin(), itEnd = keptVector.end(); it != itEnd; ++it) {
+    for(SelectedProducts::const_iterator it = keptVector.begin(), itEnd = keptVector.end(); it != itEnd; ++it) {
       int splitLevel = BranchDescription::invalidSplitLevel;
       int basketSize = BranchDescription::invalidBasketSize;
 
@@ -250,14 +250,10 @@ namespace edm {
 
   void PoolOutputModule::writeLuminosityBlock(LuminosityBlockPrincipal const& lb, ModuleCallingContext const* mcc) {
     rootOutputFile_->writeLuminosityBlock(lb, mcc);
-      Service<JobReport> reportSvc;
-      reportSvc->reportLumiSection(lb.id().run(), lb.id().luminosityBlock());
   }
 
   void PoolOutputModule::writeRun(RunPrincipal const& r, ModuleCallingContext const* mcc) {
     rootOutputFile_->writeRun(r, mcc);
-      Service<JobReport> reportSvc;
-      reportSvc->reportRunNumber(r.run());
   }
 
   void PoolOutputModule::reallyCloseFile() {

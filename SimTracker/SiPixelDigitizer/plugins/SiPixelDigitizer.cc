@@ -14,7 +14,6 @@
 // Original Author:  Michele Pioppi-INFN perugia
 //   Modifications: Freya Blekman - Cornell University
 //         Created:  Mon Sep 26 11:08:32 CEST 2005
-// $Id: SiPixelDigitizer.cc,v 1.8 2012/10/24 18:47:23 eulisse Exp $
 //
 //
 
@@ -29,7 +28,8 @@
 
 #include "SimDataFormats/TrackingHit/interface/PSimHit.h"
 #include "DataFormats/Common/interface/Handle.h"
-#include "FWCore/Framework/interface/EDProducer.h"
+#include "FWCore/Framework/interface/ConsumesCollector.h"
+#include "FWCore/Framework/interface/one/EDProducer.h"
 #include "FWCore/Framework/interface/ESHandle.h"
 #include "FWCore/Framework/interface/EventSetup.h"
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
@@ -86,7 +86,7 @@
 
 namespace cms
 {
-  SiPixelDigitizer::SiPixelDigitizer(const edm::ParameterSet& iConfig, edm::EDProducer& mixMod):
+  SiPixelDigitizer::SiPixelDigitizer(const edm::ParameterSet& iConfig, edm::one::EDProducerBase& mixMod, edm::ConsumesCollector& iC):
     first(true),
     _pixeldigialgo(),
     hitsProducer(iConfig.getParameter<std::string>("hitsProducer")),
@@ -99,6 +99,10 @@ namespace cms
     
     mixMod.produces<edm::DetSetVector<PixelDigi> >().setBranchAlias(alias);
     mixMod.produces<edm::DetSetVector<PixelDigiSimLink> >().setBranchAlias(alias + "siPixelDigiSimLink");
+    for(auto const& trackerContainer : trackerContainers) {
+      edm::InputTag tag(hitsProducer, trackerContainer);
+      iC.consumes<std::vector<PSimHit> >(edm::InputTag(hitsProducer, trackerContainer));
+    }
     edm::Service<edm::RandomNumberGenerator> rng;
     if ( ! rng.isAvailable()) {
       throw cms::Exception("Configuration")

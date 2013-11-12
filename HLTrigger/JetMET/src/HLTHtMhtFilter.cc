@@ -51,7 +51,7 @@ void HLTHtMhtFilter::fillDescriptions(edm::ConfigurationDescriptions & descripti
   std::vector<edm::InputTag> tmp1(1, edm::InputTag("calohtmht"));
   std::vector<double>        tmp2(1, 0.);
   edm::ParameterSetDescription desc;
-  desc.add<bool>("saveTags",false);
+  makeHLTFilterDescription(desc);
   desc.add<std::vector<edm::InputTag> >("htLabels",  tmp1);
   desc.add<std::vector<edm::InputTag> >("mhtLabels", tmp1);
   tmp2[0] = 250; desc.add<std::vector<double> >("minHt",     tmp2);
@@ -62,7 +62,7 @@ void HLTHtMhtFilter::fillDescriptions(edm::ConfigurationDescriptions & descripti
 }
 
 
-bool HLTHtMhtFilter::hltFilter(edm::Event & iEvent, const edm::EventSetup & iSetup, trigger::TriggerFilterObjectWithRefs & filterproduct) {
+bool HLTHtMhtFilter::hltFilter(edm::Event & iEvent, const edm::EventSetup & iSetup, trigger::TriggerFilterObjectWithRefs & filterproduct) const {
 
   // the filter objects to be stored
   std::auto_ptr<reco::METCollection> metobject(new reco::METCollection());

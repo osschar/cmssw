@@ -31,6 +31,11 @@ namespace edm {
     for_all(putProducts_, principal_get_adapter_detail::deleter());
   }
 
+  Event::CacheIdentifier_t
+  Event::cacheIdentifier() const {
+    return eventPrincipal().cacheIdentifier();
+  }
+
   void
   Event::setConsumer(EDConsumerBase const* iConsumer) {
     provRecorder_.setConsumer(iConsumer);
@@ -85,19 +90,8 @@ namespace edm {
   bool
   Event::getProcessParameterSet(std::string const& processName,
                                 ParameterSet& ps) const {
-    // Get the ProcessHistory for this event.
-    ProcessHistoryRegistry* phr = ProcessHistoryRegistry::instance();
-    ProcessHistory ph;
-    if(!phr->getMapped(processHistoryID(), ph)) {
-      throw Exception(errors::NotFound)
-        << "ProcessHistoryID " << processHistoryID()
-        << " is claimed to describe " << id()
-        << "\nbut is not found in the ProcessHistoryRegistry.\n"
-        << "This file is malformed.\n";
-    }
-
     ProcessConfiguration config;
-    bool process_found = ph.getConfigurationForProcess(processName, config);
+    bool process_found = processHistory().getConfigurationForProcess(processName, config);
     if(process_found) {
       pset::Registry::instance()->getMapped(config.parameterSetID(), ps);
       assert(!ps.empty());

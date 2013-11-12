@@ -15,7 +15,7 @@
  *    Andy Kubik, Northwestern University
  */
 
-// user include files
+#include <FWCore/Framework/interface/ConsumesCollector.h>
 #include "FWCore/Framework/interface/MakerMacros.h"
 #include "FWCore/Framework/interface/Frameworkfwd.h"
 #include "FWCore/Framework/interface/EDAnalyzer.h"
@@ -131,7 +131,7 @@ public:
   // for noise module
   struct ltrh
   {
-    bool operator()(const CSCRecHit2D rh1, const CSCRecHit2D rh2) const
+    bool operator()(const CSCRecHit2D& rh1, const CSCRecHit2D& rh2) const
     {
       return ((rh1.localPosition()).x()-(rh2.localPosition()).x()) < 0;
     }
@@ -177,7 +177,7 @@ private:
   // some useful functions
   bool   filterEvents(edm::Handle<CSCRecHit2DCollection> recHits, edm::Handle<CSCSegmentCollection> cscSegments,
                       edm::Handle<reco::TrackCollection> saMuons);
-  float  fitX(CLHEP::HepMatrix sp, CLHEP::HepMatrix ep);
+  float  fitX(const CLHEP::HepMatrix& sp, const CLHEP::HepMatrix& ep);
   float  getSignal(const CSCStripDigiCollection& stripdigis, CSCDetId idRH, int centerStrip);
   float  getthisSignal(const CSCStripDigiCollection& stripdigis, CSCDetId idRH, int centerStrip);
   int    getWidth(const CSCStripDigiCollection& stripdigis, CSCDetId idRH, int centerStrip);
@@ -237,19 +237,19 @@ private:
   double deltaPhiMax;
   double polarMin, polarMax;
 
-
-  edm::InputTag stripDigiTag;
-  edm::InputTag wireDigiTag;
-  edm::InputTag compDigiTag;
-  edm::InputTag cscRecHitTag;
-  edm::InputTag cscSegTag;
-  edm::InputTag saMuonTag;
-  edm::InputTag l1aTag;
-  edm::InputTag simHitTag;
-  edm::InputTag alctDigiTag;
-  edm::InputTag clctDigiTag;
-  edm::InputTag corrlctDigiTag;
-  edm::InputTag hltTag;
+  edm::EDGetTokenT<FEDRawDataCollection>           rd_token;
+  edm::EDGetTokenT<CSCWireDigiCollection>          wd_token;
+  edm::EDGetTokenT<CSCStripDigiCollection>         sd_token;
+  edm::EDGetTokenT<CSCComparatorDigiCollection>    cd_token;
+  edm::EDGetTokenT<CSCALCTDigiCollection>          al_token;
+  edm::EDGetTokenT<CSCCLCTDigiCollection>          cl_token;
+  edm::EDGetTokenT<CSCCorrelatedLCTDigiCollection> co_token;
+  edm::EDGetTokenT<CSCRecHit2DCollection>          rh_token;
+  edm::EDGetTokenT<CSCSegmentCollection>           se_token;
+  edm::EDGetTokenT<L1MuGMTReadoutCollection>       l1_token;
+  edm::EDGetTokenT<edm::TriggerResults>            tr_token;
+  edm::EDGetTokenT<reco::TrackCollection>          sa_token;
+  edm::EDGetTokenT<edm::PSimHitContainer>          sh_token;
 
   // module on/off switches
   bool makeOccupancyPlots;

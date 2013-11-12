@@ -34,6 +34,11 @@ MTVHistoProducerAlgoForTracker::MTVHistoProducerAlgoForTracker(const edm::Parame
   maxHit  = pset.getParameter<double>("maxHit");
   nintHit = pset.getParameter<int>("nintHit");
   
+  //parameters for _vs_Layer plots
+  minLayers  = pset.getParameter<double>("minLayers");
+  maxLayers  = pset.getParameter<double>("maxLayers");
+  nintLayers = pset.getParameter<int>("nintLayers");
+  
   //parameters for _vs_phi plots
   minPhi  = pset.getParameter<double>("minPhi");
   maxPhi  = pset.getParameter<double>("maxPhi");
@@ -413,6 +418,9 @@ void MTVHistoProducerAlgoForTracker::bookRecoHistos(){
   h_losthits.push_back( dbe_->book1D("losthits", "number of lost hits per track", nintHit,minHit,maxHit) );
   h_nchi2.push_back( dbe_->book1D("chi2", "normalized #chi^{2}", 200, 0, 20 ) );
   h_nchi2_prob.push_back( dbe_->book1D("chi2_prob", "normalized #chi^{2} probability",100,0,1));
+
+  h_nmisslayers_inner.push_back( dbe_->book1D("missing_inner_layers", "number of missing inner layers", nintLayers,minLayers,maxLayers ) );
+  h_nmisslayers_outer.push_back( dbe_->book1D("missing_outer_layers", "number of missing outer layers", nintLayers,minLayers,maxLayers ) );
 
   h_algo.push_back( dbe_->book1D("h_algo","Tracks by algo",15,0.0,15.0) );
 
@@ -849,7 +857,7 @@ void MTVHistoProducerAlgoForTracker::fill_recoAssociated_simTrack_histos(int cou
     //effic vs eta
     for (unsigned int f=0; f<etaintervals[count].size()-1; f++){
       if (getEta(momentumTP.eta())>etaintervals[count][f]&&
-	  getEta(momentumTP.eta())<etaintervals[count][f+1]) {
+	  getEta(momentumTP.eta())<=etaintervals[count][f+1]) {
 	totSIMeta[count][f]++;
 	if (isMatched) {
 	  totASSeta[count][f]++;
@@ -891,7 +899,7 @@ void MTVHistoProducerAlgoForTracker::fill_recoAssociated_simTrack_histos(int cou
   if((*TpSelectorForEfficiencyVsPhi)(tp)){
     for (unsigned int f=0; f<phiintervals[count].size()-1; f++){
       if (momentumTP.phi() > phiintervals[count][f]&&
-	  momentumTP.phi() <phiintervals[count][f+1]) {
+	  momentumTP.phi() <=phiintervals[count][f+1]) {
 	totSIM_phi[count][f]++;
 	if (isMatched) {
 	  totASS_phi[count][f]++;
@@ -903,7 +911,7 @@ void MTVHistoProducerAlgoForTracker::fill_recoAssociated_simTrack_histos(int cou
   if((*TpSelectorForEfficiencyVsPt)(tp)){
     for (unsigned int f=0; f<pTintervals[count].size()-1; f++){
       if (getPt(sqrt(momentumTP.perp2()))>pTintervals[count][f]&&
-	  getPt(sqrt(momentumTP.perp2()))<pTintervals[count][f+1]) {
+	  getPt(sqrt(momentumTP.perp2()))<=pTintervals[count][f+1]) {
 	totSIMpT[count][f]++;
 	if (isMatched) {
 	  totASSpT[count][f]++;
@@ -915,7 +923,7 @@ void MTVHistoProducerAlgoForTracker::fill_recoAssociated_simTrack_histos(int cou
   if((*TpSelectorForEfficiencyVsVTXR)(tp)){
     for (unsigned int f=0; f<dxyintervals[count].size()-1; f++){
       if (dxySim>dxyintervals[count][f]&&
-	  dxySim<dxyintervals[count][f+1]) {
+	  dxySim<=dxyintervals[count][f+1]) {
 	totSIM_dxy[count][f]++;
 	if (isMatched) {
 	  totASS_dxy[count][f]++;
@@ -925,7 +933,7 @@ void MTVHistoProducerAlgoForTracker::fill_recoAssociated_simTrack_histos(int cou
 
     for (unsigned int f=0; f<vertposintervals[count].size()-1; f++){
       if (sqrt(vertexTP.perp2())>vertposintervals[count][f]&&
-	  sqrt(vertexTP.perp2())<vertposintervals[count][f+1]) {
+	  sqrt(vertexTP.perp2())<=vertposintervals[count][f+1]) {
 	totSIM_vertpos[count][f]++;
 	if (isMatched) {
 	  totASS_vertpos[count][f]++;
@@ -937,7 +945,7 @@ void MTVHistoProducerAlgoForTracker::fill_recoAssociated_simTrack_histos(int cou
   if((*TpSelectorForEfficiencyVsVTXZ)(tp)){
     for (unsigned int f=0; f<dzintervals[count].size()-1; f++){
       if (dzSim>dzintervals[count][f]&&
-	  dzSim<dzintervals[count][f+1]) {
+	  dzSim<=dzintervals[count][f+1]) {
 	totSIM_dz[count][f]++;
 	if (isMatched) {
 	  totASS_dz[count][f]++;
@@ -947,23 +955,23 @@ void MTVHistoProducerAlgoForTracker::fill_recoAssociated_simTrack_histos(int cou
 
   
     for (unsigned int f=0; f<zposintervals[count].size()-1; f++){
-        if (vertexTP.z()>zposintervals[count][f]&&vertexTP.z()<zposintervals[count][f+1]) {
+        if (vertexTP.z()>zposintervals[count][f]&&vertexTP.z()<=zposintervals[count][f+1]) {
 	        totSIM_zpos[count][f]++;
 	        if (isMatched) totASS_zpos[count][f]++;
         }
-        if (vertz>zposintervals[count][f]&&vertz<zposintervals[count][f+1]) {
+        if (vertz>zposintervals[count][f]&&vertz<=zposintervals[count][f+1]) {
 	        totSIM_vertz_entire[count][f]++;
 	        if (isMatched) totASS_vertz_entire[count][f]++;
         }
-        if (vertz>zposintervals[count][f]&&vertz<zposintervals[count][f+1] && fabs(momentumTP.eta())<0.9) {
+        if (vertz>zposintervals[count][f]&&vertz<=zposintervals[count][f+1] && fabs(momentumTP.eta())<0.9) {
 	        totSIM_vertz_barrel[count][f]++;
 	        if (isMatched) totASS_vertz_barrel[count][f]++;
         }
-        if (vertz>zposintervals[count][f]&&vertz<zposintervals[count][f+1] && momentumTP.eta()>0.9) {
+        if (vertz>zposintervals[count][f]&&vertz<=zposintervals[count][f+1] && momentumTP.eta()>0.9) {
 	        totSIM_vertz_fwdpos[count][f]++;
 	        if (isMatched) totASS_vertz_fwdpos[count][f]++;
         }
-        if (vertz>zposintervals[count][f]&&vertz<zposintervals[count][f+1] && momentumTP.eta()<-0.9) {
+        if (vertz>zposintervals[count][f]&&vertz<=zposintervals[count][f+1] && momentumTP.eta()<-0.9) {
 	        totSIM_vertz_fwdneg[count][f]++;
 	        if (isMatched) totASS_vertz_fwdneg[count][f]++;
         }
@@ -976,7 +984,7 @@ void MTVHistoProducerAlgoForTracker::fill_recoAssociated_simTrack_histos(int cou
    //efficPU vs eta
     for (unsigned int f=0; f<etaintervals[count].size()-1; f++){
       if (getEta(momentumTP.eta())>etaintervals[count][f]&&
-	  getEta(momentumTP.eta())<etaintervals[count][f+1]) {
+	  getEta(momentumTP.eta())<=etaintervals[count][f+1]) {
 	totCONeta[count][f]++;
       }
     } // END for (unsigned int f=0; f<etaintervals[w].size()-1; f++){
@@ -989,7 +997,7 @@ void MTVHistoProducerAlgoForTracker::fill_recoAssociated_simTrack_histos(int cou
     } // END for (unsigned int f=0; f<vertcountintervals[count].size()-1; f++){
   
     for (unsigned int f=0; f<zposintervals[count].size()-1; f++){
-      if (vertexTP.z()>zposintervals[count][f]&&vertexTP.z()<zposintervals[count][f+1]) {
+      if (vertexTP.z()>zposintervals[count][f]&&vertexTP.z()<=zposintervals[count][f+1]) {
 	totCONzpos[count][f]++;
       }
     } // END for (unsigned int f=0; f<zposintervals[count].size()-1; f++){
@@ -1043,7 +1051,7 @@ void MTVHistoProducerAlgoForTracker::fill_generic_recoTrack_histos(int count,
   //Compute fake rate vs eta
   for (unsigned int f=0; f<etaintervals[count].size()-1; f++){
     if (getEta(track.momentum().eta())>etaintervals[count][f]&&
-	getEta(track.momentum().eta())<etaintervals[count][f+1]) {
+	getEta(track.momentum().eta())<=etaintervals[count][f+1]) {
       totRECeta[count][f]++;
       if (isMatched) {
 	totASS2eta[count][f]++;
@@ -1064,7 +1072,7 @@ void MTVHistoProducerAlgoForTracker::fill_generic_recoTrack_histos(int count,
 
   for (unsigned int f=0; f<phiintervals[count].size()-1; f++){
     if (track.momentum().phi()>phiintervals[count][f]&&
-	track.momentum().phi()<phiintervals[count][f+1]) {
+	track.momentum().phi()<=phiintervals[count][f+1]) {
       totREC_phi[count][f]++; 
       if (isMatched) {
 	totASS2_phi[count][f]++;
@@ -1077,7 +1085,7 @@ void MTVHistoProducerAlgoForTracker::fill_generic_recoTrack_histos(int count,
 	
   for (unsigned int f=0; f<pTintervals[count].size()-1; f++){
     if (getPt(sqrt(track.momentum().perp2()))>pTintervals[count][f]&&
-	getPt(sqrt(track.momentum().perp2()))<pTintervals[count][f+1]) {
+	getPt(sqrt(track.momentum().perp2()))<=pTintervals[count][f+1]) {
       totRECpT[count][f]++; 
       if (isMatched) {
 	totASS2pT[count][f]++;
@@ -1089,7 +1097,7 @@ void MTVHistoProducerAlgoForTracker::fill_generic_recoTrack_histos(int count,
   
   for (unsigned int f=0; f<dxyintervals[count].size()-1; f++){
     if (track.dxy(bsPosition)>dxyintervals[count][f]&&
-	track.dxy(bsPosition)<dxyintervals[count][f+1]) {
+	track.dxy(bsPosition)<=dxyintervals[count][f+1]) {
       totREC_dxy[count][f]++; 
       if (isMatched) {
 	totASS2_dxy[count][f]++;
@@ -1101,7 +1109,7 @@ void MTVHistoProducerAlgoForTracker::fill_generic_recoTrack_histos(int count,
   
   for (unsigned int f=0; f<dzintervals[count].size()-1; f++){
     if (track.dz(bsPosition)>dzintervals[count][f]&&
-	track.dz(bsPosition)<dzintervals[count][f+1]) {
+	track.dz(bsPosition)<=dzintervals[count][f+1]) {
       totREC_dz[count][f]++; 
       if (isMatched) {
 	totASS2_dz[count][f]++;
@@ -1172,6 +1180,8 @@ void MTVHistoProducerAlgoForTracker::fill_simAssociated_recoTrack_histos(int cou
     h_losthits[count]->Fill(track.numberOfLostHits());
     chi2_vs_nhits[count]->Fill(track.numberOfValidHits(),track.normalizedChi2());
     h_charge[count]->Fill( track.charge() );
+    h_nmisslayers_inner[count]->Fill(track.trackerExpectedHitsInner().numberOfHits());
+    h_nmisslayers_outer[count]->Fill(track.trackerExpectedHitsOuter().numberOfHits());
     
     //chi2 and #hit vs eta: fill 2D histos
     chi2_vs_eta[count]->Fill(getEta(track.eta()),track.normalizedChi2());
@@ -1309,10 +1319,11 @@ void MTVHistoProducerAlgoForTracker::fill_ResoAndPull_recoTrack_histos(int count
 
   h_pt[count]->Fill(ptres/ptError);
   h_eta[count]->Fill(etares);
-  etares_vs_eta[count]->Fill(getEta(track.eta()),etares);
+  //etares_vs_eta[count]->Fill(getEta(track.eta()),etares);
+  etares_vs_eta[count]->Fill(getEta(momentumTP.eta()),etares);
   
 
-	
+  /*    	
   //resolution of track params: fill 2D histos
   dxyres_vs_eta[count]->Fill(getEta(track.eta()),dxyRec-dxySim);
   ptres_vs_eta[count]->Fill(getEta(track.eta()),(ptRec-sqrt(momentumTP.perp2()))/ptRec);
@@ -1344,6 +1355,40 @@ void MTVHistoProducerAlgoForTracker::fill_ResoAndPull_recoTrack_histos(int count
   ptpull_vs_phi[count]->Fill(phiRec,ptres/ptError);
   phipull_vs_phi[count]->Fill(phiRec,phiPull); 
   thetapull_vs_phi[count]->Fill(phiRec,thetaPull); 
+  */
+
+  //resolution of track params: fill 2D histos
+  dxyres_vs_eta[count]->Fill(getEta(momentumTP.eta()),dxyRec-dxySim);
+  ptres_vs_eta[count]->Fill(getEta(momentumTP.eta()),(ptRec-sqrt(momentumTP.perp2()))/ptRec);
+  dzres_vs_eta[count]->Fill(getEta(momentumTP.eta()),dzRec-dzSim);
+  phires_vs_eta[count]->Fill(getEta(momentumTP.eta()),phiRec-phiSim);
+  cotThetares_vs_eta[count]->Fill(getEta(momentumTP.eta()),1/tan(M_PI*0.5-lambdaRec)-1/tan(M_PI*0.5-lambdaSim));         
+  
+  //same as before but vs pT
+  dxyres_vs_pt[count]->Fill(getPt(sqrt(momentumTP.perp2())),dxyRec-dxySim);
+  ptres_vs_pt[count]->Fill(getPt(sqrt(momentumTP.perp2())),(ptRec-sqrt(momentumTP.perp2()))/ptRec);
+  dzres_vs_pt[count]->Fill(getPt(sqrt(momentumTP.perp2())),dzRec-dzSim);
+  phires_vs_pt[count]->Fill(getPt(sqrt(momentumTP.perp2())),phiRec-phiSim);
+  cotThetares_vs_pt[count]->Fill(getPt(sqrt(momentumTP.perp2())),1/tan(M_PI*0.5-lambdaRec)-1/tan(M_PI*0.5-lambdaSim));      
+    
+  //pulls of track params vs eta: fill 2D histos
+  dxypull_vs_eta[count]->Fill(getEta(momentumTP.eta()),dxyPull);
+  ptpull_vs_eta[count]->Fill(getEta(momentumTP.eta()),ptres/ptError);
+  dzpull_vs_eta[count]->Fill(getEta(momentumTP.eta()),dzPull);
+  phipull_vs_eta[count]->Fill(getEta(momentumTP.eta()),phiPull);
+  thetapull_vs_eta[count]->Fill(getEta(momentumTP.eta()),thetaPull);
+    
+  //plots vs phi
+  nhits_vs_phi[count]->Fill(phiRec,track.numberOfValidHits());
+  chi2_vs_phi[count]->Fill(phiRec,track.normalizedChi2()); 
+  ptmean_vs_eta_phi[count]->Fill(phiRec,getEta(track.eta()),ptRec);
+  phimean_vs_eta_phi[count]->Fill(phiRec,getEta(track.eta()),phiRec);
+
+  ptres_vs_phi[count]->Fill(momentumTP.phi(),(ptRec-sqrt(momentumTP.perp2()))/ptRec);
+  phires_vs_phi[count]->Fill(momentumTP.phi(),phiRec-phiSim); 
+  ptpull_vs_phi[count]->Fill(momentumTP.phi(),ptres/ptError); 
+  phipull_vs_phi[count]->Fill(momentumTP.phi(),phiPull); 
+  thetapull_vs_phi[count]->Fill(momentumTP.phi(),thetaPull); 
 
 
 }
@@ -1686,7 +1731,7 @@ void MTVHistoProducerAlgoForTracker::fill_recoAssociated_simTrack_histos(int cou
     //effic vs eta
     for (unsigned int f=0; f<etaintervals[count].size()-1; f++){
       if (getEta(momentumTP.eta())>etaintervals[count][f]&&
-	  getEta(momentumTP.eta())<etaintervals[count][f+1]) {
+	  getEta(momentumTP.eta())<=etaintervals[count][f+1]) {
 	totSIMeta[count][f]++;
 	if (isMatched) {
 	  totASSeta[count][f]++;
@@ -1728,7 +1773,7 @@ void MTVHistoProducerAlgoForTracker::fill_recoAssociated_simTrack_histos(int cou
   if((*GpSelectorForEfficiencyVsPhi)(tp)){
     for (unsigned int f=0; f<phiintervals[count].size()-1; f++){
       if (momentumTP.phi() > phiintervals[count][f]&&
-	  momentumTP.phi() <phiintervals[count][f+1]) {
+	  momentumTP.phi() <=phiintervals[count][f+1]) {
 	totSIM_phi[count][f]++;
 	if (isMatched) {
 	  totASS_phi[count][f]++;
@@ -1740,7 +1785,7 @@ void MTVHistoProducerAlgoForTracker::fill_recoAssociated_simTrack_histos(int cou
   if((*GpSelectorForEfficiencyVsPt)(tp)){
     for (unsigned int f=0; f<pTintervals[count].size()-1; f++){
       if (getPt(sqrt(momentumTP.perp2()))>pTintervals[count][f]&&
-	  getPt(sqrt(momentumTP.perp2()))<pTintervals[count][f+1]) {
+	  getPt(sqrt(momentumTP.perp2()))<=pTintervals[count][f+1]) {
 	totSIMpT[count][f]++;
 	if (isMatched) {
 	  totASSpT[count][f]++;
@@ -1752,7 +1797,7 @@ void MTVHistoProducerAlgoForTracker::fill_recoAssociated_simTrack_histos(int cou
   if((*GpSelectorForEfficiencyVsVTXR)(tp)){
     for (unsigned int f=0; f<dxyintervals[count].size()-1; f++){
       if (dxySim>dxyintervals[count][f]&&
-	  dxySim<dxyintervals[count][f+1]) {
+	  dxySim<=dxyintervals[count][f+1]) {
 	totSIM_dxy[count][f]++;
 	if (isMatched) {
 	  totASS_dxy[count][f]++;
@@ -1762,7 +1807,7 @@ void MTVHistoProducerAlgoForTracker::fill_recoAssociated_simTrack_histos(int cou
 
     for (unsigned int f=0; f<vertposintervals[count].size()-1; f++){
       if (sqrt(vertexTP.perp2())>vertposintervals[count][f]&&
-	  sqrt(vertexTP.perp2())<vertposintervals[count][f+1]) {
+	  sqrt(vertexTP.perp2())<=vertposintervals[count][f+1]) {
 	totSIM_vertpos[count][f]++;
 	if (isMatched) {
 	  totASS_vertpos[count][f]++;
@@ -1774,7 +1819,7 @@ void MTVHistoProducerAlgoForTracker::fill_recoAssociated_simTrack_histos(int cou
   if((*GpSelectorForEfficiencyVsVTXZ)(tp)){
     for (unsigned int f=0; f<dzintervals[count].size()-1; f++){
       if (dzSim>dzintervals[count][f]&&
-	  dzSim<dzintervals[count][f+1]) {
+	  dzSim<=dzintervals[count][f+1]) {
 	totSIM_dz[count][f]++;
 	if (isMatched) {
 	  totASS_dz[count][f]++;
@@ -1784,23 +1829,23 @@ void MTVHistoProducerAlgoForTracker::fill_recoAssociated_simTrack_histos(int cou
 
   
     for (unsigned int f=0; f<zposintervals[count].size()-1; f++){
-        if (vertexTP.z()>zposintervals[count][f]&&vertexTP.z()<zposintervals[count][f+1]) {
+        if (vertexTP.z()>zposintervals[count][f]&&vertexTP.z()<=zposintervals[count][f+1]) {
 	        totSIM_zpos[count][f]++;
 	        if (isMatched) totASS_zpos[count][f]++;
         }
-        if (vertz>zposintervals[count][f]&&vertz<zposintervals[count][f+1]) {
+        if (vertz>zposintervals[count][f]&&vertz<=zposintervals[count][f+1]) {
 	        totSIM_vertz_entire[count][f]++;
 	        if (isMatched) totASS_vertz_entire[count][f]++;
         }
-        if (vertz>zposintervals[count][f]&&vertz<zposintervals[count][f+1] && fabs(momentumTP.eta())<0.9) {
+        if (vertz>zposintervals[count][f]&&vertz<=zposintervals[count][f+1] && fabs(momentumTP.eta())<0.9) {
 	        totSIM_vertz_barrel[count][f]++;
 	        if (isMatched) totASS_vertz_barrel[count][f]++;
         }
-        if (vertz>zposintervals[count][f]&&vertz<zposintervals[count][f+1] && momentumTP.eta()>0.9) {
+        if (vertz>zposintervals[count][f]&&vertz<=zposintervals[count][f+1] && momentumTP.eta()>0.9) {
 	        totSIM_vertz_fwdpos[count][f]++;
 	        if (isMatched) totASS_vertz_fwdpos[count][f]++;
         }
-        if (vertz>zposintervals[count][f]&&vertz<zposintervals[count][f+1] && momentumTP.eta()<-0.9) {
+        if (vertz>zposintervals[count][f]&&vertz<=zposintervals[count][f+1] && momentumTP.eta()<-0.9) {
 	        totSIM_vertz_fwdneg[count][f]++;
 	        if (isMatched) totASS_vertz_fwdneg[count][f]++;
         }
@@ -1813,7 +1858,7 @@ void MTVHistoProducerAlgoForTracker::fill_recoAssociated_simTrack_histos(int cou
    //efficPU vs eta
     for (unsigned int f=0; f<etaintervals[count].size()-1; f++){
       if (getEta(momentumTP.eta())>etaintervals[count][f]&&
-	  getEta(momentumTP.eta())<etaintervals[count][f+1]) {
+	  getEta(momentumTP.eta())<=etaintervals[count][f+1]) {
 	totCONeta[count][f]++;
       }
     } // END for (unsigned int f=0; f<etaintervals[w].size()-1; f++){
@@ -1826,7 +1871,7 @@ void MTVHistoProducerAlgoForTracker::fill_recoAssociated_simTrack_histos(int cou
     } // END for (unsigned int f=0; f<vertcountintervals[count].size()-1; f++){
   
     for (unsigned int f=0; f<zposintervals[count].size()-1; f++){
-      if (vertexTP.z()>zposintervals[count][f]&&vertexTP.z()<zposintervals[count][f+1]) {
+      if (vertexTP.z()>zposintervals[count][f]&&vertexTP.z()<=zposintervals[count][f+1]) {
 	totCONzpos[count][f]++;
       }
     } // END for (unsigned int f=0; f<zposintervals[count].size()-1; f++){

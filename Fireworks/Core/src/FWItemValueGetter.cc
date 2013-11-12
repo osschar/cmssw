@@ -8,7 +8,6 @@
 //
 // Original Author:  Chris Jones
 //         Created:  Sun Nov 30 16:15:43 EST 2008
-// $Id: FWItemValueGetter.cc,v 1.10 2012/08/03 18:20:28 wmtan Exp $
 //
 
 // system include files
@@ -52,6 +51,12 @@ FWItemValueGetter::FWItemValueGetter(const edm::TypeWithDict& iType, const std::
       addEntry("x0", 2, "x", "cm");
       addEntry("y0", 2, "y", "cm");
       addEntry("z0", 2, "z", "cm");
+   }
+   else if (strstr(iPurpose.c_str(), "Vertices") )
+   {
+      addEntry("x", 2, "x", "cm");
+      addEntry("y", 2, "y", "cm");
+      addEntry("z", 2, "z", "cm");
    }
    else if (strstr(iPurpose.c_str(), "Conversion") )
    {

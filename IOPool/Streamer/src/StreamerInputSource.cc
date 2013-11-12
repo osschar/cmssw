@@ -39,10 +39,6 @@ namespace edm {
     int const init_size = 1024*1024;
   }
 
-  std::string StreamerInputSource::processName_;
-  unsigned int StreamerInputSource::protocolVersion_;
-
-
   StreamerInputSource::StreamerInputSource(
                     ParameterSet const& pset,
                     InputSourceDescription const& desc):
@@ -51,8 +47,10 @@ namespace edm {
     dest_(init_size),
     xbuf_(TBuffer::kRead, init_size),
     sendEvent_(),
-    productGetter_(),
-    adjustEventToNewProductRegistry_(false) {
+    eventPrincipalHolder_(),
+    adjustEventToNewProductRegistry_(false),
+    processName_(),
+    protocolVersion_(0U) {
   }
 
   StreamerInputSource::~StreamerInputSource() {}
@@ -91,11 +89,9 @@ namespace edm {
 
   void
   StreamerInputSource::declareStreamers(SendDescs const& descs) {
-    SendDescs::const_iterator i(descs.begin()), e(descs.end());
-
-    for(; i != e; ++i) {
+    for(auto const& item : descs) {
         //pi->init();
-        std::string const real_name = wrappedClassName(i->className());
+        std::string const real_name = wrappedClassName(item.className());
         FDEBUG(6) << "declare: " << real_name << std::endl;
         loadCap(real_name);
     }
@@ -104,11 +100,9 @@ namespace edm {
 
   void
   StreamerInputSource::buildClassCache(SendDescs const& descs) {
-    SendDescs::const_iterator i(descs.begin()), e(descs.end());
-
-    for(; i != e; ++i) {
+    for(auto const& item : descs) {
         //pi->init();
-        std::string const real_name = wrappedClassName(i->className());
+        std::string const real_name = wrappedClassName(item.className());
         FDEBUG(6) << "BuildReadData: " << real_name << std::endl;
         doBuildRealData(real_name);
     }
@@ -154,7 +148,7 @@ namespace edm {
     RootDebug tracer(10,10);
     std::auto_ptr<SendJobHeader> sd((SendJobHeader*)xbuf.ReadObjectAny(desc));
 
-    if(sd.get()==0) {
+    if(sd.get() == nullptr) {
         throw cms::Exception("StreamTranslation","Registry deserialization error")
           << "Could not read the initial product registry list\n";
     }
@@ -176,9 +170,9 @@ namespace edm {
      }
      SendJobHeader::ParameterSetMap const& psetMap = sd->processParameterSet();
      pset::Registry& psetRegistry = *pset::Registry::instance();
-     for (SendJobHeader::ParameterSetMap::const_iterator i = psetMap.begin(), iEnd = psetMap.end(); i != iEnd; ++i) {
-       ParameterSet pset(i->second.pset());
-       pset.setID(i->first);
+     for (auto const& item : psetMap) {
+       ParameterSet pset(item.second.pset());
+       pset.setID(item.first);
        psetRegistry.insertMapped(pset);
      }
   }
@@ -237,18 +231,18 @@ namespace edm {
     xbuf_.SetBuffer(&dest_[0],dest_size,kFALSE);
     RootDebug tracer(10,10);
 
-    setRefCoreStreamer(&productGetter_);
+    setRefCoreStreamer(&eventPrincipalHolder_);
     sendEvent_ = std::unique_ptr<SendEvent>((SendEvent*)xbuf_.ReadObjectAny(tc_));
     setRefCoreStreamer();
 
-    if(sendEvent_.get()==0) {
+    if(sendEvent_.get() == nullptr) {
         throw cms::Exception("StreamTranslation","Event deserialization error")
           << "got a null event from input stream\n";
     }
-    ProcessHistoryRegistry::instance()->insertMapped(sendEvent_->processHistory());
+    processHistoryRegistryUpdate().registerProcessHistory(sendEvent_->processHistory());
 
     FDEBUG(5) << "Got event: " << sendEvent_->aux().id() << " " << sendEvent_->products().size() << std::endl;
-    if(runAuxiliary().get() == 0 || runAuxiliary()->run() != sendEvent_->aux().run()) {
+    if(runAuxiliary().get() == nullptr || runAuxiliary()->run() != sendEvent_->aux().run()) {
       RunAuxiliary* runAuxiliary = new RunAuxiliary(sendEvent_->aux().run(), sendEvent_->aux().time(), Timestamp::invalidTimestamp());
       runAuxiliary->setProcessHistoryID(sendEvent_->processHistory().id());
       setRunAuxiliary(runAuxiliary);
@@ -263,7 +257,7 @@ namespace edm {
     setEventCached();
   }
 
-  EventPrincipal *
+  void
   StreamerInputSource::read(EventPrincipal& eventPrincipal) {
     if(adjustEventToNewProductRegistry_) {
       eventPrincipal.adjustIndexesAfterProductRegistryAddition();
@@ -271,44 +265,42 @@ namespace edm {
       assert(eventOK);
       adjustEventToNewProductRegistry_ = false;
     }
-    boost::shared_ptr<EventSelectionIDVector> ids(new EventSelectionIDVector(sendEvent_->eventSelectionIDs()));
-    boost::shared_ptr<BranchListIndexes> indexes(new BranchListIndexes(sendEvent_->branchListIndexes()));
-    branchIDListHelper()->fixBranchListIndexes(*indexes);
-    eventPrincipal.fillEventPrincipal(sendEvent_->aux(), ids, indexes);
-    productGetter_.setEventPrincipal(&eventPrincipal);
+    EventSelectionIDVector ids(sendEvent_->eventSelectionIDs());
+    BranchListIndexes indexes(sendEvent_->branchListIndexes());
+    branchIDListHelper()->fixBranchListIndexes(indexes);
+    eventPrincipal.fillEventPrincipal(sendEvent_->aux(), processHistoryRegistry(), std::move(ids), std::move(indexes));
+    eventPrincipalHolder_.setEventPrincipal(&eventPrincipal);
 
     // no process name list handling
 
-    SendProds & sps = sendEvent_->products();
-    for(SendProds::iterator spi = sps.begin(), spe = sps.end(); spi != spe; ++spi) {
+    SendProds& sps = sendEvent_->products();
+    for(auto& spitem : sps) {
         FDEBUG(10) << "check prodpair" << std::endl;
-        if(spi->desc() == 0)
+        if(spitem.desc() == nullptr)
           throw cms::Exception("StreamTranslation","Empty Provenance");
         FDEBUG(5) << "Prov:"
-             << " " << spi->desc()->className()
-             << " " << spi->desc()->productInstanceName()
-             << " " << spi->desc()->branchID()
+             << " " << spitem.desc()->className()
+             << " " << spitem.desc()->productInstanceName()
+             << " " << spitem.desc()->branchID()
              << std::endl;
 
-        BranchDescription const branchDesc(*spi->desc());
+        BranchDescription const branchDesc(*spitem.desc());
         // This ProductProvenance constructor inserts into the entry description registry
-        ProductProvenance productProvenance(spi->branchID(), *spi->parents());
+        ProductProvenance productProvenance(spitem.branchID(), *spitem.parents());
 
-        if(spi->prod() != 0) {
-          FDEBUG(10) << "addproduct next " << spi->branchID() << std::endl;
-          eventPrincipal.putOnRead(branchDesc, spi->prod(), productProvenance);
+        if(spitem.prod() != nullptr) {
+          FDEBUG(10) << "addproduct next " << spitem.branchID() << std::endl;
+          eventPrincipal.putOnRead(branchDesc, spitem.prod(), productProvenance);
           FDEBUG(10) << "addproduct done" << std::endl;
         } else {
-          FDEBUG(10) << "addproduct empty next " << spi->branchID() << std::endl;
-          eventPrincipal.putOnRead(branchDesc, spi->prod(), productProvenance);
+          FDEBUG(10) << "addproduct empty next " << spitem.branchID() << std::endl;
+          eventPrincipal.putOnRead(branchDesc, spitem.prod(), productProvenance);
           FDEBUG(10) << "addproduct empty done" << std::endl;
         }
-        spi->clear();
+        spitem.clear();
     }
 
     FDEBUG(10) << "Size = " << eventPrincipal.size() << std::endl;
-
-    return &eventPrincipal;
   }
 
   /**
@@ -373,17 +365,23 @@ namespace edm {
      << "Contact a Storage Manager Developer\n";
   }
 
-  StreamerInputSource::ProductGetter::ProductGetter() : eventPrincipal_(0) {}
+  StreamerInputSource::EventPrincipalHolder::EventPrincipalHolder() : eventPrincipal_(nullptr) {}
 
-  StreamerInputSource::ProductGetter::~ProductGetter() {}
+  StreamerInputSource::EventPrincipalHolder::~EventPrincipalHolder() {}
 
   WrapperHolder
-  StreamerInputSource::ProductGetter::getIt(ProductID const& id) const {
+  StreamerInputSource::EventPrincipalHolder::getIt(ProductID const& id) const {
     return eventPrincipal_ ? eventPrincipal_->getIt(id) : WrapperHolder();
   }
 
+  unsigned int
+  StreamerInputSource::EventPrincipalHolder::transitionIndex_() const {
+    assert(eventPrincipal_ != nullptr);
+    return eventPrincipal_->transitionIndex();
+  }
+
   void
-  StreamerInputSource::ProductGetter::setEventPrincipal(EventPrincipal *ep) {
+  StreamerInputSource::EventPrincipalHolder::setEventPrincipal(EventPrincipal* ep) {
     eventPrincipal_ = ep;
   }
 

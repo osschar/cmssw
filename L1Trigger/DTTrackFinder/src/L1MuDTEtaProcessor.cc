@@ -9,8 +9,6 @@
 //                one Eta Track Finder (ETF) and 
 //                one Eta Matching Unit (EMU) 
 //
-//   $Date: 2008/10/13 07:44:43 $
-//   $Revision: 1.15 $
 //
 //   Author :
 //   N. Neumeister            CERN EP
@@ -231,7 +229,7 @@ void L1MuDTEtaProcessor::receiveData(int bx, const edm::Event& e, const edm::Eve
   int sector = m_epid;
   for ( int stat = 1; stat <= 3; stat++ ) {
     for ( int wheel = -2; wheel <= 2; wheel++ ) {
-      L1MuDTChambThDigi* tseta = dttrig->chThetaSegm(wheel,stat,sector,bx);
+      L1MuDTChambThDigi const* tseta = dttrig->chThetaSegm(wheel,stat,sector,bx);
       bitset<7> pos;
       bitset<7> qual;
 

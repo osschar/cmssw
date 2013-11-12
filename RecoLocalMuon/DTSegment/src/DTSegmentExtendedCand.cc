@@ -5,7 +5,6 @@
  *  detailed description
  *
  * \author : Stefano Lacaprara - INFN LNL <stefano.lacaprara@pd.infn.it>
- * $date   : 15/05/2008 17:50:32 CEST $
  *
  * Modification:
  *
@@ -31,8 +30,8 @@ bool DTSegmentExtendedCand::isCompatible(const DTSegmentExtendedCand::DTSLRecClu
   LocalPoint posAtSL =
     position()+direction()*(clus.pos.z()-position().z())/cos(direction().theta());
   // cout << "pos :" << clus.pos << " posAtSL " << posAtSL << endl;
-  static float errScaleFact=10.;
-  static float minError=25.; // (cm)
+  constexpr float errScaleFact=10.;
+  constexpr float minError=25.; // (cm)
   // cout << "clus.err.xx() " << clus.err << endl;
   return fabs((posAtSL-clus.pos).x())<max(errScaleFact*sqrt(clus.err.xx()), minError);
 }

@@ -9,8 +9,6 @@
  *
  * \author: G.P. Di Giovanni - University of Florida
  *
- * $Date$
- * $Revision$
  *
  */
 
@@ -19,6 +17,7 @@
 
 // system include files
 #include <iomanip>
+#include <iostream>
 
 // user include files
 //   base class

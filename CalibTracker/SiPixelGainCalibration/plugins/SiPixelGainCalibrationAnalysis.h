@@ -13,7 +13,6 @@ Implementation:
 //
 // Original Author:  Freya Blekman
 //         Created:  Wed Nov 14 15:02:06 CET 2007
-// $Id: SiPixelGainCalibrationAnalysis.h,v 1.22 2009/05/28 22:19:06 dlange Exp $
 //
 //
 
@@ -117,7 +116,7 @@ private:
   double scalarVcalHigh_VcalLow_;
   
   //Summary
-  ofstream summary_;
+  std::ofstream summary_;
   uint32_t currentDetID_;
   int* statusNumbers_;
   

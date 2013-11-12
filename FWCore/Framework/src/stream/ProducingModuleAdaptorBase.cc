@@ -18,7 +18,7 @@
 #include "FWCore/Framework/interface/Run.h"
 #include "FWCore/Framework/interface/LuminosityBlockPrincipal.h"
 #include "FWCore/Framework/interface/RunPrincipal.h"
-
+#include "FWCore/Framework/src/PreallocationConfiguration.h"
 
 //
 // constants, enums and typedefs
@@ -36,7 +36,6 @@ namespace edm {
     template< typename T>
     ProducingModuleAdaptorBase<T>::ProducingModuleAdaptorBase()
     {
-      m_streamModules.resize(1);
     }
     
     template< typename T>
@@ -50,6 +49,15 @@ namespace edm {
     //
     // member functions
     //
+    
+    template< typename T>
+    void
+    ProducingModuleAdaptorBase<T>::doPreallocate(PreallocationConfiguration const& iPrealloc) {
+      m_streamModules.resize(iPrealloc.numberOfStreams(),
+                             static_cast<T*>(nullptr));
+      setupStreamModules();
+    }
+
     template< typename T>
     void
     ProducingModuleAdaptorBase<T>::registerProductsAndCallbacks(ProducingModuleAdaptorBase const*, ProductRegistry* reg) {
@@ -76,16 +84,23 @@ namespace edm {
     
     template< typename T>
     void
-    ProducingModuleAdaptorBase<T>::itemsToGet(BranchType iType, std::vector<ProductHolderIndex>& iIndices) const {
+    ProducingModuleAdaptorBase<T>::itemsToGet(BranchType iType, std::vector<ProductHolderIndexAndSkipBit>& iIndices) const {
       assert(not m_streamModules.empty());
       m_streamModules[0]->itemsToGet(iType,iIndices);
     }
     
     template< typename T>
     void
-    ProducingModuleAdaptorBase<T>::itemsMayGet(BranchType iType, std::vector<ProductHolderIndex>& iIndices) const {
+    ProducingModuleAdaptorBase<T>::itemsMayGet(BranchType iType, std::vector<ProductHolderIndexAndSkipBit>& iIndices) const {
       assert(not m_streamModules.empty());
-      m_streamModules[0]->itemsToGet(iType,iIndices);
+      m_streamModules[0]->itemsMayGet(iType,iIndices);
+    }
+
+    template<typename T>
+    std::vector<edm::ProductHolderIndexAndSkipBit> const&
+    ProducingModuleAdaptorBase<T>::itemsToGetFromEvent() const {
+      assert(not m_streamModules.empty());
+      return m_streamModules[0]->itemsToGetFromEvent();
     }
 
     template< typename T>
@@ -106,7 +121,7 @@ namespace edm {
     template< typename T>
     void
     ProducingModuleAdaptorBase<T>::doBeginStream(StreamID id) {
-      m_streamModules[id]->beginStream();
+      m_streamModules[id]->beginStream(id);
     }
     template< typename T>
     void

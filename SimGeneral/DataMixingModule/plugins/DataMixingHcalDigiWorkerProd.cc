@@ -4,6 +4,7 @@
 //
 //--------------------------------------------
 
+#include "FWCore/Framework/interface/ConsumesCollector.h"
 #include "FWCore/MessageLogger/interface/MessageLogger.h"
 #include "FWCore/Utilities/interface/EDMException.h"
 #include "DataMixingHcalDigiWorkerProd.h"
@@ -12,17 +13,18 @@
 using namespace std;
 namespace edm {
   // Constructor 
-  DataMixingHcalDigiWorkerProd::DataMixingHcalDigiWorkerProd(const edm::ParameterSet& ps) : 
+  DataMixingHcalDigiWorkerProd::DataMixingHcalDigiWorkerProd(const edm::ParameterSet& ps, edm::ConsumesCollector& iC) : 
     HBHEPileInputTag_(ps.getParameter<edm::InputTag>("HBHEPileInputTag")),
     HOPileInputTag_(ps.getParameter<edm::InputTag>("HOPileInputTag")),
     HFPileInputTag_(ps.getParameter<edm::InputTag>("HFPileInputTag")),
     ZDCPileInputTag_(ps.getParameter<edm::InputTag>("ZDCPileInputTag")),
-    theHBHESignalGenerator(HBHEPileInputTag_),
-    theHOSignalGenerator(HOPileInputTag_),
-    theHFSignalGenerator(HFPileInputTag_),
-    theZDCSignalGenerator(ZDCPileInputTag_),
     label_(ps.getParameter<std::string>("Label"))
-  {                                                         
+  {  
+
+    theHBHESignalGenerator = HBHESignalGenerator(HBHEPileInputTag_,tok_hbhe_);
+    theHOSignalGenerator = HOSignalGenerator(HOPileInputTag_,tok_ho_);
+    theHFSignalGenerator = HFSignalGenerator(HFPileInputTag_,tok_hf_);
+    theZDCSignalGenerator = ZDCSignalGenerator(ZDCPileInputTag_,tok_zdc_);
 
     // get the subdetector names
     //    this->getSubdetectorNames();  //something like this may be useful to check what we are supposed to do...
@@ -39,7 +41,7 @@ namespace edm {
 
     // initialize HcalDigitizer here...
 
-    myHcalDigitizer_ = new HcalDigitizer( ps );
+    myHcalDigitizer_ = new HcalDigitizer( ps, iC );
 
     myHcalDigitizer_->setHBHENoiseSignalGenerator( & theHBHESignalGenerator );
     myHcalDigitizer_->setHFNoiseSignalGenerator( & theHFSignalGenerator );

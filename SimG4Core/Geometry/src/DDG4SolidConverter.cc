@@ -5,6 +5,7 @@
 
 #include "FWCore/MessageLogger/interface/MessageLogger.h"
 #include "FWCore/Utilities/interface/Exception.h"
+#include "G4SystemOfUnits.hh"
 
 using namespace std;
 const vector<double> * DDG4SolidConverter::par_ = 0; 
@@ -223,13 +224,17 @@ G4VSolid * DDG4SolidConverter::torus(const DDSolid & s)
 
 
 #include "G4ReflectedSolid.hh"
+
+namespace {
+  static const HepGeom::ReflectZ3D z_reflection;
+}
+
 G4VSolid * DDG4SolidConverter::reflected(const DDSolid & s)
 {
   LogDebug("SimG4CoreGeometry") << "DDG4SolidConverter: reflected = " << s ;  
   G4ReflectedSolid * rs = 0;
   DDReflectionSolid rfs(s); 
   if (rfs) {	
-    static /* G4Transform3D */ HepGeom::ReflectZ3D z_reflection; // = HepGeom::ReflectZ3D;	
     rs = new G4ReflectedSolid(s.name().name(), 
                               DDG4SolidConverter().convert(rfs.unreflected()), 
 			      z_reflection);

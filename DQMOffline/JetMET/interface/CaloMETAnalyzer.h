@@ -5,8 +5,6 @@
  *
  *  DQM monitoring source for CaloMET
  *
- *  $Date: 2012/04/20 14:37:05 $
- *  $Revision: 1.34 $
  *  \author F. Chlebana - Fermilab
  *          K. Hatakeyama - Rockefeller University
  */
@@ -14,6 +12,7 @@
 #include <memory>
 #include <fstream>
 #include "FWCore/Framework/interface/Frameworkfwd.h"
+#include "FWCore/Framework/interface/ConsumesCollector.h"
 #include "DQMOffline/JetMET/interface/CaloMETAnalyzerBase.h"
 #include "FWCore/Framework/interface/Event.h"
 #include "FWCore/Framework/interface/MakerMacros.h"
@@ -35,7 +34,7 @@
 #include "RecoJets/JetProducers/interface/JetIDHelper.h"
 
 #include "DataFormats/MuonReco/interface/MuonMETCorrectionData.h"
-#include "DataFormats/Common/interface/ValueMap.h"  
+#include "DataFormats/Common/interface/ValueMap.h"
 #include "DataFormats/MuonReco/interface/Muon.h"
 #include "DataFormats/MuonReco/interface/MuonFwd.h"
 #include "DataFormats/MuonReco/interface/MuonMETCorrectionData.h"
@@ -54,8 +53,8 @@ class CaloMETAnalyzer : public CaloMETAnalyzerBase {
  public:
 
   /// Constructor
-  CaloMETAnalyzer(const edm::ParameterSet&);
-  
+  CaloMETAnalyzer(const edm::ParameterSet&, edm::ConsumesCollector&&);
+
   /// Destructor
   virtual ~CaloMETAnalyzer();
 
@@ -66,7 +65,7 @@ class CaloMETAnalyzer : public CaloMETAnalyzerBase {
   void endJob();
 
   /// Get the analysis
-  void analyze(const edm::Event&, const edm::EventSetup&, 
+  void analyze(const edm::Event&, const edm::EventSetup&,
                const edm::TriggerResults&);
 
   /// Initialize run-based parameters
@@ -99,7 +98,7 @@ class CaloMETAnalyzer : public CaloMETAnalyzerBase {
 
  private:
   // ----------member data ---------------------------
-  
+
   edm::ParameterSet parameters;
   // Switch for verbosity
   int _verbose;
@@ -107,7 +106,7 @@ class CaloMETAnalyzer : public CaloMETAnalyzerBase {
 
   std::string metname;
   std::string _source; // HLT? FU?
-  
+
   edm::InputTag theCaloMETCollectionLabel;
 
   edm::InputTag theCaloTowersLabel;
@@ -252,30 +251,30 @@ class CaloMETAnalyzer : public CaloMETAnalyzerBase {
   MonitorElement* hCaloMETNoHF_profile;
   MonitorElement* hCaloSumET_profile;
 
-  
+
   MonitorElement* hCaloMET_logx;
   MonitorElement* hCaloSumET_logx;
-  
+
   //MonitorElement* hCaloMETIonFeedbck;
   //MonitorElement* hCaloMETHPDNoise;
   //MonitorElement* hCaloMETRBXNoise;
-  
+
   //MonitorElement* hCaloMETPhi002;
   //MonitorElement* hCaloMETPhi010;
   MonitorElement* hCaloMETPhi020;
-  
+
   MonitorElement* hCaloMExLS;
   MonitorElement* hCaloMEyLS;
-  
+
   MonitorElement* hCaloMaxEtInEmTowers;
   MonitorElement* hCaloMaxEtInHadTowers;
   MonitorElement* hCaloEtFractionHadronic;
   MonitorElement* hCaloEmEtFraction;
-  
+
   //MonitorElement* hCaloEmEtFraction002;
   //MonitorElement* hCaloEmEtFraction010;
   MonitorElement* hCaloEmEtFraction020;
-  
+
   MonitorElement* hCaloHadEtInHB;
   MonitorElement* hCaloHadEtInHO;
   MonitorElement* hCaloHadEtInHE;
@@ -283,21 +282,21 @@ class CaloMETAnalyzer : public CaloMETAnalyzerBase {
   MonitorElement* hCaloEmEtInHF;
   MonitorElement* hCaloEmEtInEE;
   MonitorElement* hCaloEmEtInEB;
-  
+
   MonitorElement* hCaloEmMEx;
   MonitorElement* hCaloEmMEy;
   //MonitorElement* hCaloEmEz;
   MonitorElement* hCaloEmMET;
   MonitorElement* hCaloEmMETPhi;
   //MonitorElement* hCaloEmSumET;
-  
+
   MonitorElement* hCaloHaMEx;
   MonitorElement* hCaloHaMEy;
   //MonitorElement* hCaloHaEz;
   MonitorElement* hCaloHaMET;
   MonitorElement* hCaloHaMETPhi;
   //MonitorElement* hCaloHaSumET;
-  
+
   MonitorElement* hCalomuPt;
   MonitorElement* hCalomuEta;
   MonitorElement* hCalomuNhits;
@@ -306,6 +305,6 @@ class CaloMETAnalyzer : public CaloMETAnalyzerBase {
   MonitorElement* hCaloMExCorrection;
   MonitorElement* hCaloMEyCorrection;
   MonitorElement* hCaloMuonCorrectionFlag;
-  
+
 };
 #endif

@@ -7,7 +7,7 @@
 //
 // HLTrackerHaloFilter
 //
-// Filter selecting beam halo track candidates by looking at 
+// Filter selecting beam halo track candidates by looking at
 // TEC clusters accumulations
 //
 // This filter is working with events seeded by L1_BeamHalo
@@ -24,6 +24,8 @@
 #include "FWCore/Framework/interface/Event.h"
 #include "FWCore/Framework/interface/EventSetup.h"
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
+#include "FWCore/ParameterSet/interface/ConfigurationDescriptions.h"
+#include "FWCore/ParameterSet/interface/ParameterSetDescription.h"
 #include "FWCore/MessageLogger/interface/MessageLogger.h"
 #include "DataFormats/Common/interface/Handle.h"
 #include "FWCore/Framework/interface/ESHandle.h"
@@ -41,26 +43,21 @@ class HLTTrackerHaloFilter : public HLTFilter {
 public:
   explicit HLTTrackerHaloFilter(const edm::ParameterSet&);
   ~HLTTrackerHaloFilter();
+  static void fillDescriptions(edm::ConfigurationDescriptions & descriptions);
 
 private:
-  virtual bool hltFilter(edm::Event&, const edm::EventSetup&, trigger::TriggerFilterObjectWithRefs & filterproduct);
+  virtual bool hltFilter(edm::Event&, const edm::EventSetup&, trigger::TriggerFilterObjectWithRefs & filterproduct) const override;
 
+  edm::EDGetTokenT<edm::RefGetter<SiStripCluster> > inputToken_;
   edm::InputTag inputTag_; // input tag identifying product containing pixel clusters
   int max_clusTp_; // Maximum number of TEC+ clusters
   int max_clusTm_; // Maximum number of TEC- clusters
   int sign_accu_;  // Minimal size for a signal accumulation
   int max_clusT_;  // Maximum number of TEC clusters
   int max_back_;   // Max number of accumulations per side
-  int fastproc_;   // fast unpacking of cluster info, based on DetIds 
- 
-  int SST_clus_MAP_m[5][8][9];
-  int SST_clus_MAP_p[5][8][9];
-  int SST_clus_PROJ_m[5][8];
-  int SST_clus_PROJ_p[5][8];
+  int fastproc_;   // fast unpacking of cluster info, based on DetIds
 
   static const int m_TEC_cells[];
-
-
 };
 
 #endif

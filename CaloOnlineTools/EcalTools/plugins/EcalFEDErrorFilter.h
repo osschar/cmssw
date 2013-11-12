@@ -2,7 +2,7 @@
 //
 // Package:    EcalFEDErrorFilter
 // Class:      EcalFEDErrorFilter
-// 
+//
 /**\class EcalFEDErrorFilter EcalFEDErrorFilter.cc filter/EcalFEDErrorFilter/src/EcalFEDErrorFilter.cc
 
 Description: <one line class summary>
@@ -13,7 +13,6 @@ Implementation:
 //
 // Original Author:  Giovanni FRANZONI
 //         Created:  Tue Jan 22 13:55:00 CET 2008
-// $Id: EcalFEDErrorFilter.h,v 1.3 2010/02/11 00:10:40 wmtan Exp $
 //
 //
 
@@ -47,13 +46,13 @@ class EcalFEDErrorFilter : public HLTFilter {
 public:
   explicit EcalFEDErrorFilter(const edm::ParameterSet&);
   ~EcalFEDErrorFilter();
-  
+
 private:
-  virtual bool hltFilter(edm::Event&, const edm::EventSetup&, trigger::TriggerFilterObjectWithRefs & filterproduct);
-  
+  virtual bool hltFilter(edm::Event&, const edm::EventSetup&, trigger::TriggerFilterObjectWithRefs & filterproduct) const override;
+
   // ----------member data ---------------------------
-  
+
   edm::InputTag     DataLabel_;
   std::vector<int> fedUnpackList_;
-  
+
 };

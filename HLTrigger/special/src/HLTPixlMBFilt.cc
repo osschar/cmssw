@@ -2,8 +2,6 @@
  *
  * See header file for documentation
  *
- *  $Date: 2008/01/10 07:52:24 $
- *  $Revision: 1.3 $
  *
  *  \author Mika Huhtinen
  *
@@ -14,11 +12,10 @@
 #include "FWCore/Framework/interface/Event.h"
 #include "FWCore/Framework/interface/EventSetup.h"
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
+#include "FWCore/ParameterSet/interface/ConfigurationDescriptions.h"
+#include "FWCore/ParameterSet/interface/ParameterSetDescription.h"
 
 #include "DataFormats/Common/interface/Handle.h"
-
-#include "DataFormats/RecoCandidate/interface/RecoChargedCandidate.h"
-#include "DataFormats/RecoCandidate/interface/RecoChargedCandidateFwd.h"
 
 #include "DataFormats/HLTReco/interface/TriggerFilterObjectWithRefs.h"
 
@@ -30,7 +27,7 @@
 //
 // constructors and destructor
 //
- 
+
 HLTPixlMBFilt::HLTPixlMBFilt(const edm::ParameterSet& iConfig) : HLTFilter(iConfig),
     pixlTag_ (iConfig.getParameter<edm::InputTag>("pixlTag")),
     min_Pt_  (iConfig.getParameter<double>("MinPt")),
@@ -38,6 +35,7 @@ HLTPixlMBFilt::HLTPixlMBFilt(const edm::ParameterSet& iConfig) : HLTFilter(iConf
     min_sep_  (iConfig.getParameter<double>("MinSep"))
 
 {
+  pixlToken_ = consumes<reco::RecoChargedCandidateCollection>(pixlTag_);
   LogDebug("") << "MinPt cut " << min_Pt_   << "pixl: " << pixlTag_.encode();
   LogDebug("") << "Requesting : " << min_trks_ << " tracks from same vertex ";
   LogDebug("") << "Requesting tracks from same vertex eta-phi separation by " << min_sep_;
@@ -47,12 +45,23 @@ HLTPixlMBFilt::~HLTPixlMBFilt()
 {
 }
 
+void
+HLTPixlMBFilt::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
+  edm::ParameterSetDescription desc;
+  makeHLTFilterDescription(desc);
+  desc.add<edm::InputTag>("pixlTag",edm::InputTag("hltPixelCands"));
+  desc.add<double>("MinPt",0.);
+  desc.add<unsigned int>("MinTrks",2);
+  desc.add<double>("MinSep",1.);
+  descriptions.add("hltPixlMBFilt",desc);
+}
+
 //
 // member functions
 //
 
 // ------------ method called to produce the data  ------------
-bool HLTPixlMBFilt::hltFilter(edm::Event& iEvent, const edm::EventSetup& iSetup, trigger::TriggerFilterObjectWithRefs & filterproduct)
+bool HLTPixlMBFilt::hltFilter(edm::Event& iEvent, const edm::EventSetup& iSetup, trigger::TriggerFilterObjectWithRefs & filterproduct) const
 {
    using namespace std;
    using namespace edm;
@@ -70,8 +79,7 @@ bool HLTPixlMBFilt::hltFilter(edm::Event& iEvent, const edm::EventSetup& iSetup,
    // get hold of products from Event
 
    Handle<RecoChargedCandidateCollection> tracks;
-
-   iEvent.getByLabel(pixlTag_,tracks);
+   iEvent.getByToken(pixlToken_,tracks);
 
    // pixel tracks
    int npixl_tot = 0;
@@ -85,9 +93,9 @@ bool HLTPixlMBFilt::hltFilter(edm::Event& iEvent, const edm::EventSetup& iSetup,
    unsigned int nsame_vtx=0;
    int itrk = -1;
    if (tracks->size() >= min_trks_) {
-     for (ipixl=apixl; ipixl!=epixl; ipixl++){ 
+     for (ipixl=apixl; ipixl!=epixl; ipixl++){
        itrk++;
-       const double& ztrk1 = ipixl->vz();		    
+       const double& ztrk1 = ipixl->vz();		
        const double& etatrk1 = ipixl->momentum().eta();
        const double& phitrk1 = ipixl->momentum().phi();
        nsame_vtx=1;
@@ -103,7 +111,7 @@ bool HLTPixlMBFilt::hltFilter(edm::Event& iEvent, const edm::EventSetup& iSetup,
          for (jpixl=apixl; jpixl!=epixl; jpixl++) {
 	   jtrk++;
 	   if (jpixl==ipixl) continue;
-           const double& ztrk2 = jpixl->vz();		    
+           const double& ztrk2 = jpixl->vz();		
            const double& etatrk2 = jpixl->momentum().eta();
            const double& phitrk2 = jpixl->momentum().phi();
            double eta_dist=etatrk2-etatrk1;

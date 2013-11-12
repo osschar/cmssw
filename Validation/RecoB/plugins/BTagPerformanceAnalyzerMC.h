@@ -72,7 +72,7 @@ typedef std::map<edm::RefToBase<reco::Jet>, reco::JetFlavour::Leptons, JetRefCom
   //  reco::JetFlavour getJetFlavour(
   //	edm::RefToBase<reco::Jet> caloRef, FlavourMap flavours);
   bool getJetWithFlavour( edm::RefToBase<reco::Jet> caloRef,
-                         FlavourMap flavours, JetWithFlavour &jetWithFlavour,
+                         const FlavourMap& _flavours, JetWithFlavour &jetWithFlavour,
                          const edm::EventSetup & es);
 
   std::vector<std::string> tiDataFormatType;
@@ -112,6 +112,15 @@ typedef std::map<edm::RefToBase<reco::Jet>, reco::JetFlavour::Leptons, JetRefCom
 
   bool eventInitialized;
   bool electronPlots, muonPlots, tauPlots;
+
+  //add consumes 
+  edm::EDGetTokenT<GenEventInfoProduct> genToken;
+  edm::EDGetTokenT<reco::JetFlavourMatchingCollection> jetToken;
+  edm::EDGetTokenT<reco::SoftLeptonTagInfoCollection> slInfoToken;
+  std::vector< edm::EDGetTokenT<reco::JetTagCollection> > jetTagToken;
+  std::vector< std::pair<edm::EDGetTokenT<reco::JetTagCollection>, edm::EDGetTokenT<reco::JetTagCollection>> > tagCorrelationToken;
+  std::vector<std::vector <edm::EDGetTokenT<edm::View<reco::BaseTagInfo>> >> tagInfoToken;
+
 };
 
 

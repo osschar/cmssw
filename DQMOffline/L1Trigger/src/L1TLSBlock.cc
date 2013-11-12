@@ -14,8 +14,6 @@
  *
  * Todo: see header file
  *
- * $Date: 2012/10/23 12:01:01 $
- * $Revision: 0.0 $
  *
  */
 
@@ -76,7 +74,7 @@ L1TLSBlock::~L1TLSBlock(){}
 //-------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------
 
-L1TLSBlock::LumiRangeList L1TLSBlock::doBlocking(LumiTestDoubleList inputList, double threshold, BLOCKBY blockingMethod)
+L1TLSBlock::LumiRangeList L1TLSBlock::doBlocking(const LumiTestDoubleList& inputList, double threshold, BLOCKBY blockingMethod)
 {
   inputDoubleList_ = inputList;
   thresholdD_ = threshold;
@@ -100,7 +98,7 @@ L1TLSBlock::LumiRangeList L1TLSBlock::doBlocking(LumiTestDoubleList inputList, d
 //-------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------
 
-L1TLSBlock::LumiRangeList L1TLSBlock::doBlocking(LumiTestIntList inputList, int threshold, BLOCKBY blockingMethod)
+L1TLSBlock::LumiRangeList L1TLSBlock::doBlocking(const LumiTestIntList& inputList, int threshold, BLOCKBY blockingMethod)
 {
   inputIntList_ = inputList;
   thresholdI_ = threshold;

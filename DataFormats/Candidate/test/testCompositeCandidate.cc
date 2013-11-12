@@ -1,4 +1,3 @@
-// $Id: testCompositeCandidate.cc,v 1.5 2007/10/23 17:27:05 llista Exp $
 #include <cppunit/extensions/HelperMacros.h>
 #include "DataFormats/Candidate/interface/LeafCandidate.h"
 #include "DataFormats/Candidate/interface/CompositeCandidate.h"
@@ -58,6 +57,7 @@ void testCompositeCandidate::checkAll() {
     const reco::Candidate * d[ 2 ];
     int idx = 0;
     const reco::CompositeCandidate & cand = c;
+    CPPUNIT_ASSERT(c.numberOfDaughters()==2);
     for( reco::Candidate::const_iterator i = cand.begin(); i != cand.end(); ++ i ) {
       d[ idx ++ ] = & * i;
     }

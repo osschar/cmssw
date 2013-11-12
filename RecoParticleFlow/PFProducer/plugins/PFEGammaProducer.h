@@ -73,7 +73,7 @@ class PFEGammaProducer : public edm::EDProducer {
 			     );   
   
   edm::EDGetTokenT<reco::PFBlockCollection>  inputTagBlocks_;
-  edm::EDGetTokenT<reco::SuperCluster::EEtoPSAssociation> eetopsSrc_;
+  edm::EDGetTokenT<reco::PFCluster::EEtoPSAssociation> eetopsSrc_;
   edm::EDGetTokenT<reco::VertexCollection>  vertices_;
 
   //Use of HO clusters and links in PF Reconstruction
@@ -123,7 +123,6 @@ class PFEGammaProducer : public edm::EDProducer {
   unsigned int nTrackIsoForEgammaSC_;  
   
   reco::Vertex       primaryVertex_;
-  bool               useVertices_;   
   
   std::auto_ptr< reco::PFCandidateCollection >          egCandidates_;
   std::auto_ptr<reco::PFCandidateEGammaExtraCollection> egExtra_;

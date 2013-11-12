@@ -2,11 +2,10 @@
  *
  * Generates PYQUEN HepMC events
  *
- * $Id: PyquenHadronizer.cc,v 1.15 2013/01/20 23:55:21 mnguyen Exp $
 */
 
 #include <iostream>
-#include "time.h"
+#include <ctime>
 
 #include "GeneratorInterface/PyquenInterface/interface/PyquenHadronizer.h"
 #include "GeneratorInterface/PyquenInterface/interface/PyquenWrapper.h"

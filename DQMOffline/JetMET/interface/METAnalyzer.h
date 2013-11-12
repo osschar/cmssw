@@ -6,8 +6,6 @@
  *
  *  DQM monitoring source for MET (Mu corrected/TcMET)
  *
- *  $Date: 2012/04/20 14:37:06 $
- *  $Revision: 1.25 $
  *  \author A.Apresyan - Caltech
  */
 
@@ -16,6 +14,7 @@
 #include <fstream>
 #include "TMath.h"
 #include "FWCore/Framework/interface/Frameworkfwd.h"
+#include "FWCore/Framework/interface/ConsumesCollector.h"
 #include "DQMOffline/JetMET/interface/METAnalyzerBase.h"
 #include "FWCore/Framework/interface/Event.h"
 #include "FWCore/Framework/interface/MakerMacros.h"
@@ -38,7 +37,7 @@
 #include "RecoJets/JetProducers/interface/JetIDHelper.h"
 
 #include "DataFormats/MuonReco/interface/MuonMETCorrectionData.h"
-#include "DataFormats/Common/interface/ValueMap.h"  
+#include "DataFormats/Common/interface/ValueMap.h"
 #include "DataFormats/MuonReco/interface/Muon.h"
 #include "DataFormats/MuonReco/interface/MuonFwd.h"
 #include "DataFormats/MuonReco/interface/MuonMETCorrectionData.h"
@@ -55,8 +54,8 @@ class METAnalyzer : public METAnalyzerBase {
  public:
 
   /// Constructor
-  METAnalyzer(const edm::ParameterSet&);
-  
+  METAnalyzer(const edm::ParameterSet&, edm::ConsumesCollector&&);
+
   /// Destructor
   virtual ~METAnalyzer();
 
@@ -71,7 +70,7 @@ class METAnalyzer : public METAnalyzerBase {
   void bookMonitorElement(std::string, bool);
 
   /// Get the analysis
-  void analyze(const edm::Event&, const edm::EventSetup&, 
+  void analyze(const edm::Event&, const edm::EventSetup&,
                const edm::TriggerResults&);
 
   /// Initialize run-based parameters
@@ -98,7 +97,7 @@ class METAnalyzer : public METAnalyzerBase {
 
  private:
   // ----------member data ---------------------------
-  
+
   edm::ParameterSet parameters;
   // Switch for verbosity
   int _verbose;
@@ -161,7 +160,7 @@ class METAnalyzer : public METAnalyzerBase {
   int _vtxndof_min;
   double _vtxchi2_max;
   double _vtxz_max;
-  
+
   int _trig_JetMB;
   int _trig_HighPtJet;
   int _trig_LowPtJet;
@@ -257,7 +256,7 @@ class METAnalyzer : public METAnalyzerBase {
   MonitorElement* hmuNhits;
   MonitorElement* hmuChi2;
   MonitorElement* hmuD0;
-  
+
   MonitorElement* hMExCorrection;
   MonitorElement* hMEyCorrection;
   MonitorElement* hMuonCorrectionFlag;

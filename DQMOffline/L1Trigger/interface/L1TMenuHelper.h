@@ -4,8 +4,6 @@
 /*
  * \file L1TMenuHelper.h
  *
- * $Date: 2011/11/15 10:41:00 $
- * $Revision: 1.6 $
  * \author J. Pela
  *
 */
@@ -92,9 +90,9 @@ class L1TMenuHelper {
     std::string enumToStringL1GtConditionCategory(L1GtConditionCategory iConditionCategory);
 
     // Getters
-    int  getPrescaleByAlias(TString iCategory, TString iAlias);
-    unsigned int getEtaRangeByAlias(TString iCategory, TString iAlias);    
-    unsigned int getQualityAlias   (TString iCategory, TString iAlias);
+    int  getPrescaleByAlias(const TString& iCategory, const TString& iAlias);
+    unsigned int getEtaRangeByAlias(const TString& iCategory, const TString& iAlias);    
+    unsigned int getQualityAlias   (const TString& iCategory, const TString& iAlias);
 
   private:
 

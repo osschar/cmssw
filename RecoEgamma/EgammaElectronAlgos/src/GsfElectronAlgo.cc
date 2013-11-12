@@ -10,7 +10,6 @@
 #include "RecoEcal/EgammaCoreTools/interface/EcalClusterFunctionBaseClass.h"
 #include "RecoEcal/EgammaCoreTools/interface/EcalClusterTools.h"
 
-#include "DataFormats/ParticleFlowReco/interface/GsfPFRecTrackFwd.h"
 #include "DataFormats/ParticleFlowReco/interface/GsfPFRecTrack.h"
 #include "DataFormats/EgammaReco/interface/BasicCluster.h"
 #include "DataFormats/EgammaReco/interface/ElectronSeed.h"
@@ -654,6 +653,7 @@ void GsfElectronAlgo::checkSetup( const edm::EventSetup & es )
   }
  }
 
+
 void GsfElectronAlgo::copyElectrons( GsfElectronCollection & outEle )
  {
   GsfElectronPtrCollection::const_iterator it ;
@@ -672,21 +672,21 @@ void GsfElectronAlgo::beginEvent( edm::Event & event )
 
   // init the handles linked to the current event
   eventData_->event = &event ;
-  event.getByLabel(generalData_->inputCfg.previousGsfElectrons,eventData_->previousElectrons) ;
-  event.getByLabel(generalData_->inputCfg.pflowGsfElectronsTag,eventData_->pflowElectrons) ;
-  event.getByLabel(generalData_->inputCfg.gsfElectronCores,eventData_->coreElectrons) ;
-  event.getByLabel(generalData_->inputCfg.ctfTracks,eventData_->currentCtfTracks) ;
-  event.getByLabel(generalData_->inputCfg.barrelRecHitCollection,eventData_->barrelRecHits) ;
-  event.getByLabel(generalData_->inputCfg.endcapRecHitCollection,eventData_->endcapRecHits) ;
-  event.getByLabel(generalData_->inputCfg.hcalTowersTag,eventData_->towers) ;
-  event.getByLabel(generalData_->inputCfg.pfMVA,eventData_->pfMva) ;
-  event.getByLabel(generalData_->inputCfg.seedsTag,eventData_->seeds) ;
+  event.getByToken(generalData_->inputCfg.previousGsfElectrons,eventData_->previousElectrons) ;
+  event.getByToken(generalData_->inputCfg.pflowGsfElectronsTag,eventData_->pflowElectrons) ;
+  event.getByToken(generalData_->inputCfg.gsfElectronCores,eventData_->coreElectrons) ;
+  event.getByToken(generalData_->inputCfg.ctfTracks,eventData_->currentCtfTracks) ;
+  event.getByToken(generalData_->inputCfg.barrelRecHitCollection,eventData_->barrelRecHits) ;
+  event.getByToken(generalData_->inputCfg.endcapRecHitCollection,eventData_->endcapRecHits) ;
+  event.getByToken(generalData_->inputCfg.hcalTowersTag,eventData_->towers) ;
+  event.getByToken(generalData_->inputCfg.pfMVA,eventData_->pfMva) ;
+  event.getByToken(generalData_->inputCfg.seedsTag,eventData_->seeds) ;
   if (generalData_->strategyCfg.useGsfPfRecTracks)
-   { event.getByLabel(generalData_->inputCfg.gsfPfRecTracksTag,eventData_->gsfPfRecTracks) ; }
+   { event.getByToken(generalData_->inputCfg.gsfPfRecTracksTag,eventData_->gsfPfRecTracks) ; }
 
   // get the beamspot from the Event:
   edm::Handle<reco::BeamSpot> recoBeamSpotHandle ;
-  event.getByLabel(generalData_->inputCfg.beamSpotTag,recoBeamSpotHandle) ;
+  event.getByToken(generalData_->inputCfg.beamSpotTag,recoBeamSpotHandle) ;
   eventData_->beamspot = recoBeamSpotHandle.product() ;
 
   // prepare access to hcal data
@@ -741,9 +741,9 @@ void GsfElectronAlgo::beginEvent( edm::Event & event )
   //Fill in the Isolation Value Maps for PF and EcalDriven electrons
   std::vector<edm::InputTag> inputTagIsoVals;
   if(! generalData_->inputCfg.pfIsoVals.empty() ) {
-    inputTagIsoVals.push_back(generalData_->inputCfg.pfIsoVals.getParameter<edm::InputTag>("pfChargedHadrons"));
-    inputTagIsoVals.push_back(generalData_->inputCfg.pfIsoVals.getParameter<edm::InputTag>("pfPhotons"));
-    inputTagIsoVals.push_back(generalData_->inputCfg.pfIsoVals.getParameter<edm::InputTag>("pfNeutralHadrons"));
+    inputTagIsoVals.push_back(generalData_->inputCfg.pfIsoVals.getParameter<edm::InputTag>("pfSumChargedHadronPt"));
+    inputTagIsoVals.push_back(generalData_->inputCfg.pfIsoVals.getParameter<edm::InputTag>("pfSumPhotonEt"));
+    inputTagIsoVals.push_back(generalData_->inputCfg.pfIsoVals.getParameter<edm::InputTag>("pfSumNeutralHadronEt"));
 
     eventData_->pfIsolationValues.resize(inputTagIsoVals.size());
 
@@ -755,9 +755,9 @@ void GsfElectronAlgo::beginEvent( edm::Event & event )
 
   if(! generalData_->inputCfg.edIsoVals.empty() ) {
     inputTagIsoVals.clear();
-    inputTagIsoVals.push_back(generalData_->inputCfg.edIsoVals.getParameter<edm::InputTag>("edChargedHadrons"));
-    inputTagIsoVals.push_back(generalData_->inputCfg.edIsoVals.getParameter<edm::InputTag>("edPhotons"));
-    inputTagIsoVals.push_back(generalData_->inputCfg.edIsoVals.getParameter<edm::InputTag>("edNeutralHadrons"));
+    inputTagIsoVals.push_back(generalData_->inputCfg.edIsoVals.getParameter<edm::InputTag>("edSumChargedHadronPt"));
+    inputTagIsoVals.push_back(generalData_->inputCfg.edIsoVals.getParameter<edm::InputTag>("edSumPhotonEt"));
+    inputTagIsoVals.push_back(generalData_->inputCfg.edIsoVals.getParameter<edm::InputTag>("edSumNeutralHadronEt"));
 
     eventData_->edIsolationValues.resize(inputTagIsoVals.size());
 
@@ -904,9 +904,9 @@ void GsfElectronAlgo::addPflowInfo()
 	  reco::GsfElectronRef 
 		pfElectronRef(eventData_->pflowElectrons, pfIndex);
 	  reco::GsfElectron::PflowIsolationVariables isoVariables;
-	  isoVariables.chargedHadronIso=(*(eventData_->pfIsolationValues)[0])[pfElectronRef];
-	  isoVariables.photonIso       =(*(eventData_->pfIsolationValues)[1])[pfElectronRef];
-	  isoVariables.neutralHadronIso=(*(eventData_->pfIsolationValues)[2])[pfElectronRef];
+	  isoVariables.sumChargedHadronPt =(*(eventData_->pfIsolationValues)[0])[pfElectronRef];
+	  isoVariables.sumPhotonEt        =(*(eventData_->pfIsolationValues)[1])[pfElectronRef];
+	  isoVariables.sumNeutralHadronEt =(*(eventData_->pfIsolationValues)[2])[pfElectronRef];
 	  (*el)->setPfIsolationVariables(isoVariables);
         }
 
@@ -940,9 +940,9 @@ void GsfElectronAlgo::addPflowInfo()
 	  reco::GsfElectronRef 
 		edElectronRef(eventData_->previousElectrons, edIndex);
 	  reco::GsfElectron::PflowIsolationVariables isoVariables;
-	  isoVariables.chargedHadronIso=(*(eventData_->edIsolationValues)[0])[edElectronRef];
-	  isoVariables.photonIso       =(*(eventData_->edIsolationValues)[1])[edElectronRef];
-	  isoVariables.neutralHadronIso=(*(eventData_->edIsolationValues)[2])[edElectronRef];
+	  isoVariables.sumChargedHadronPt =(*(eventData_->edIsolationValues)[0])[edElectronRef];
+	  isoVariables.sumPhotonEt        =(*(eventData_->edIsolationValues)[1])[edElectronRef];
+	  isoVariables.sumNeutralHadronEt =(*(eventData_->edIsolationValues)[2])[edElectronRef];
 	  (*el)->setPfIsolationVariables(isoVariables);
         } 
 

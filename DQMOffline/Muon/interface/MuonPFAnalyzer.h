@@ -5,8 +5,6 @@
  *
  *  DQM monitoring source for PF muons
  *
- *  $Date: 2013/06/14 10:28:23 $
- *  $Revision: 1.1 $
  *  \author C. Battilana - CIEMAT
  */
 
@@ -84,10 +82,10 @@ private:
 				       edm::Handle<reco::BeamSpot> &beamSpot );
 
 
-  edm::InputTag theGenLabel;
-  edm::InputTag theRecoLabel;
-  edm::InputTag theVertexLabel;
-  edm::InputTag theBeamSpotLabel;
+  edm::EDGetTokenT<reco::GenParticleCollection> theGenLabel_;
+  edm::EDGetTokenT<reco::MuonCollection>        theRecoLabel_;
+  edm::EDGetTokenT<reco::VertexCollection>      theVertexLabel_;
+  edm::EDGetTokenT<reco::BeamSpot>              theBeamSpotLabel_;
 
   std::vector<std::string> theMuonKinds;
 

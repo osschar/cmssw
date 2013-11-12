@@ -1,7 +1,6 @@
 /* 
  *  \class EcalStatusAnalyzer
  *
- *  $Date: 2010/10/21 22:03:33 $
  *  author: Julie Malcles - CEA/Saclay
  *  author: Gautier Hamel De Monchenault - CEA/Saclay
  */
@@ -291,7 +290,7 @@ void EcalStatusAnalyzer::endJob() {
 
   string statusfile=namefile.str();
   
-  ofstream statusFile(statusfile.c_str(), ofstream::out);
+  std::ofstream statusFile(statusfile.c_str(), std::ofstream::out);
   
   
   if(fedIDsLas.size()!=0 && fedIDsLas.size()==dccIDsLas.size()){

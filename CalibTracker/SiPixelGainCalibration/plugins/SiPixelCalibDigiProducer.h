@@ -15,7 +15,6 @@
 //
 // Original Author:  Freya Blekman
 //         Created:  Wed Oct 31 15:28:52 CET 2007
-// $Id: SiPixelCalibDigiProducer.h,v 1.12 2010/02/11 00:10:31 wmtan Exp $
 //
 //
 
@@ -71,6 +70,7 @@ class SiPixelCalibDigiProducer : public edm::EDProducer {
       typedef std::pair<uint32_t,std::pair<short,short> >  pixelstruct;
       // ----------member data ---------------------------
       edm::InputTag src_;
+      edm::EDGetTokenT <edm::DetSetVector<PixelDigi>>  tPixelDigi;
       uint32_t iEventCounter_;
       
       bool ignore_non_pattern_;

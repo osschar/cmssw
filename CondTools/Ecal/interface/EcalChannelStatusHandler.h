@@ -100,7 +100,7 @@ namespace popcon {
       void physicsMasking();
 
       // to read the daq configuration
-      void daqOut(RunIOV myRun);
+      void daqOut(const RunIOV& myRun);
 
       // real analysis
       void pedAnalysis( std::map<EcalLogicID, MonPedestalsDat> dataset_mon, std::map<EcalLogicID, MonCrystalConsistencyDat> wrongGain_mon );
@@ -130,12 +130,12 @@ namespace popcon {
 
       EcalElectronicsMapping ecalElectronicsMap_;
 
-      ofstream *ResFileEB;
-      ofstream *ResFileEE;
-      ofstream *ResFileNewEB;
-      ofstream *ResFileNewEE;
-      ofstream *daqFile;
-      ofstream *daqFile2;
+      std::ofstream *ResFileEB;
+      std::ofstream *ResFileEE;
+      std::ofstream *ResFileNewEB;
+      std::ofstream *ResFileNewEE;
+      std::ofstream *daqFile;
+      std::ofstream *daqFile2;
 
       std::map<DetId, float> maskedOnlinePedEB, maskedOnlinePedEE;
       std::map<DetId, float> maskedPedEB, maskedPedEE;

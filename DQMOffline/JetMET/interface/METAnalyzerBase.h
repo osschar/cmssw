@@ -5,8 +5,6 @@
  *
  *  base class for all DQM monitor sources
  *
- *  $Date: 2010/02/17 17:49:45 $
- *  $Revision: 1.5 $
  *  \author K. Hatakeyama - The Rockefeller University
  */
 
@@ -34,19 +32,19 @@ class METAnalyzerBase {
 
   /// Constructor
   METAnalyzerBase() {}
-  
+
   /// Destructor
   virtual ~METAnalyzerBase() {}
-  
+
   /// Inizialize parameters for histo binning
   virtual void beginJob(DQMStore * dbe)= 0;
 
   /// Get the analysis of the muon properties
-    void analyze(const edm::Event&, const edm::EventSetup&, 
+    void analyze(const edm::Event&, const edm::EventSetup&,
 		 const edm::TriggerResults&,
                  const reco::MET& MET){}
 
  private:
   // ----------member data ---------------------------
 };
-#endif  
+#endif

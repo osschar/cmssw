@@ -6,14 +6,13 @@
 // Package:    HLTHcalPhiSymFilter
 // Class:      HLTHcalPhiSymFilter
 //
-/**\class HLTHcalPhiSymFilter HLTHcalPhiSymFilter.cc 
+/**\class HLTHcalPhiSymFilter HLTHcalPhiSymFilter.cc
 
  Description: Producer for HcalRecHits to be used for phi-symmetry HCAL calibration . Discard events in which no suitable rechit is available
 
 */
 //
 // Original Author:  Grigory Safronov
-//         Created:  $Date: 2008/01/21 16:49:16 $
 //
 
 
@@ -28,6 +27,10 @@
 #include "FWCore/Framework/interface/MakerMacros.h"
 
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
+#include "FWCore/ParameterSet/interface/ConfigurationDescriptions.h"
+#include "FWCore/ParameterSet/interface/ParameterSetDescription.h"
+
+#include "DataFormats/HcalRecHit/interface/HcalRecHitCollections.h"
 
 //
 // class decleration
@@ -37,13 +40,15 @@ class HLTHcalPhiSymFilter : public HLTFilter {
    public:
       explicit HLTHcalPhiSymFilter(const edm::ParameterSet&);
       ~HLTHcalPhiSymFilter();
+      static void fillDescriptions(edm::ConfigurationDescriptions & descriptions);
+      virtual bool hltFilter(edm::Event &, const edm::EventSetup&, trigger::TriggerFilterObjectWithRefs & filterproduct) const override;
 
-
-      virtual bool hltFilter(edm::Event &, const edm::EventSetup&, trigger::TriggerFilterObjectWithRefs & filterproduct);
    private:
       // ----------member data ---------------------------
 
-
+ edm::EDGetTokenT<HBHERecHitCollection> HBHEHitsToken_;
+ edm::EDGetTokenT<HORecHitCollection> HOHitsToken_;
+ edm::EDGetTokenT<HFRecHitCollection> HFHitsToken_;
  edm::InputTag HBHEHits_;
  edm::InputTag HOHits_;
  edm::InputTag HFHits_;

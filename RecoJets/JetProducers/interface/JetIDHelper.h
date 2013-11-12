@@ -1,6 +1,7 @@
 #ifndef RecoJets_JetProducers_interface_JetIDHelper_h
 #define RecoJets_JetProducers_interface_JetIDHelper_h
 
+#include <atomic>
 
 #include "FWCore/Framework/interface/Frameworkfwd.h"
 #include "FWCore/Framework/interface/Event.h"
@@ -84,8 +85,8 @@ namespace reco {
 			      std::vector< double > &RBX_energies,
 			      const int iDbg = 0);
 
-      unsigned int nCarrying( double fraction, std::vector< double > descending_energies );
-      unsigned int hitsInNCarrying( double fraction, std::vector< subtower > descending_towers );
+      unsigned int nCarrying( double fraction, const std::vector< double >& descending_energies );
+      unsigned int hitsInNCarrying( double fraction, const std::vector< subtower >& descending_towers );
       
       enum Region{
 	unknown_region = -1,
@@ -126,7 +127,7 @@ namespace reco {
       edm::InputTag ebRecHitsColl_;
       edm::InputTag eeRecHitsColl_;
 
-      static int sanity_checks_left_;
+      static std::atomic<int> sanity_checks_left_;
     };
   }
 }

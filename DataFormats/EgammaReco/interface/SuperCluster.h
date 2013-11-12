@@ -7,7 +7,6 @@
  *
  * \author Luca Lista, INFN
  *
- * \version $Id: SuperCluster.h,v 1.25 2012/10/22 20:23:27 argiro Exp $
  *
  */
 #include "DataFormats/Math/interface/Point3D.h"
@@ -19,7 +18,6 @@
 namespace reco {
   class SuperCluster : public CaloCluster {
   public:
-    typedef std::vector<std::pair<CaloClusterPtr::key_type,CaloClusterPtr> > EEtoPSAssociation;
     typedef math::XYZPoint Point;
 
     /// default constructor

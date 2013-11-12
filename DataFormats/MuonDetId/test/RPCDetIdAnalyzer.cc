@@ -13,12 +13,12 @@
 //
 // Original Author:  Marcello Maggi,161 R-006,+41227676292,
 //         Created:  Fri Nov  4 12:32:59 CET 2011
-// $Id$
 //
 //
 
 
 // system include files
+#include <iostream>
 #include <memory>
 
 // user include files

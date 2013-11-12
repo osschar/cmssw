@@ -11,6 +11,9 @@
 #include "FWCore/Framework/interface/MakerMacros.h"
 
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
+#include "FWCore/ParameterSet/interface/ConfigurationDescriptions.h"
+#include "FWCore/ParameterSet/interface/ParameterSetDescription.h"
+
 #include "DataFormats/RPCRecHit/interface/RPCRecHitCollection.h"
 #include "DataFormats/MuonDetId/interface/RPCDetId.h"
 
@@ -52,13 +55,16 @@ class HLTRPCTrigNoSyncFilter : public HLTFilter{
    public:
       explicit HLTRPCTrigNoSyncFilter(const edm::ParameterSet&);
       ~HLTRPCTrigNoSyncFilter();
+      static void fillDescriptions(edm::ConfigurationDescriptions & descriptions);
 
    private:
       virtual void beginJob() ;
-      virtual bool hltFilter(edm::Event&, const edm::EventSetup&, trigger::TriggerFilterObjectWithRefs & filterproduct);
+      virtual bool hltFilter(edm::Event&, const edm::EventSetup&, trigger::TriggerFilterObjectWithRefs & filterproduct) const override;
       virtual void endJob() ;
       edm::InputTag m_GMTInputTag;
       edm::InputTag rpcRecHitsLabel;
+      edm::EDGetTokenT<L1MuGMTReadoutCollection> m_GMTInputToken;
+      edm::EDGetTokenT<RPCRecHitCollection> rpcRecHitsToken;
 };
 
 #endif

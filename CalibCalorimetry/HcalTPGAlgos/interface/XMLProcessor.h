@@ -16,7 +16,6 @@
 //
 // Original Author:  Gena Kukartsev
 //         Created:  Sun Sep 23 16:57:06 CEST 2007
-// $Id: XMLProcessor.h,v 1.5 2009/10/25 21:19:45 kvtsang Exp $
 //
 
 // system include files
@@ -25,7 +24,7 @@
 #include <time.h>
 #include <xercesc/dom/DOM.hpp>
 #include <xercesc/util/XMLString.hpp>
-#include <xercesc/util/PlatformUtils.hpp>
+#include "FWCore/Concurrency/interface/Xerces.h"
 #include <xercesc/dom/DOMNode.hpp>
 #include <xercesc/framework/MemBufInputSource.hpp>
 #include <cstdio>

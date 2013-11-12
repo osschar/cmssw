@@ -8,7 +8,6 @@
 //
 // Original Author:
 //         Created:  Mon Dec  3 08:38:38 PST 2007
-// $Id: CmsShowMain.cc,v 1.203 2012/10/19 19:29:24 amraktad Exp $
 //
 
 // system include files
@@ -65,6 +64,7 @@
 
 #if defined(R__LINUX)
 #include "TGX11.h" // !!!! AMT has to be at the end to pass build
+#include "X11/Xlib.h"
 #endif
 //
 // constants, enums and typedefs

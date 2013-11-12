@@ -6,7 +6,6 @@
 //local includes
 #include "CondCore/DBCommon/interface/DbConnection.h"
 #include "CondCore/DBCommon/interface/SQLReport.h"
-#include "CondCore/DBCommon/interface/FipProtocolParser.h"
 #include "CondCore/Utilities/interface/Utilities.h"
 #include "FWCore/PluginManager/interface/PluginManager.h"
 #include "FWCore/PluginManager/interface/standard.h"
@@ -14,6 +13,7 @@
 #include "CondCore/ORA/interface/SharedLibraryName.h"
 #include <boost/foreach.hpp>                   
 #include <fstream>
+#include <iostream>
 
 #include "CondCore/DBCommon/interface/Auth.h"
 
@@ -198,8 +198,8 @@ void cond::Utilities::initializePluginManager(){
     edm::ParameterSet pSet;
     pSet.addParameter("@service_type",std::string("SiteLocalConfigService"));
     psets.push_back(pSet);
-    static edm::ServiceToken services(edm::ServiceRegistry::createSet(psets));
-    static edm::ServiceRegistry::Operate operate(services);
+    static const edm::ServiceToken services(edm::ServiceRegistry::createSet(psets));
+    static const edm::ServiceRegistry::Operate operate(services);
 
     m_pluginMgrInitialized = true;
   }
@@ -245,23 +245,32 @@ void cond::Utilities::initializeForDbConnection(){
   
 }
 
-cond::DbSession cond::Utilities::openDbSession( const std::string& connectionParameterName, 
-						const std::string& role, 
+cond::DbSession cond::Utilities::newDbSession( const std::string& connectionString, 
 						bool readOnly ){
   initializeForDbConnection();
-  std::string connectionString = getOptionValue<std::string>( connectionParameterName );
+  cond::DbSession session = m_dbConnection->createSession();
+  session.open( connectionString, readOnly );
+  return session;
+}
+cond::DbSession cond::Utilities::newDbSession( const std::string& connectionString, 
+					       const std::string& role, 
+					       bool readOnly ){
+  initializeForDbConnection();
   cond::DbSession session = m_dbConnection->createSession();
   session.open( connectionString, role, readOnly );
   return session;
 }
+cond::DbSession cond::Utilities::openDbSession( const std::string& connectionParameterName, 
+						const std::string& role, 
+						bool readOnly ){
+  std::string connectionString = getOptionValue<std::string>( connectionParameterName );
+  return newDbSession( connectionString, role, readOnly );
+}
 
 cond::DbSession cond::Utilities::openDbSession( const std::string& connectionParameterName, 
 						bool readOnly ){
-  initializeForDbConnection();
   std::string connectionString = getOptionValue<std::string>( connectionParameterName );
-  cond::DbSession session = m_dbConnection->createSession();
-  session.open( connectionString, readOnly );
-  return session;
+  return newDbSession( connectionString, readOnly );
 }
 
 std::string cond::Utilities::getValueIfExists(const std::string& fullName){

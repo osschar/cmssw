@@ -31,15 +31,15 @@ HLTMhtFilter::~HLTMhtFilter(){}
 
 void HLTMhtFilter::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
   edm::ParameterSetDescription desc;
+  makeHLTFilterDescription(desc);
   desc.add<edm::InputTag>("inputMhtTag",edm::InputTag("hltMht30"));
-  desc.add<bool>("saveTags",false);
   desc.add<double>("minMht",0.0);
   descriptions.add("hltMhtFilter",desc);
 }
 
 // ------------ method called to produce the data  ------------
 bool
-  HLTMhtFilter::hltFilter(edm::Event& iEvent, const edm::EventSetup& iSetup, trigger::TriggerFilterObjectWithRefs & filterproduct)
+  HLTMhtFilter::hltFilter(edm::Event& iEvent, const edm::EventSetup& iSetup, trigger::TriggerFilterObjectWithRefs & filterproduct) const
 {
   using namespace std;
   using namespace edm;

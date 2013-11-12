@@ -13,7 +13,6 @@
 //
 // Original Author:  Freya Blekman
 //         Created:  Mon Nov  5 16:56:35 CET 2007
-// $Id: SimpleTestPrintOutPixelCalibAnalyzer.cc,v 1.6 2008/08/08 08:24:58 fblekman Exp $
 //
 //
 
@@ -46,7 +45,7 @@
 SimpleTestPrintOutPixelCalibAnalyzer::SimpleTestPrintOutPixelCalibAnalyzer(const edm::ParameterSet& iConfig)
 
 {
-   //now do what ever initialization is needed
+  tPixelCalibDigi = consumes <edm::DetSetVector<SiPixelCalibDigi> > (edm::InputTag("siPixelCalibDigis"));
 
 }
 
@@ -69,7 +68,7 @@ SimpleTestPrintOutPixelCalibAnalyzer::printInfo(const edm::Event& iEvent, const 
   using namespace edm;
   
   Handle<DetSetVector<SiPixelCalibDigi> > pIn;
-  iEvent.getByLabel("siPixelCalibDigis",pIn);
+  iEvent.getByToken(tPixelCalibDigi,pIn);
 
   DetSetVector<SiPixelCalibDigi>::const_iterator digiIter;
   for(digiIter=pIn->begin(); digiIter!=pIn->end(); ++digiIter){

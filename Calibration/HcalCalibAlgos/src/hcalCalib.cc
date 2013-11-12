@@ -6,7 +6,6 @@
 //  Anton Anastassov (Northwestern)
 //  Email: aa@fnal.gov
 //
-// $Id: hcalCalib.cc,v 1.8 2010/10/03 20:38:58 elmer Exp $
 //
 
 #include "Calibration/HcalCalibAlgos/interface/hcalCalib.h"
@@ -614,7 +613,7 @@ void hcalCalib::GetCoefFromMtrxInvOfAve() {
 
 Bool_t hcalCalib::ReadPhiSymCor() {
 
-  ifstream phiSymFile(PHI_SYM_COR_FILENAME.Data());
+  std::ifstream phiSymFile(PHI_SYM_COR_FILENAME.Data());
 
   if (!phiSymFile) {
     cout << "\nERROR: Can not find file with phi symmetry constants \"" <<  PHI_SYM_COR_FILENAME.Data() << "\"" << endl;

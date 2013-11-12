@@ -6,10 +6,8 @@
  *
  *  DQM monitoring source for PFMET
  *
- *  $Date: 2012/05/20 13:11:46 $
- *  $Revision: 1.29 $
  *  \author K. Hatakeyama - Rockefeller University
- *          A.Apresyan - Caltech 
+ *          A.Apresyan - Caltech
  */
 
 
@@ -17,6 +15,7 @@
 #include <fstream>
 #include "TMath.h"
 #include "FWCore/Framework/interface/Frameworkfwd.h"
+#include "FWCore/Framework/interface/ConsumesCollector.h"
 #include "DQMOffline/JetMET/interface/PFMETAnalyzerBase.h"
 #include "FWCore/Framework/interface/Event.h"
 #include "FWCore/Framework/interface/MakerMacros.h"
@@ -52,8 +51,8 @@ class PFMETAnalyzer : public PFMETAnalyzerBase {
  public:
 
   /// Constructor
-  PFMETAnalyzer(const edm::ParameterSet&);
-  
+  PFMETAnalyzer(const edm::ParameterSet&, edm::ConsumesCollector&&);
+
   /// Destructor
   virtual ~PFMETAnalyzer();
 
@@ -68,7 +67,7 @@ class PFMETAnalyzer : public PFMETAnalyzerBase {
   void bookMonitorElement(std::string, bool);
 
   /// Get the analysis
-  void analyze(const edm::Event&, const edm::EventSetup&, 
+  void analyze(const edm::Event&, const edm::EventSetup&,
                const edm::TriggerResults&);
 
   /// Initialize run-based parameters
@@ -97,7 +96,7 @@ class PFMETAnalyzer : public PFMETAnalyzerBase {
 
  private:
   // ----------member data ---------------------------
-  
+
   edm::ParameterSet parameters;
   int _verbose;
 
@@ -151,7 +150,7 @@ class PFMETAnalyzer : public PFMETAnalyzerBase {
   int _vtxndof_min;
   double _vtxchi2_max;
   double _vtxz_max;
-  
+
   int _trig_JetMB;
   int _trig_HighPtJet;
   int _trig_LowPtJet;

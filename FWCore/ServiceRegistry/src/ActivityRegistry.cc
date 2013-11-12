@@ -86,7 +86,7 @@ namespace edm {
 
   void
   ActivityRegistry::connectGlobals(ActivityRegistry& iOther) {
-
+     preallocateSignal_.connect(std::cref(iOther.preallocateSignal_));
      postBeginJobSignal_.connect(std::cref(iOther.postBeginJobSignal_));
      postEndJobSignal_.connect(std::cref(iOther.postEndJobSignal_));
 
@@ -194,6 +194,10 @@ namespace edm {
 
      preModuleEventSignal_.connect(std::cref(iOther.preModuleEventSignal_));
      postModuleEventSignal_.connect(std::cref(iOther.postModuleEventSignal_));
+    
+     preModuleEventDelayedGetSignal_.connect(std::cref(iOther.preModuleEventDelayedGetSignal_));
+     postModuleEventDelayedGetSignal_.connect(std::cref(iOther.postModuleEventDelayedGetSignal_));
+
 
      preModuleStreamBeginRunSignal_.connect(std::cref(iOther.preModuleStreamBeginRunSignal_));
      postModuleStreamBeginRunSignal_.connect(std::cref(iOther.postModuleStreamBeginRunSignal_));
@@ -249,6 +253,7 @@ namespace edm {
 
   void
   ActivityRegistry::copySlotsFrom(ActivityRegistry& iOther) {
+    copySlotsToFrom(preallocateSignal_,iOther.preallocateSignal_);
     copySlotsToFrom(postBeginJobSignal_, iOther.postBeginJobSignal_);
     copySlotsToFromReverse(postEndJobSignal_, iOther.postEndJobSignal_);
 
@@ -346,6 +351,9 @@ namespace edm {
 
     copySlotsToFrom(preModuleEventSignal_, iOther.preModuleEventSignal_);
     copySlotsToFromReverse(postModuleEventSignal_, iOther.postModuleEventSignal_);
+
+    copySlotsToFrom(preModuleEventDelayedGetSignal_, iOther.preModuleEventDelayedGetSignal_);
+    copySlotsToFromReverse(postModuleEventDelayedGetSignal_, iOther.postModuleEventDelayedGetSignal_);
 
     copySlotsToFrom(preModuleStreamBeginRunSignal_, iOther.preModuleStreamBeginRunSignal_);
     copySlotsToFromReverse(postModuleStreamBeginRunSignal_, iOther.postModuleStreamBeginRunSignal_);

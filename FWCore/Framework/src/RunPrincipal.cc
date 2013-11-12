@@ -19,13 +19,14 @@ namespace edm {
   }
 
   void
-  RunPrincipal::fillRunPrincipal(DelayedReader* reader) {
+  RunPrincipal::fillRunPrincipal(ProcessHistoryRegistry const& processHistoryRegistry, DelayedReader* reader) {
     complete_ = false;
 
-    fillPrincipal(aux_->processHistoryID(), reader);
+    m_reducedHistoryID = processHistoryRegistry.reducedProcessHistoryID(aux_->processHistoryID());
+    fillPrincipal(aux_->processHistoryID(), processHistoryRegistry, reader);
 
     for(auto const& prod : *this) {
-      prod->setProcessHistoryID(processHistoryID());
+      prod->setProcessHistory(processHistory());
     }
   }
 
@@ -73,4 +74,10 @@ namespace edm {
       putOrMerge(edp, &phb);
     }
   }
+
+  unsigned int
+  RunPrincipal::transitionIndex_() const {
+    return index().value();
+  }
+
 }

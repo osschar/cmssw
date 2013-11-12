@@ -39,7 +39,7 @@ namespace edm {
     void setLumiSection();
 
   private:
-    Selections const* selections_;
+    SelectedProducts const* selections_;
 
     int maxEventSize_;
     bool useCompression_;
@@ -50,6 +50,8 @@ namespace edm {
     double timeInSecSinceUTC;
 
     StreamSerializer serializer_;
+
+    SerializeDataBuffer serializeDataBuffer_;
 
     //Event variables, made class memebers to avoid re instatiation for each event.
     unsigned int hltsize_;

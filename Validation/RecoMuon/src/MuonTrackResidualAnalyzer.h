@@ -22,6 +22,9 @@
 #include "SimDataFormats/TrackingHit/interface/PSimHit.h"
 #include "SimDataFormats/TrackingHit/interface/PSimHitContainer.h"
 
+#include "DataFormats/TrackReco/interface/Track.h"
+#include "DataFormats/TrackReco/interface/TrackFwd.h"
+
 #include "DataFormats/DetId/interface/DetId.h"
 #include "TrackingTools/PatternTools/interface/Trajectory.h"
 
@@ -57,6 +60,8 @@ public:
 
   virtual void beginJob() ;
   virtual void endJob() ;
+  virtual void beginRun() ;
+  virtual void endRun() ;
 
 protected:
 
@@ -82,14 +87,19 @@ private:
   std::string out;
   
   edm::InputTag theDataType;
+  edm::EDGetTokenT<edm::SimTrackContainer> theDataTypeToken;
   EtaRange theEtaRange;
   
   edm::InputTag theMuonTrackLabel;
-  edm::InputTag theSeedCollectionLabel;
   edm::InputTag cscSimHitLabel;
   edm::InputTag dtSimHitLabel;
   edm::InputTag rpcSimHitLabel;
-  
+
+  edm::EDGetTokenT<reco::TrackCollection> theMuonTrackToken;
+  edm::EDGetTokenT<std::vector<PSimHit> > theCSCSimHitToken;
+  edm::EDGetTokenT<std::vector<PSimHit> > theDTSimHitToken;
+  edm::EDGetTokenT<std::vector<PSimHit> > theRPCSimHitToken;
+
   MuonServiceProxy *theService;
   KFUpdator *theUpdator;
   MeasurementEstimator *theEstimator;

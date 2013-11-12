@@ -1,5 +1,4 @@
 //
-// $Id: PATPhotonProducer.h,v 1.19 2009/06/25 23:49:35 gpetrucc Exp $
 //
 
 #ifndef PhysicsTools_PatAlgos_PATPhotonProducer_h
@@ -49,29 +48,31 @@ namespace pat {
     private:
 
       // configurables
-      edm::InputTag photonSrc_;
+      edm::EDGetTokenT<edm::View<reco::Photon> > photonToken_;
       bool embedSuperCluster_;
 
       bool addGenMatch_;
       bool embedGenMatch_;
-      std::vector<edm::InputTag> genMatchSrc_;
+      std::vector<edm::EDGetTokenT<edm::Association<reco::GenParticleCollection> > > genMatchTokens_;
 
       // tools
       GreaterByEt<Photon> eTComparator_;
 
-      pat::helper::MultiIsolator isolator_; 
+      pat::helper::MultiIsolator isolator_;
       pat::helper::MultiIsolator::IsolationValuePairs isolatorTmpStorage_; // better here than recreate at each event
       std::vector<std::pair<pat::IsolationKeys,edm::InputTag> > isoDepositLabels_;
+      std::vector<edm::EDGetTokenT<edm::ValueMap<IsoDeposit> > > isoDepositTokens_;
 
       bool addEfficiencies_;
       pat::helper::EfficiencyLoader efficiencyLoader_;
-      
+
       bool addResolutions_;
       pat::helper::KinResolutionsLoader resolutionLoader_;
 
       bool          addPhotonID_;
       typedef std::pair<std::string, edm::InputTag> NameTag;
       std::vector<NameTag> photIDSrcs_;
+      std::vector<edm::EDGetTokenT<edm::ValueMap<Bool_t> > > photIDTokens_;
 
       bool useUserData_;
       pat::PATUserDataHelper<pat::Photon>      userDataHelper_;

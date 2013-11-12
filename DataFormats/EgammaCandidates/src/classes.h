@@ -1,5 +1,4 @@
 //
-// $Id: classes.h,v 1.40 2011/10/27 12:50:19 chamont Exp $
 //
 #include "FWCore/MessageLogger/interface/MessageLogger.h"
 #include "DataFormats/EgammaCandidates/interface/Photon.h"
@@ -36,6 +35,7 @@
 #include "DataFormats/Common/interface/AssociationMap.h"
 #include "DataFormats/Common/interface/Ptr.h"
 #include "DataFormats/Common/interface/PtrVector.h"
+#include "DataFormats/Common/interface/ValueMap.h"
 #include "Rtypes.h"
 #include "Math/Cartesian3D.h"
 #include "Math/Polar3D.h"
@@ -72,6 +72,8 @@ namespace {
     edm::RefToBaseVector<reco::Photon> rtbvp;
     edm::Wrapper<edm::RefToBaseVector<reco::Photon> > rtbvp_w;
     edm::reftobase::BaseVectorHolder<reco::Photon> *bvhp_p;
+    edm::Wrapper<edm::ValueMap<edm::Ref<std::vector<reco::Photon>,reco::Photon,edm::refhelper::FindUsingAdvance<std::vector<reco::Photon>,reco::Photon> > > > valMap_wr;
+    edm::ValueMap<edm::Ref<std::vector<reco::Photon>,reco::Photon,edm::refhelper::FindUsingAdvance<std::vector<reco::Photon>,reco::Photon> > >  valMap;
 
 
     reco::Photon::FiducialFlags pff ;
@@ -108,6 +110,8 @@ namespace {
     edm::Ref<reco::GsfElectronCoreCollection> gecc_r;
     edm::RefProd<reco::GsfElectronCoreCollection> gecc_rp;
     edm::Wrapper<edm::RefVector<reco::GsfElectronCoreCollection> > gecc_rv;
+    edm::Wrapper<edm::ValueMap<edm::Ref<std::vector<reco::GsfElectron>,reco::GsfElectron,edm::refhelper::FindUsingAdvance<std::vector<reco::GsfElectron>,reco::GsfElectron> > > > gecc_wvm;
+    edm::ValueMap<edm::Ref<std::vector<reco::GsfElectron>,reco::GsfElectron,edm::refhelper::FindUsingAdvance<std::vector<reco::GsfElectron>,reco::GsfElectron> > > gecc_vm;
 
     reco::GsfElectron::TrackClusterMatching getcm ;
     reco::GsfElectron::TrackExtrapolations gete ;

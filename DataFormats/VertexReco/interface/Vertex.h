@@ -15,7 +15,6 @@
  *
  * \author Luca Lista, INFN
  *
- * \version $Id: Vertex.h,v 1.38 2010/11/17 17:13:42 dlange Exp $
  *
  */
 #include <Rtypes.h>
@@ -141,7 +140,6 @@ namespace reco {
     /// Returns the number of tracks in the vertex with weight above minWeight
     unsigned int nTracks(float minWeight=0.5) const; 
 
-  private:
     class TrackEqual {
       public:
 	TrackEqual( const Track & t) : track_( t ) { }
@@ -149,6 +147,8 @@ namespace reco {
       private:
 	const Track & track_;
     };
+
+  private:
     /// chi-sqared
     float chi2_;
     /// number of degrees of freedom

@@ -15,7 +15,6 @@
 #include "TrackingTools/TrackFitters/interface/KFTrajectorySmoother.h"
 
 #include "DataFormats/TrajectorySeed/interface/TrajectorySeedCollection.h"
-#include "DataFormats/TrackReco/interface/Track.h"
 #include "DataFormats/MuonDetId/interface/DTLayerId.h"
 #include "DataFormats/MuonDetId/interface/MuonSubdetId.h"
 
@@ -43,11 +42,14 @@ MuonTrackResidualAnalyzer::MuonTrackResidualAnalyzer(const edm::ParameterSet& ps
   theService = new MuonServiceProxy(serviceParameters);
   
   theMuonTrackLabel = pset.getParameter<InputTag>("MuonTrack");
-  theSeedCollectionLabel = pset.getParameter<InputTag>("MuonSeed");
+  theMuonTrackToken = consumes<reco::TrackCollection>(theMuonTrackLabel);
 
   cscSimHitLabel = pset.getParameter<InputTag>("CSCSimHit");
   dtSimHitLabel = pset.getParameter<InputTag>("DTSimHit");
   rpcSimHitLabel = pset.getParameter<InputTag>("RPCSimHit");
+  theCSCSimHitToken = consumes<std::vector<PSimHit> >(cscSimHitLabel);
+  theDTSimHitToken = consumes<std::vector<PSimHit> >(dtSimHitLabel);
+  theRPCSimHitToken = consumes<std::vector<PSimHit> >(rpcSimHitLabel);
 
   dbe_ = edm::Service<DQMStore>().operator->();
   out = pset.getUntrackedParameter<string>("rootFileName");
@@ -57,6 +59,7 @@ MuonTrackResidualAnalyzer::MuonTrackResidualAnalyzer(const edm::ParameterSet& ps
   theDataType = pset.getParameter<InputTag>("DataType"); 
   if(theDataType.label() != "RealData" && theDataType.label() != "SimData")
     LogDebug("MuonTrackResidualAnalyzer")<<"Error in Data Type!!";
+  theDataTypeToken = consumes<edm::SimTrackContainer>(theDataType);
 
   theEtaRange = (EtaRange) pset.getParameter<int>("EtaRange");
 
@@ -75,7 +78,13 @@ MuonTrackResidualAnalyzer::~MuonTrackResidualAnalyzer(){
 
 // Operations
 void MuonTrackResidualAnalyzer::beginJob(){
-  LogDebug("MuonTrackResidualAnalyzer")<<"Begin Job";
+ 
+}
+
+void MuonTrackResidualAnalyzer::endJob(){
+}
+void MuonTrackResidualAnalyzer::beginRun(){
+ LogDebug("MuonTrackResidualAnalyzer")<<"Begin Run";
   
   dbe_->showDirStructure();
   
@@ -109,11 +118,9 @@ void MuonTrackResidualAnalyzer::beginJob(){
   hDeltaPtVsEtaSim2 = dbe_->book2D("DeltaPtVsEtaSim2","#Delta P_{t} vs #eta gen, sim quantity",120,-3.,3.,500,-250.,250.);
 }
 
-void MuonTrackResidualAnalyzer::endJob(){
+void MuonTrackResidualAnalyzer::endRun(){
   if ( out.size() != 0 && dbe_ ) dbe_->save(out);
 }
- 
-
 void MuonTrackResidualAnalyzer::analyze(const edm::Event & event, const edm::EventSetup& eventSetup){
   LogDebug("MuonTrackResidualAnalyzer")<<"Analyze";
 
@@ -124,13 +131,13 @@ void MuonTrackResidualAnalyzer::analyze(const edm::Event & event, const edm::Eve
 
   // Get the SimHit collection from the event
   Handle<PSimHitContainer> dtSimHits;
-  event.getByLabel(dtSimHitLabel.instance(),dtSimHitLabel.label(), dtSimHits);
+  event.getByToken(theDTSimHitToken, dtSimHits);
 
   Handle<PSimHitContainer> cscSimHits;
-  event.getByLabel(cscSimHitLabel.instance(),cscSimHitLabel.label(), cscSimHits);
+  event.getByToken(theCSCSimHitToken, cscSimHits);
 
   Handle<PSimHitContainer> rpcSimHits;
-  event.getByLabel(rpcSimHitLabel.instance(),rpcSimHitLabel.label(), rpcSimHits);
+  event.getByToken(theRPCSimHitToken, rpcSimHits);
 
   Handle<SimTrackContainer> simTracks;
 
@@ -147,7 +154,7 @@ void MuonTrackResidualAnalyzer::analyze(const edm::Event & event, const edm::Eve
   if(theDataType.label() == "SimData"){
     
     // Get the SimTrack collection from the event
-    event.getByLabel(theDataType.instance(),simTracks);
+    event.getByToken(theDataTypeToken,simTracks);
     
     // Loop over the Sim tracks
     SimTrackContainer::const_iterator simTrack;
@@ -164,7 +171,7 @@ void MuonTrackResidualAnalyzer::analyze(const edm::Event & event, const edm::Eve
   
   // Get the RecTrack collection from the event
   Handle<reco::TrackCollection> muonTracks;
-  event.getByLabel(theMuonTrackLabel, muonTracks);
+  event.getByToken(theMuonTrackToken, muonTracks);
 
   reco::TrackCollection::const_iterator muonTrack;
   

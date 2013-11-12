@@ -22,6 +22,7 @@
 #include "FWCore/Framework/interface/LuminosityBlockPrincipal.h"
 #include "FWCore/Framework/interface/RunPrincipal.h"
 
+#include "FWCore/Framework/src/PreallocationConfiguration.h"
 
 using namespace edm::stream;
 //
@@ -37,7 +38,6 @@ using namespace edm::stream;
 //
 EDAnalyzerAdaptorBase::EDAnalyzerAdaptorBase()
 {
-  m_streamModules.resize(1);
 }
 
 // EDAnalyzerAdaptorBase::EDAnalyzerAdaptorBase(const EDAnalyzerAdaptorBase& rhs)
@@ -68,6 +68,13 @@ EDAnalyzerAdaptorBase::~EDAnalyzerAdaptorBase()
 // member functions
 //
 void
+EDAnalyzerAdaptorBase::doPreallocate(PreallocationConfiguration const& iPrealloc) {
+  m_streamModules.resize(iPrealloc.numberOfStreams(),
+                         static_cast<stream::EDAnalyzerBase*>(nullptr));
+  setupStreamModules();
+}
+
+void
 EDAnalyzerAdaptorBase::registerProductsAndCallbacks(EDAnalyzerAdaptorBase const*, ProductRegistry* reg) {
   for(auto mod : m_streamModules) {
     mod->registerProductsAndCallbacks(mod, reg);
@@ -75,14 +82,20 @@ EDAnalyzerAdaptorBase::registerProductsAndCallbacks(EDAnalyzerAdaptorBase const*
 }
 
 void
-EDAnalyzerAdaptorBase::itemsToGet(BranchType iType, std::vector<ProductHolderIndex>& iIndices) const {
+EDAnalyzerAdaptorBase::itemsToGet(BranchType iType, std::vector<ProductHolderIndexAndSkipBit>& iIndices) const {
   assert(not m_streamModules.empty());
   m_streamModules[0]->itemsToGet(iType,iIndices);
 }
 void
-EDAnalyzerAdaptorBase::itemsMayGet(BranchType iType, std::vector<ProductHolderIndex>& iIndices) const {
+EDAnalyzerAdaptorBase::itemsMayGet(BranchType iType, std::vector<ProductHolderIndexAndSkipBit>& iIndices) const {
   assert(not m_streamModules.empty());
-  m_streamModules[0]->itemsToGet(iType,iIndices);  
+  m_streamModules[0]->itemsMayGet(iType,iIndices);  
+}
+
+std::vector<edm::ProductHolderIndexAndSkipBit> const&
+EDAnalyzerAdaptorBase::itemsToGetFromEvent() const {
+  assert(not m_streamModules.empty());
+  return m_streamModules[0]->itemsToGetFromEvent();  
 }
 
 void
@@ -116,7 +129,7 @@ EDAnalyzerAdaptorBase::doBeginJob() {
 
 void
 EDAnalyzerAdaptorBase::doBeginStream(StreamID id) {
-  m_streamModules[id]->beginStream();
+  m_streamModules[id]->beginStream(id);
 }
 void
 EDAnalyzerAdaptorBase::doEndStream(StreamID id) {

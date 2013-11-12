@@ -8,6 +8,7 @@ Test of the EventPrincipal class.
 #include "DataFormats/Provenance/interface/ModuleDescription.h"
 #include "DataFormats/Provenance/interface/RunAuxiliary.h"
 #include "DataFormats/Provenance/interface/ProcessConfiguration.h"
+#include "DataFormats/Provenance/interface/ProcessHistoryRegistry.h"
 #include "DataFormats/Provenance/interface/ProductRegistry.h"
 #include "DataFormats/Provenance/interface/BranchDescription.h"
 #include "DataFormats/Provenance/interface/BranchIDListHelper.h"
@@ -66,7 +67,7 @@ void testEventGetRefBeforePut::failGetProductNotRegisteredTest() {
   std::auto_ptr<edm::ProductRegistry> preg(new edm::ProductRegistry);
   preg->setFrozen();
   boost::shared_ptr<edm::BranchIDListHelper> branchIDListHelper(new edm::BranchIDListHelper());
-  branchIDListHelper->updateRegistries(*preg);
+  branchIDListHelper->updateFromRegistry(*preg);
   edm::EventID col(1L, 1L, 1L);
   std::string uuid = edm::createGlobalIdentifier();
   edm::Timestamp fakeTime;
@@ -79,7 +80,8 @@ void testEventGetRefBeforePut::failGetProductNotRegisteredTest() {
   lbp->setRunPrincipal(rp);
   edm::EventAuxiliary eventAux(col, uuid, fakeTime, true);
   edm::EventPrincipal ep(pregc, branchIDListHelper, pc, &historyAppender_,edm::StreamID::invalidStreamID());
-  ep.fillEventPrincipal(eventAux);
+  edm::ProcessHistoryRegistry phr;
+  ep.fillEventPrincipal(eventAux, phr);
   ep.setLuminosityBlockPrincipal(lbp);
   try {
      edm::ParameterSet pset;
@@ -137,7 +139,7 @@ void testEventGetRefBeforePut::getRefTest() {
   preg->addProduct(product);
   preg->setFrozen();
   boost::shared_ptr<edm::BranchIDListHelper> branchIDListHelper(new edm::BranchIDListHelper());
-  branchIDListHelper->updateRegistries(*preg);
+  branchIDListHelper->updateFromRegistry(*preg);
   edm::EventID col(1L, 1L, 1L);
   std::string uuid = edm::createGlobalIdentifier();
   edm::Timestamp fakeTime;
@@ -151,7 +153,8 @@ void testEventGetRefBeforePut::getRefTest() {
   lbp->setRunPrincipal(rp);
   edm::EventAuxiliary eventAux(col, uuid, fakeTime, true);
   edm::EventPrincipal ep(pregc, branchIDListHelper, pc, &historyAppender_,edm::StreamID::invalidStreamID());
-  ep.fillEventPrincipal(eventAux);
+  edm::ProcessHistoryRegistry phr;
+  ep.fillEventPrincipal(eventAux, phr);
   ep.setLuminosityBlockPrincipal(lbp);
 
   edm::RefProd<edmtest::IntProduct> refToProd;

@@ -20,16 +20,17 @@
 class HERecalibration {
 
 public:
-  HERecalibration(double integrated_lumi);
+  HERecalibration(double integrated_lumi, double cutoff);
   ~HERecalibration();
 
   double getCorr(int ieta, int idepth);
-  void  setDsegm(std::vector<std::vector<int> > m_segmentation);
+  void  setDsegm(const std::vector<std::vector<int> >& m_segmentation);
 
 private:
 
   void initialize();
   double iLumi;
+  double cutoff_;
   HEDarkening darkening;
 
  // Tabulated mean energy values per layer and per depth

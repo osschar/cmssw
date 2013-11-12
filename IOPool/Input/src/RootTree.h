@@ -8,8 +8,10 @@ RootTree.h // used by ROOT input sources
 ----------------------------------------------------------------------*/
 
 #include "DataFormats/Provenance/interface/BranchDescription.h"
+#include "DataFormats/Provenance/interface/IndexIntoFile.h"
 #include "DataFormats/Provenance/interface/ProvenanceFwd.h"
 #include "FWCore/Framework/interface/Frameworkfwd.h"
+#include "FWCore/Utilities/interface/InputType.h"
 
 #include "Rtypes.h"
 #include "TBranch.h"
@@ -26,7 +28,7 @@ class TTree;
 class TTreeCache;
 
 namespace edm {
-  struct BranchKey;
+  class BranchKey;
   class DelayedReader;
   class InputFile;
   class RootTree;
@@ -36,7 +38,7 @@ namespace edm {
     unsigned int const defaultNonEventCacheSize = 1U * 1024 * 1024;
     unsigned int const defaultLearningEntries = 20U;
     unsigned int const defaultNonEventLearningEntries = 1U;
-    typedef Long64_t EntryNumber;
+    typedef IndexIntoFile::EntryNumber_t EntryNumber;
     struct BranchInfo {
       BranchInfo(BranchDescription const& prod) :
         branchDescription_(prod),
@@ -60,10 +62,12 @@ namespace edm {
     typedef roottree::EntryNumber EntryNumber;
     RootTree(boost::shared_ptr<InputFile> filePtr,
              BranchType const& branchType,
+             unsigned int nIndexes,
              unsigned int maxVirtualSize,
              unsigned int cacheSize,
              unsigned int learningEntries,
-             bool enablePrefetching);
+             bool enablePrefetching,
+             InputType inputType);
     ~RootTree();
 
     RootTree(RootTree const&) = delete; // Disallow copying and moving
@@ -80,12 +84,15 @@ namespace edm {
 
     bool next() {return ++entryNumber_ < entries_;}
     bool previous() {return --entryNumber_ >= 0;}
-    bool current() {return entryNumber_ < entries_ && entryNumber_ >= 0;}
+    bool current() const {return entryNumber_ < entries_ && entryNumber_ >= 0;}
+    bool current(EntryNumber entry) const {return entry < entries_ && entry >= 0;}
     void rewind() {entryNumber_ = 0;}
     void close();
     EntryNumber const& entryNumber() const {return entryNumber_;}
+    EntryNumber const& entryNumberForIndex(unsigned int index) const;
     EntryNumber const& entries() const {return entries_;}
     void setEntryNumber(EntryNumber theEntryNumber);
+    void insertEntryForIndex(unsigned int index);
     std::vector<std::string> const& branchNames() const {return branchNames_;}
     DelayedReader* rootDelayedReader() const;
     template <typename T>
@@ -110,6 +117,23 @@ namespace edm {
       getEntry(branch, entryNumber_);
     }
 
+    template <typename T>
+    void fillBranchEntryMeta(TBranch* branch, EntryNumber entryNumber, T*& pbuf) {
+      if (metaTree_ != 0) {
+        // Metadata was in separate tree.  Not cached.
+        branch->SetAddress(&pbuf);
+        roottree::getEntry(branch, entryNumber);
+      } else {
+        fillBranchEntry<T>(branch, entryNumber, pbuf);
+      }
+    }
+    
+    template <typename T>
+    void fillBranchEntry(TBranch* branch, EntryNumber entryNumber, T*& pbuf) {
+      branch->SetAddress(&pbuf);
+      getEntry(branch, entryNumber);
+    }
+    
     TTree const* tree() const {return tree_;}
     TTree* tree() {return tree_;}
     TTree const* metaTree() const {return metaTree_;}
@@ -150,6 +174,7 @@ namespace edm {
     mutable std::unordered_set<TBranch*> triggerSet_;
     EntryNumber entries_;
     EntryNumber entryNumber_;
+    std::unique_ptr<std::vector<EntryNumber> > entryNumberForIndex_;
     std::vector<std::string> branchNames_;
     boost::shared_ptr<BranchMap> branches_;
     bool trainNow_;

@@ -13,7 +13,7 @@
 #include <iostream>
 #include <string>
 #include <cmath>
-#include "math.h"
+#include <cmath>
 #include <vector>
 #include <iomanip>
 #include <set>
@@ -105,7 +105,7 @@ void RPCRecHitReader::beginRun(const edm::Run&, const edm::EventSetup& iSetup)
   _rollEff = roll;
 
   fOutputFile  = new TFile( fOutputFileName.c_str(), "RECREATE" );
-  fout = new fstream("RecHitOut.dat", std::ios::out);
+  fout = new std::fstream("RecHitOut.dat", std::ios::out);
 
   _mapLayer[0] = -413.675;
   _mapLayer[1] = -448.675;

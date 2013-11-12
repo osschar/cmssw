@@ -33,7 +33,7 @@ namespace reco {
     
     bool subtower_has_greater_E( reco::helper::JetIDHelper::subtower i, 
 				 reco::helper::JetIDHelper::subtower j ) { return i.E > j.E; }
-    int JetIDHelper::sanity_checks_left_ = 100;
+    std::atomic<int> JetIDHelper::sanity_checks_left_{100};
   }
 }
 
@@ -164,7 +164,7 @@ void reco::helper::JetIDHelper::calculate( const edm::Event& event, const reco::
       fLS_ = LS_bad_energy / jet.energy();
       fHFOOT_ = HF_OOT_energy / jet.energy();
 
-      if( sanity_checks_left_ > 0 ) {
+      if( sanity_checks_left_.load(std::memory_order_acquire) > 0 ) {
 	--sanity_checks_left_;
 	double EH_sum = accumulate( Ecal_energies.begin(), Ecal_energies.end(), 0. );
 	EH_sum = accumulate( Hcal_energies.begin(), Hcal_energies.end(), EH_sum );
@@ -189,7 +189,7 @@ void reco::helper::JetIDHelper::calculate( const edm::Event& event, const reco::
 }
 
 
-unsigned int reco::helper::JetIDHelper::nCarrying( double fraction, vector< double > descending_energies )
+unsigned int reco::helper::JetIDHelper::nCarrying( double fraction, const std::vector< double >& descending_energies )
 {
   double totalE = 0;
   for( unsigned int i = 0; i < descending_energies.size(); ++i ) totalE += descending_energies[ i ];
@@ -206,7 +206,7 @@ unsigned int reco::helper::JetIDHelper::nCarrying( double fraction, vector< doub
 }
 
 
-unsigned int reco::helper::JetIDHelper::hitsInNCarrying( double fraction, vector< subtower > descending_towers )
+unsigned int reco::helper::JetIDHelper::hitsInNCarrying( double fraction, const std::vector< subtower >& descending_towers )
 {
   double totalE = 0;
   for( unsigned int i = 0; i < descending_towers.size(); ++i ) totalE += descending_towers[ i ].E;

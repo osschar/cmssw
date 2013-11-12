@@ -30,9 +30,9 @@
 
 // forward declarations
 namespace edm {
+  template<typename T> class WorkerT;
   namespace stream {
     class EDProducerAdaptorBase;
-    template<typename T> class StreamWorker;
     template<typename> class ProducingModuleAdaptorBase;
     
     class EDProducerBase : public edm::ProducerBase, public edm::EDConsumerBase
@@ -43,10 +43,6 @@ namespace edm {
 
     public:
       typedef EDProducerAdaptorBase ModuleType;
-      //WorkerType is used to call the 'makeModule<T>' call which constructs
-      // the actual module. We can use the StreamWorker to create the actual
-      // module which holds the various stream modules
-      typedef StreamWorker<EDProducerAdaptorBase> WorkerType;
 
       EDProducerBase();
       virtual ~EDProducerBase();
@@ -55,12 +51,16 @@ namespace edm {
       static void prevalidate(ConfigurationDescriptions& descriptions);
       static const std::string& baseType();
       
+      // Warning: the returned moduleDescription will be invalid during construction
+      ModuleDescription const& moduleDescription() const {
+        return *moduleDescriptionPtr_;
+      }
     private:
       EDProducerBase(const EDProducerBase&) = delete; // stop default
       
       const EDProducerBase& operator=(const EDProducerBase&) = delete; // stop default
       
-      virtual void beginStream() {}
+      virtual void beginStream(StreamID) {}
       virtual void beginRun(edm::Run const&, edm::EventSetup const&) {}
       virtual void beginLuminosityBlock(edm::LuminosityBlock const&, edm::EventSetup const&) {}
       virtual void produce(Event&, EventSetup const&) = 0;
@@ -68,11 +68,13 @@ namespace edm {
       virtual void endRun(edm::Run const&, edm::EventSetup const&) {}
       virtual void endStream(){}
 
+      void setModuleDescriptionPtr(ModuleDescription const* iDesc) {
+        moduleDescriptionPtr_ = iDesc;
+      }
       // ---------- member data --------------------------------
-
       std::vector<BranchID> previousParentage_;
       ParentageID previousParentageId_;
-
+      ModuleDescription const* moduleDescriptionPtr_;
     };
     
   }

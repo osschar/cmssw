@@ -17,6 +17,7 @@ WorkerT: Code common to all workers.
 namespace edm {
 
   class ModuleCallingContext;
+  class ProductHolderIndexAndSkipBit;
 
   UnscheduledHandler* getUnscheduledHandler(EventPrincipal const& ep);
 
@@ -31,14 +32,9 @@ namespace edm {
 
     virtual ~WorkerT();
 
-  template<typename ModType>
-  static std::unique_ptr<T> makeModule(ParameterSet const& pset) {
-    std::unique_ptr<ModType> module = std::unique_ptr<ModType>(new ModType(pset));
-    return std::unique_ptr<T>(module.release());
-  }
-
   void setModule( T* iModule) {
     module_ = iModule;
+    resetModuleDescription(&(module_->moduleDescription()));
   }
     
     virtual Types moduleType() const override;
@@ -100,7 +96,17 @@ namespace edm {
     virtual void implPreForkReleaseResources() override;
     virtual void implPostForkReacquireResources(unsigned int iChildIndex, 
                                                unsigned int iNumberOfChildren) override;
-     virtual std::string workerType() const override;
+    virtual std::string workerType() const override;
+
+    virtual void itemsToGet(BranchType branchType, std::vector<ProductHolderIndexAndSkipBit>& indexes) const {
+      module_->itemsToGet(branchType, indexes);
+    }
+
+    virtual void itemsMayGet(BranchType branchType, std::vector<ProductHolderIndexAndSkipBit>& indexes) const {
+      module_->itemsMayGet(branchType, indexes);
+    }
+
+    virtual std::vector<ProductHolderIndexAndSkipBit> const& itemsToGetFromEvent() const override { return module_->itemsToGetFromEvent(); }
 
     T* module_;
   };

@@ -25,9 +25,6 @@
 #include "SimDataFormats/Track/interface/SimTrackContainer.h"
 
 #include "SimDataFormats/TrackingAnalysis/interface/TrackingParticle.h"
-#include "DataFormats/Common/interface/View.h"
-#include "DataFormats/TrackReco/interface/Track.h"
-#include "DataFormats/TrackReco/interface/TrackFwd.h"
 #include "DataFormats/MuonReco/interface/MuonTrackLinks.h"
 #include "DataFormats/MuonReco/interface/MuonFwd.h"
 
@@ -52,6 +49,11 @@ GlobalMuonMatchAnalyzer::GlobalMuonMatchAnalyzer(const edm::ParameterSet& iConfi
 
   out = iConfig.getUntrackedParameter<std::string>("out");
   dbe_ = edm::Service<DQMStore>().operator->();
+
+  tpToken_ = consumes<edm::View<reco::Track> >(tpName_);
+  tkToken_ = consumes<edm::View<reco::Track> >(tkName_);
+  staToken_ = consumes<edm::View<reco::Track> >(staName_);
+  glbToken_ = consumes<edm::View<reco::Track> >(glbName_);
 }
 
 
@@ -76,23 +78,23 @@ GlobalMuonMatchAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup
    using namespace reco;
 
    Handle<TrackingParticleCollection> tpHandle;
-   iEvent.getByLabel(tpName_,tpHandle);
+   iEvent.getByToken(tpToken_,tpHandle);
    const TrackingParticleCollection tpColl = *(tpHandle.product());
 
    Handle<reco::MuonTrackLinksCollection> muHandle;
-   iEvent.getByLabel(glbName_,muHandle);
+   iEvent.getByToken(glbToken_,muHandle);
    const reco::MuonTrackLinksCollection muColl = *(muHandle.product());
 
    Handle<View<Track> > staHandle;
-   iEvent.getByLabel(staName_,staHandle);
+   iEvent.getByToken(staToken_,staHandle);
    //   const reco::TrackCollection staColl = *(staHandle.product());
 
    Handle<View<Track> > glbHandle;
-   iEvent.getByLabel(glbName_,glbHandle);
+   iEvent.getByToken(glbToken_,glbHandle);
    //   const reco::TrackCollection glbColl = *(glbHandle.product());
 
    Handle<View<Track> > tkHandle;
-   iEvent.getByLabel(tkName_,tkHandle);
+   iEvent.getByToken(tkToken_,tkHandle);
    //   const reco::TrackCollection mtkColl = *(tkHandle.product());
 
    reco::RecoToSimCollection tkrecoToSimCollection;
@@ -225,29 +227,10 @@ GlobalMuonMatchAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup
 void 
 GlobalMuonMatchAnalyzer::beginJob()
 {
-  dbe_->cd();
-  std::string dirName="Matcher/";
-  dbe_->setCurrentFolder("RecoMuonV/Matcher");
-
-  h_shouldMatch = dbe_->book2D("h_shouldMatch","SIM associated to Tk and Sta",50,-2.5,2.5,100,0.,500.);
-  h_goodMatchSim = dbe_->book2D("h_goodMatchSim","SIM associated to Glb Sta Tk",50,-2.5,2.5,100,0.,500.);
-  h_tkOnlySim = dbe_->book2D("h_tkOnlySim","SIM associated to Glb Tk",50,-2.5,2.5,100,0.,500.);
-  h_staOnlySim = dbe_->book2D("h_staOnlySim","SIM associated to Glb Sta",50,-2.5,2.5,100,0.,500.);
-
-  h_totReco = dbe_->book2D("h_totReco","Total Glb Reconstructed",50,-2.5,2.5,100,0.,500.);
-  h_goodMatch = dbe_->book2D("h_goodMatch","Sta and Tk from same SIM",50,-2.5,2.5,100, 0., 500.);
-  h_fakeMatch = dbe_->book2D("h_fakeMatch","Sta and Tk not from same SIM",50,-2.5,2.5,100,0.,500.);
-
-  h_effic = dbe_->book1D("h_effic","Efficiency vs #eta",50,-2.5,2.5);
-  h_efficPt = dbe_->book1D("h_efficPt","Efficiency vs p_{T}",100,0.,100.);
-
-  h_fake = dbe_->book1D("h_fake","Fake fraction vs #eta",50,-2.5,2.5);
-  h_fakePt = dbe_->book1D("h_fakePt","Fake fraction vs p_{T}",100,0.,100.);
 }
-
+void GlobalMuonMatchAnalyzer::endJob() {}
 // ------------ method called once each job just after ending the event loop  ------------
-void 
-GlobalMuonMatchAnalyzer::endJob() {
+void GlobalMuonMatchAnalyzer::endRun() {
   computeEfficiencyEta(h_effic,h_goodMatchSim,h_shouldMatch);
   computeEfficiencyPt(h_efficPt,h_goodMatchSim,h_shouldMatch);
 
@@ -268,6 +251,25 @@ void GlobalMuonMatchAnalyzer::beginRun(const edm::Run&, const edm::EventSetup& s
   edm::ESHandle<TrackAssociatorBase> muassociatorHandle;
   setup.get<TrackAssociatorRecord>().get(muAssociatorName_,muassociatorHandle);
   muAssociator_ = muassociatorHandle.product();
+  dbe_->cd();
+  std::string dirName="Matcher/";
+  dbe_->setCurrentFolder("RecoMuonV/Matcher");
+
+  h_shouldMatch = dbe_->book2D("h_shouldMatch","SIM associated to Tk and Sta",50,-2.5,2.5,100,0.,500.);
+  h_goodMatchSim = dbe_->book2D("h_goodMatchSim","SIM associated to Glb Sta Tk",50,-2.5,2.5,100,0.,500.);
+  h_tkOnlySim = dbe_->book2D("h_tkOnlySim","SIM associated to Glb Tk",50,-2.5,2.5,100,0.,500.);
+  h_staOnlySim = dbe_->book2D("h_staOnlySim","SIM associated to Glb Sta",50,-2.5,2.5,100,0.,500.);
+
+  h_totReco = dbe_->book2D("h_totReco","Total Glb Reconstructed",50,-2.5,2.5,100,0.,500.);
+  h_goodMatch = dbe_->book2D("h_goodMatch","Sta and Tk from same SIM",50,-2.5,2.5,100, 0., 500.);
+  h_fakeMatch = dbe_->book2D("h_fakeMatch","Sta and Tk not from same SIM",50,-2.5,2.5,100,0.,500.);
+
+  h_effic = dbe_->book1D("h_effic","Efficiency vs #eta",50,-2.5,2.5);
+  h_efficPt = dbe_->book1D("h_efficPt","Efficiency vs p_{T}",100,0.,100.);
+
+  h_fake = dbe_->book1D("h_fake","Fake fraction vs #eta",50,-2.5,2.5);
+  h_fakePt = dbe_->book1D("h_fakePt","Fake fraction vs p_{T}",100,0.,100.);
+
 }
 
 

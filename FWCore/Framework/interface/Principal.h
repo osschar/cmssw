@@ -44,6 +44,7 @@ namespace edm {
 
   class HistoryAppender;
   class ModuleCallingContext;
+  class ProcessHistoryRegistry;
   class ProductHolderIndexHelper;
   class EDConsumerBase;
 
@@ -85,7 +86,7 @@ namespace edm {
 
     void addAliasedProduct(boost::shared_ptr<BranchDescription const> bd);
 
-    void fillPrincipal(ProcessHistoryID const& hist, DelayedReader* reader);
+    void fillPrincipal(ProcessHistoryID const& hist, ProcessHistoryRegistry const& phr, DelayedReader* reader);
 
     void clearPrincipal();
 
@@ -126,6 +127,10 @@ namespace edm {
                            bool& ambiguous,
                            ModuleCallingContext const* mcc) const;
 
+    void prefetch(ProductHolderIndex index,
+                  bool skipCurrentProcess,
+                  ModuleCallingContext const* mcc) const;
+
     void getManyByType(TypeID const& typeID,
                        BasicHandleVec& results,
                        EDConsumerBase const* consumes,
@@ -160,6 +165,10 @@ namespace edm {
     void getAllProvenance(std::vector<Provenance const*>& provenances) const;
 
     BranchType const& branchType() const {return branchType_;}
+    
+    //This will never return 0 so you can use 0 to mean unset
+    typedef unsigned long CacheIdentifier_t;
+    CacheIdentifier_t cacheIdentifier() const {return cacheIdentifier_;}
 
     DelayedReader* reader() const {return reader_;}
 
@@ -234,7 +243,7 @@ namespace edm {
 
     virtual bool isComplete_() const {return true;}
 
-    ProcessHistory const* processHistoryPtr_;
+    boost::shared_ptr<ProcessHistory const> processHistoryPtr_;
 
     ProcessHistoryID processHistoryID_;
 
@@ -264,8 +273,9 @@ namespace edm {
     // input ProcessHistory, the following pointer should be null.
     // The Principal does not own this object.
     HistoryAppender* historyAppender_;
+    
+    CacheIdentifier_t cacheIdentifier_;
 
-    static const ProcessHistory emptyProcessHistory_;
   };
 
   template <typename PROD>

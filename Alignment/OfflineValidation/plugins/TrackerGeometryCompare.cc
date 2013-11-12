@@ -107,7 +107,7 @@ TrackerGeometryCompare::TrackerGeometryCompare(const edm::ParameterSet& cfg) :
 		
 	// if want to use, make id cut list
 	if (_detIdFlag){
-        ifstream fin;
+        std::ifstream fin;
         fin.open( _detIdFlagFile.c_str() );
         
         while (!fin.eof() && fin.good() ){
@@ -753,7 +753,7 @@ void TrackerGeometryCompare::diffCommonTrackerSystem(Alignable *refAli, Alignabl
 	
 }
 
-void TrackerGeometryCompare::fillTree(Alignable *refAli, AlgebraicVector diff, const TrackerTopology* tTopo){
+void TrackerGeometryCompare::fillTree(Alignable *refAli, const AlgebraicVector& diff, const TrackerTopology* tTopo){
 	
 	_id = refAli->id();
 	_level = refAli->alignableObjectId();

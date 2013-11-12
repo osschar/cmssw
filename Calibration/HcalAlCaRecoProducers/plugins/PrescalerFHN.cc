@@ -13,7 +13,6 @@
 //
 // Original Author:  Kenneth Case Rossato
 //         Created:  Wed Mar 25 13:05:10 CET 2008
-// $Id: PrescalerFHN.cc,v 1.3 2010/02/11 00:10:37 wmtan Exp $
 //
 //
 // modified to PrecalerFHN by Grigory Safronov 27/03/09
@@ -60,7 +59,7 @@ class PrescalerFHN : public edm::EDFilter {
 
   edm::ParameterSetID triggerNamesID_;
 
-  edm::InputTag triggerTag;
+  edm::EDGetTokenT<TriggerResults> tok_trigger;
 
   std::map<std::string, unsigned int> prescales;
   std::map<std::string, unsigned int> prescale_counter;
@@ -80,8 +79,8 @@ class PrescalerFHN : public edm::EDFilter {
 // constructors and destructor
 //
 PrescalerFHN::PrescalerFHN(const edm::ParameterSet& iConfig)
-  : triggerTag(iConfig.getParameter<edm::InputTag>("TriggerResultsTag"))
 {
+  tok_trigger = consumes<TriggerResults>(iConfig.getParameter<edm::InputTag>("TriggerResultsTag"));
    //now do what ever initialization is needed
   std::vector<edm::ParameterSet> prescales_in(iConfig.getParameter<std::vector<edm::ParameterSet> >("Prescales"));
 
@@ -147,7 +146,7 @@ PrescalerFHN::filter(edm::Event& iEvent, const edm::EventSetup& iSetup)
    // Trying to mirror HLTrigger/HLTfilters/src/HLTHighLevel.cc where possible
 
    Handle<TriggerResults> trh;
-   iEvent.getByLabel(triggerTag, trh);
+   iEvent.getByToken(tok_trigger, trh);
 
    if (trh.isValid()) {
      LogDebug("") << "TriggerResults found, number of HLT paths: " << trh->size();

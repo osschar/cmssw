@@ -13,7 +13,7 @@
 #include "FWCore/ServiceRegistry/interface/ServiceToken.h"
 #include "FWCore/Utilities/interface/BranchType.h"
 
-#include "DataFormats/Provenance/interface/Selections.h"
+#include "DataFormats/Provenance/interface/SelectedProducts.h"
 
 #include "boost/shared_ptr.hpp"
 
@@ -46,15 +46,18 @@ namespace edm {
                ProcessContext const* parentProcessContext);
 
     virtual ~SubProcess();
+
+    SubProcess(SubProcess const&) = delete; // Disallow copying and moving
+    SubProcess& operator=(SubProcess const&) = delete; // Disallow copying and moving
     
     //From OutputModule
     void selectProducts(ProductRegistry const& preg);
-    SelectionsArray const& keptProducts() const {return keptProducts_;}
+    SelectedProductsForBranchType const& keptProducts() const {return keptProducts_;}
 
     void doBeginJob();
     void doEndJob();
 
-    void doEvent(EventPrincipal const& principal, IOVSyncValue const& ts);
+    void doEvent(EventPrincipal const& principal);
 
     void doBeginRun(RunPrincipal const& principal, IOVSyncValue const& ts);
 
@@ -200,7 +203,7 @@ namespace edm {
   private:
      void beginJob();
      void endJob();
-     void process(EventPrincipal const& e, IOVSyncValue const& ts);
+     void process(EventPrincipal const& e);
      void beginRun(RunPrincipal const& r, IOVSyncValue const& ts);
      void endRun(RunPrincipal const& r, IOVSyncValue const& ts, bool cleaningUpAfterException);
      void beginLuminosityBlock(LuminosityBlockPrincipal const& lb, IOVSyncValue const& ts);
@@ -216,16 +219,21 @@ namespace edm {
     
     ServiceToken                                  serviceToken_;
     boost::shared_ptr<ProductRegistry const>      parentPreg_;
-    boost::shared_ptr<ProductRegistry const>	  preg_;
+    boost::shared_ptr<ProductRegistry const>	    preg_;
     boost::shared_ptr<BranchIDListHelper>         branchIDListHelper_;
-    std::unique_ptr<ExceptionToActionTable const>            act_table_;
+    std::unique_ptr<ExceptionToActionTable const> act_table_;
     boost::shared_ptr<ProcessConfiguration const> processConfiguration_;
     ProcessContext                                processContext_;
+    //We require 1 history for each Run, Lumi and Stream
+    // The vectors first hold Stream info, then Lumi then Run
+    unsigned int                                  historyLumiOffset_;
+    unsigned int                                  historyRunOffset_;
+    std::vector<ProcessHistoryRegistry>           processHistoryRegistries_;
+    std::vector<HistoryAppender>                  historyAppenders_;
     PrincipalCache                                principalCache_;
     boost::shared_ptr<eventsetup::EventSetupProvider> esp_;
     std::auto_ptr<Schedule>                       schedule_;
     std::map<ProcessHistoryID, ProcessHistoryID>  parentToChildPhID_;
-    std::unique_ptr<HistoryAppender>              historyAppender_;
     std::auto_ptr<SubProcess>                     subProcess_;
     std::unique_ptr<ParameterSet>                 processParameterSet_;
 
@@ -233,7 +241,7 @@ namespace edm {
     // the branches we are to write.
     //
     // We do not own the BranchDescriptions to which we point.
-    SelectionsArray keptProducts_;
+    SelectedProductsForBranchType keptProducts_;
     ProductSelectorRules productSelectorRules_;
     ProductSelector productSelector_;
 

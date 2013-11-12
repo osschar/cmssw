@@ -13,8 +13,6 @@
 //
 // Original Author:  Gobinda Majumder
 //         Created:  Sat Jul  7 09:51:31 CEST 2007
-// $Id: HOCalibAnalyzer.cc,v 1.11 2010/08/11 13:37:54 elmer Exp $
-// $Id: HOCalibAnalyzer.cc,v 1.11 2010/08/11 13:37:54 elmer Exp $
 //
 //
 
@@ -439,7 +437,7 @@ class HOCalibAnalyzer : public edm::EDAnalyzer {
   int irunold;
 
   edm::InputTag hoCalibVariableCollectionTag;
-
+  edm::EDGetTokenT<HOCalibVariableCollection> tok_ho_; 
       // ----------member data ---------------------------
 
 };
@@ -461,11 +459,12 @@ const int HOCalibAnalyzer::neffip;
 //
 // constructors and destructor
 //
-HOCalibAnalyzer::HOCalibAnalyzer(const edm::ParameterSet& iConfig) :
-  hoCalibVariableCollectionTag(iConfig.getParameter<edm::InputTag>("hoCalibVariableCollectionTag"))
+
+HOCalibAnalyzer::HOCalibAnalyzer(const edm::ParameterSet& iConfig)
   // It is very likely you want the following in your configuration
   // hoCalibVariableCollectionTag = cms.InputTag('hoCalibProducer', 'HOCalibVariableCollection')
 {
+   tok_ho_ = consumes<HOCalibVariableCollection>(iConfig.getParameter<edm::InputTag>("hoCalibVariableCollectionTag"));
    //now do what ever initialization is needed
   ipass = 0;
   Nevents = 0;
@@ -1002,8 +1001,7 @@ HOCalibAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup
   edm::Handle<HOCalibVariableCollection>HOCalib;
   bool isCosMu = true;
   try {
-    iEvent.getByLabel(hoCalibVariableCollectionTag, HOCalib); 
-    //    iEvent.getByLabel("hoCalibProducer","HOCalibVariableCollection",HOCalib);
+    iEvent.getByToken(tok_ho_, HOCalib);
 
   } catch ( cms::Exception &iEvent ) { isCosMu = false; } 
 
@@ -1767,7 +1765,7 @@ HOCalibAnalyzer::endJob() {
     int iiter = 0;
 
 
-    ofstream file_out(theoutputtxtFile.c_str());
+    std::ofstream file_out(theoutputtxtFile.c_str());
     //    TPostScript* ps=0;
     int ips=111;
     TPostScript ps(theoutputpsFile.c_str(),ips);
@@ -1777,13 +1775,15 @@ HOCalibAnalyzer::endJob() {
     ysiz = 1200; //600;
     TCanvas *c0 = new TCanvas("c0", " Pedestal vs signal", xsiz, ysiz);
 
-    float mean_eta[nphimx];
-    float mean_phi[netamx];
-    float rms_eta[nphimx];
-    float rms_phi[netamx];
+// Fix is done for eta-phi
 
-    for (int ij=0; ij<nphimx; ij++) {mean_phi[ij] = rms_phi[ij] =0;}
-    for (int ij=0; ij<netamx; ij++) {mean_eta[ij] = rms_eta[ij] =0;}
+    float mean_eta[netamx];
+    float mean_phi[nphimx];
+    float rms_eta[netamx];
+    float rms_phi[nphimx];
+
+    for (int ij=0; ij<nphimx; ++ij) {mean_phi[ij] = 0; rms_phi[ij] = 0;}
+    for (int ij=0; ij<netamx; ++ij) {mean_eta[ij] = 0; rms_eta[ij] = 0;}
 
     int mxeta = 0;
     int mxphi = 0;

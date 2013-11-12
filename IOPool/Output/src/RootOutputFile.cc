@@ -3,6 +3,7 @@
 
 #include "FWCore/Utilities/interface/GlobalIdentifier.h"
 
+
 #include "DataFormats/Provenance/interface/EventAuxiliary.h"
 #include "FWCore/Version/interface/GetFileFormatVersion.h"
 #include "DataFormats/Provenance/interface/FileFormatVersion.h"
@@ -13,6 +14,7 @@
 #include "FWCore/Framework/interface/EventPrincipal.h"
 #include "FWCore/Framework/interface/LuminosityBlockPrincipal.h"
 #include "FWCore/Framework/interface/RunPrincipal.h"
+#include "FWCore/MessageLogger/interface/JobReport.h"
 #include "FWCore/MessageLogger/interface/MessageLogger.h"
 #include "DataFormats/Common/interface/OutputHandle.h"
 #include "DataFormats/Provenance/interface/BranchChildren.h"
@@ -22,7 +24,6 @@
 #include "DataFormats/Provenance/interface/EventID.h"
 #include "DataFormats/Provenance/interface/ParameterSetBlob.h"
 #include "DataFormats/Provenance/interface/ParameterSetID.h"
-#include "DataFormats/Provenance/interface/ProcessHistoryRegistry.h"
 #include "DataFormats/Provenance/interface/ProcessHistoryID.h"
 #include "DataFormats/Provenance/interface/ProductRegistry.h"
 #include "FWCore/Framework/interface/ConstProductRegistry.h"
@@ -92,6 +93,7 @@ namespace edm {
       runTree_(filePtr_, InRun, om_->splitLevel(), om_->treeMaxVirtualSize()),
       treePointers_(),
       dataTypeReported_(false),
+      processHistoryRegistry_(),
       parentageIDs_(),
       branchesWithStoredHistory_() {
 #if ROOT_VERSION_CODE >= ROOT_VERSION(5,30,0)
@@ -408,8 +410,10 @@ namespace edm {
       dataTypeReported_ = true;
     }
 
+    // Store the process history.
+    processHistoryRegistry_.registerProcessHistory(e.processHistory());
     // Store the reduced ID in the IndexIntoFile
-    ProcessHistoryID reducedPHID = ProcessHistoryRegistry::instance()->extraForUpdate().reduceProcessHistoryID(e.processHistoryID());
+    ProcessHistoryID reducedPHID = processHistoryRegistry_.reducedProcessHistoryID(e.processHistoryID());
     // Add event to index
     indexIntoFile_.addEntry(reducedPHID, pEventAux_->run(), pEventAux_->luminosityBlock(), pEventAux_->event(), eventEntryNumber_);
     ++eventEntryNumber_;
@@ -425,13 +429,18 @@ namespace edm {
     lumiAux_ = lb.aux();
     // Use the updated process historyID
     lumiAux_.setProcessHistoryID(lb.processHistoryID());
+    // Store the process history.
+    processHistoryRegistry_.registerProcessHistory(lb.processHistory());
     // Store the reduced ID in the IndexIntoFile
-    ProcessHistoryID reducedPHID = ProcessHistoryRegistry::instance()->extraForUpdate().reduceProcessHistoryID(lb.processHistoryID());
+    ProcessHistoryID reducedPHID = processHistoryRegistry_.reducedProcessHistoryID(lb.processHistoryID());
     // Add lumi to index.
     indexIntoFile_.addEntry(reducedPHID, lumiAux_.run(), lumiAux_.luminosityBlock(), 0U, lumiEntryNumber_);
     ++lumiEntryNumber_;
     fillBranches(InLumi, lb, nullptr, mcc);
     lumiTree_.optimizeBaskets(10ULL*1024*1024);
+
+    Service<JobReport> reportSvc;
+    reportSvc->reportLumiSection(reportToken_, lb.id().run(), lb.id().luminosityBlock());
   }
 
   void RootOutputFile::writeRun(RunPrincipal const& r, ModuleCallingContext const* mcc) {
@@ -440,13 +449,18 @@ namespace edm {
     runAux_ = r.aux();
     // Use the updated process historyID
     runAux_.setProcessHistoryID(r.processHistoryID());
+    // Store the process history.
+    processHistoryRegistry_.registerProcessHistory(r.processHistory());
     // Store the reduced ID in the IndexIntoFile
-    ProcessHistoryID reducedPHID = ProcessHistoryRegistry::instance()->extraForUpdate().reduceProcessHistoryID(r.processHistoryID());
+    ProcessHistoryID reducedPHID = processHistoryRegistry_.reducedProcessHistoryID(r.processHistoryID());
     // Add run to index.
     indexIntoFile_.addEntry(reducedPHID, runAux_.run(), 0U, 0U, runEntryNumber_);
     ++runEntryNumber_;
     fillBranches(InRun, r, nullptr, mcc);
     runTree_.optimizeBaskets(10ULL*1024*1024);
+
+    Service<JobReport> reportSvc;
+    reportSvc->reportRunNumber(reportToken_, r.run());
   }
 
   void RootOutputFile::writeParentageRegistry() {
@@ -506,10 +520,8 @@ namespace edm {
   }
 
   void RootOutputFile::writeProcessHistoryRegistry() {
-    typedef ProcessHistoryRegistry::collection_type Map;
-    Map const& procHistoryMap = ProcessHistoryRegistry::instance()->data();
     ProcessHistoryVector procHistoryVector;
-    for(auto const& ph : procHistoryMap) {
+    for(auto const& ph : processHistoryRegistry_) {
       procHistoryVector.push_back(ph.second);
     }
     ProcessHistoryVector* p = &procHistoryVector;
@@ -610,7 +622,7 @@ namespace edm {
   }
 
   void
-  RootOutputFile::setBranchAliases(TTree* tree, Selections const& branches) const {
+  RootOutputFile::setBranchAliases(TTree* tree, SelectedProducts const& branches) const {
     if(tree && tree->GetNbranches() != 0) {
       for(auto const& selection : branches) {
         BranchDescription const& pd = *selection;
@@ -637,7 +649,7 @@ namespace edm {
     assert(om_->dropMetaData() != PoolOutputModule::DropAll);
     assert(produced || om_->dropMetaData() != PoolOutputModule::DropPrior);
     if(om_->dropMetaData() == PoolOutputModule::DropDroppedPrior && !produced) return;
-    BranchMapper const& iMapper = *principal.branchMapperPtr();
+    ProductProvenanceRetriever const& iMapper = *principal.productProvenanceRetrieverPtr();
     std::vector<BranchID> const& parentIDs = iGetParents.parentage().parents();
     for(auto const& parentID : parentIDs) {
       branchesWithStoredHistory_.insert(parentID);
@@ -689,7 +701,7 @@ namespace edm {
         insertProductProvenance(*oh.productProvenance(),provenanceToKeep);
         //provenanceToKeep.insert(*oh.productProvenance());
         EventPrincipal const& eventPrincipal = dynamic_cast<EventPrincipal const&>(principal);
-        assert(eventPrincipal.branchMapperPtr());
+        assert(eventPrincipal.productProvenanceRetrieverPtr());
         insertAncestors(*oh.productProvenance(), eventPrincipal, produced, provenanceToKeep, mcc);
       }
       product = oh.wrapper();

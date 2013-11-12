@@ -19,7 +19,6 @@
 // Rewritten by: Vladimir Rekovic
 //         Date:  May 2009
 //
-// $Id: FourVectorHLTOffline.h,v 1.66 2011/06/15 16:22:47 bjk Exp $
 //
 //
 // system include files
@@ -735,9 +734,9 @@ public:
      DRRange_ = dRRange;
      thresholdFactor_ = thresholdFactor;
     }
-    void setTriggerType(std::vector<int> trigType) { triggerType_ = trigType; }
+    void setTriggerType(const std::vector<int>& trigType) { triggerType_ = trigType; }
     void pushTriggerType(int trigType) { triggerType_.push_back(trigType); }
-    void setL1TriggerType(std::vector<int> trigType) { l1triggerType_ = trigType; }
+    void setL1TriggerType(const std::vector<int>& trigType) { l1triggerType_ = trigType; }
     void pushL1TriggerType(int trigType) { l1triggerType_.push_back(trigType); }
     void setPath(FourVectorHLTOffline::PathInfoCollection::iterator v) { v_ = v; }
     void setReco(edm::Handle<T> offColl) { offColl_ = offColl; }

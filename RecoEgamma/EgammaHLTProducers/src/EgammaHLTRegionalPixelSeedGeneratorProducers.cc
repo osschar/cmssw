@@ -2,6 +2,7 @@
 // Package:         RecoEgamma/EgammaHLTProducers
 // Class:           EgammaHLTRegionalPixelSeedGeneratorProducers
 //  Modified from TkSeedGeneratorFromTrk by Jeremy Werner, Princeton University, USA
+// $Id: EgammaHLTRegionalPixelSeedGeneratorProducers.cc,v 1.13 2012/01/23 12:56:38 sharper Exp $
 //
 
 #include <iostream>
@@ -20,10 +21,6 @@
 #include "RecoTracker/TkTrackingRegions/interface/RectangularEtaPhiTrackingRegion.h"
 #include "DataFormats/TrackReco/interface/Track.h"
 #include "DataFormats/Math/interface/Vector3D.h"
-#include "DataFormats/RecoCandidate/interface/RecoEcalCandidate.h"
-#include "DataFormats/RecoCandidate/interface/RecoEcalCandidateFwd.h"
-#include "DataFormats/EgammaCandidates/interface/Electron.h"
-#include "DataFormats/EgammaCandidates/interface/ElectronFwd.h"
 #include "DataFormats/EgammaReco/interface/SuperCluster.h"
 
 #include "RecoTracker/TkTrackingRegions/interface/OrderedHitsGeneratorFactory.h"
@@ -31,14 +28,13 @@
 #include "RecoTracker/TkSeedGenerator/interface/SeedGeneratorFromRegionHits.h"
 #include "RecoTracker/TkSeedGenerator/interface/SeedCreatorFactory.h"
 
-#include "CondFormats/DataRecord/interface/BeamSpotObjectsRcd.h"//needed?
-#include "CondFormats/BeamSpotObjects/interface/BeamSpotObjects.h"//needed?
-
 #include "DataFormats/BeamSpot/interface/BeamSpot.h"
 #include "DataFormats/Math/interface/Point3D.h"
 // Math
 #include "Math/GenVector/VectorUtil.h"
 #include "Math/GenVector/PxPyPzE4D.h"
+#include "FWCore/ParameterSet/interface/ConfigurationDescriptions.h"
+#include "FWCore/ParameterSet/interface/ParameterSetDescription.h"
 
 using namespace std;
 using namespace reco;
@@ -54,16 +50,43 @@ EgammaHLTRegionalPixelSeedGeneratorProducers::EgammaHLTRegionalPixelSeedGenerato
   halflength_  = conf_.getParameter<double>("originHalfLength");
   deltaEta_    = conf_.getParameter<double>("deltaEtaRegion");
   deltaPhi_    = conf_.getParameter<double>("deltaPhiRegion");
-  candTag_     = conf_.getParameter< edm::InputTag > ("candTag");
-  candTagEle_  = conf_.getParameter< edm::InputTag > ("candTagEle");
+
+  candTag_     = consumes<reco::RecoEcalCandidateCollection>(conf_.getParameter< edm::InputTag > ("candTag"));
+  candTagEle_  = consumes<reco::ElectronCollection>(conf_.getParameter< edm::InputTag > ("candTagEle"));
+  BSProducer_  = consumes<reco::BeamSpot>(conf.getParameter<edm::InputTag>("BSProducer"));
+  
   useZvertex_  = conf_.getParameter<bool>("UseZInVertex");
-  BSProducer_ = conf.getParameter<edm::InputTag>("BSProducer");
+
   // setup orderedhits setup (in order to tell seed generator to use pairs/triplets, which layers)
 }
 
 // Virtual destructor needed.
 EgammaHLTRegionalPixelSeedGeneratorProducers::~EgammaHLTRegionalPixelSeedGeneratorProducers() { 
 }  
+
+void EgammaHLTRegionalPixelSeedGeneratorProducers::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
+
+  edm::ParameterSetDescription desc;
+  desc.add<double>("ptMin", 1.5);
+  desc.add<double>("vertexZ", 0);
+  desc.add<double>("originRadius", 0.02);
+  desc.add<double>("originHalfLength", 15.0);
+  desc.add<double>("deltaEtaRegion", 0.3);
+  desc.add<double>("deltaPhiRegion", 0.3);
+  desc.add<edm::InputTag>(("candTag"), edm::InputTag("hltL1SeededRecoEcalCandidate"));
+  desc.add<edm::InputTag>(("candTagEle"), edm::InputTag("pixelMatchElectrons"));
+  desc.add<edm::InputTag>(("BSProducer"), edm::InputTag("hltOnlineBeamSpot"));
+  desc.add<bool>(("UseZInVertex"), false);
+  desc.add<std::string>("TTRHBuilder", "WithTrackAngle");
+
+  edm::ParameterSetDescription orederedHitsPSET;
+  orederedHitsPSET.add<std::string>("ComponentName", "StandardHitPairGenerator");
+  orederedHitsPSET.add<std::string>("SeedingLayers", "hltESPPixelLayerPairs");
+  orederedHitsPSET.add<unsigned int>("maxElement", 0);
+  desc.add<edm::ParameterSetDescription>("OrderedHitsFactoryPSet", orederedHitsPSET);
+
+  descriptions.add(("hltEgammaHLTRegionalPixelSeedGeneratorProducers"), desc);  
+}
 
 void EgammaHLTRegionalPixelSeedGeneratorProducers::endRun(edm::Run const&run, const edm::EventSetup& es)
 {
@@ -74,22 +97,19 @@ void EgammaHLTRegionalPixelSeedGeneratorProducers::endRun(edm::Run const&run, co
 
 void EgammaHLTRegionalPixelSeedGeneratorProducers::beginRun(edm::Run const&run, const edm::EventSetup& es)
 {
-  edm::ParameterSet hitsfactoryPSet =
-      conf_.getParameter<edm::ParameterSet>("OrderedHitsFactoryPSet");
+  edm::ParameterSet hitsfactoryPSet = conf_.getParameter<edm::ParameterSet>("OrderedHitsFactoryPSet");
   std::string hitsfactoryName = hitsfactoryPSet.getParameter<std::string>("ComponentName");
-
+  
   // get orderd hits generator from factory
-  OrderedHitsGenerator*  hitsGenerator =
-        OrderedHitsGeneratorFactory::get()->create( hitsfactoryName, hitsfactoryPSet);
-
+  OrderedHitsGenerator*  hitsGenerator = OrderedHitsGeneratorFactory::get()->create( hitsfactoryName, hitsfactoryPSet);
+  
   // start seed generator
-  // FIXME??
   edm::ParameterSet creatorPSet;
   creatorPSet.addParameter<std::string>("propagator","PropagatorWithMaterial");
-
+  
   combinatorialSeedGenerator = new SeedGeneratorFromRegionHits( hitsGenerator, 0, 
-						 SeedCreatorFactory::get()->create("SeedFromConsecutiveHitsCreator", creatorPSet)
-                                                              );
+								SeedCreatorFactory::get()->create("SeedFromConsecutiveHitsCreator", creatorPSet)
+								);
 }
 
 // Functions that gets called by framework every event
@@ -101,18 +121,18 @@ void EgammaHLTRegionalPixelSeedGeneratorProducers::produce(edm::Event& iEvent, c
 
   // Get the recoEcalCandidates
   edm::Handle<reco::RecoEcalCandidateCollection> recoecalcands;
-  iEvent.getByLabel(candTag_,recoecalcands);
+  iEvent.getByToken(candTag_,recoecalcands);
 
   //Get the Beam Spot position
   edm::Handle<reco::BeamSpot> recoBeamSpotHandle;
-  // iEvent.getByType(recoBeamSpotHandle);
-  iEvent.getByLabel(BSProducer_,recoBeamSpotHandle);
+  iEvent.getByToken(BSProducer_,recoBeamSpotHandle);
   // gets its position
   const BeamSpot::Point& BSPosition = recoBeamSpotHandle->position(); 
 
   //Get the HLT electrons collection if needed
   edm::Handle<reco::ElectronCollection> electronHandle;
-  if(useZvertex_){iEvent.getByLabel(candTagEle_,electronHandle);}
+  if(useZvertex_)
+    iEvent.getByToken(candTagEle_,electronHandle);
 
   reco::SuperClusterRef scRef;
   for (reco::RecoEcalCandidateCollection::const_iterator recoecalcand= recoecalcands->begin(); recoecalcand!=recoecalcands->end(); recoecalcand++) {

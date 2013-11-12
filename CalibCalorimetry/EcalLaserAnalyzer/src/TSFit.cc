@@ -1,7 +1,6 @@
 /* 
  *  \class TSFit
  *
- *  $Date: 2010/01/04 15:06:28 $
  *  \author: Jean-Pierre Pansart - CEA/Saclay
  */
 
@@ -275,7 +274,6 @@ double TSFit::fit_third_degree_polynomial(
   double xki2;
   double tm, tmp, amp;
 
-  static double nevt;
 
   ret_dat[0] = -999.;
   ret_dat[1] = -999.;
@@ -370,7 +368,6 @@ double TSFit::fit_third_degree_polynomial(
     return -104.;
   }
 
-  nevt += 1.;
 
   ret_dat[0] = amp;
   ret_dat[1] = tm;

@@ -19,6 +19,7 @@
 //
 
 // system include files
+#include <vector>
 
 // user include files
 #include "DataFormats/Provenance/interface/BranchType.h"
@@ -37,6 +38,8 @@ namespace edm {
   class ModuleCallingContext;
   class ProductHolderIndexHelper;
   class EDConsumerBase;
+  class PreallocationConfiguration;
+  class ProductHolderIndexAndSkipBit;
 
   namespace maker {
     template<typename T> class ModuleHolderT;
@@ -44,6 +47,7 @@ namespace edm {
   
   namespace stream {
     class EDAnalyzerBase;
+
     class EDAnalyzerAdaptorBase
     {
       
@@ -59,19 +63,23 @@ namespace edm {
       // ---------- static member functions --------------------
       
       // ---------- member functions ---------------------------
-      const ModuleDescription moduleDescription() { return moduleDescription_;}
+      const ModuleDescription& moduleDescription() { return moduleDescription_;}
       
       std::string workerType() const { return "WorkerT<EDAnalyzerAdaptorBase>";}
       void
       registerProductsAndCallbacks(EDAnalyzerAdaptorBase const*, ProductRegistry* reg);
     protected:
       template<typename T> void createStreamModules(T iFunc) {
-        m_streamModules[0] = iFunc();
+        for(auto& m: m_streamModules) {
+          m = iFunc();
+        }
       }
       
       //Same interface as EDConsumerBase
-      void itemsToGet(BranchType, std::vector<ProductHolderIndex>&) const;
-      void itemsMayGet(BranchType, std::vector<ProductHolderIndex>&) const;
+      void itemsToGet(BranchType, std::vector<ProductHolderIndexAndSkipBit>&) const;
+      void itemsMayGet(BranchType, std::vector<ProductHolderIndexAndSkipBit>&) const;
+      std::vector<ProductHolderIndexAndSkipBit> const& itemsToGetFromEvent() const;
+
       void updateLookup(BranchType iBranchType,
                         ProductHolderIndexHelper const&);
       
@@ -83,6 +91,9 @@ namespace edm {
       
       bool doEvent(EventPrincipal& ep, EventSetup const& c,
                    ModuleCallingContext const*) ;
+      void doPreallocate(PreallocationConfiguration const&);
+      
+      virtual void setupStreamModules() = 0;
       void doBeginJob();
       virtual void doEndJob() = 0;
       

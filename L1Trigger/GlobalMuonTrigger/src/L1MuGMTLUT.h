@@ -32,8 +32,6 @@
  * 
 */ 
 //
-//   $Date: 2007/03/23 18:51:35 $
-//   $Revision: 1.4 $
 //
 //   Author :
 //   H. Sakulin            HEPHY Vienna
@@ -54,7 +52,7 @@
 //#include <sstream>
 #include <string>
 #include <stdlib.h>
-#include "stdio.h"
+#include <cstdio>
 
 //----------------------
 // Base Class Headers --
