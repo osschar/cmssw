@@ -694,7 +694,8 @@ void SteppingHelixPropagator::loadState(SteppingHelixPropagator::StateInfo& svCu
 	}
       }
     } else {
-      edm::LogWarning(metname)<<std::setprecision(17)<<std::setw(20)<<std::scientific<<"Failed to cast into VolumeBasedMagneticField: fall back to the default behavior"<<std::endl;
+      // XXXX MT comment this out to get realistic uniform tracking speed
+      // edm::LogWarning(metname)<<std::setprecision(17)<<std::setw(20)<<std::scientific<<"Failed to cast into VolumeBasedMagneticField: fall back to the default behavior"<<std::endl;
       svCurrent.magVol = 0;
     }
     if (debug_){
