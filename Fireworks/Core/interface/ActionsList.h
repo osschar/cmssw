@@ -18,6 +18,7 @@ namespace cmsshow {
 
    extern const std::string sExportImage;
    extern const std::string sExportAllImages;
+   extern const std::string sExportAsWfObj;
 
    extern const std::string sQuit;
 

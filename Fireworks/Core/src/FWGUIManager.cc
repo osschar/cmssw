@@ -83,6 +83,7 @@
 #include "Fireworks/Core/interface/fwLog.h"
 #include "FWCore/Common/interface/EventBase.h"
 
+#include "Fireworks/Core/src/FWEveWriteToObjFile.h"
 
 
 // constants, enums and typedefs
@@ -168,6 +169,7 @@ FWGUIManager::FWGUIManager(fireworks::Context* ctx,
 
       getAction(cmsshow::sExportImage)->activated.connect(sigc::mem_fun(*this, &FWGUIManager::exportImageOfMainView));
       getAction(cmsshow::sExportAllImages)->activated.connect(sigc::mem_fun(*this, &FWGUIManager::exportImagesOfAllViews));
+      getAction(cmsshow::sExportAsWfObj)->activated.connect(sigc::mem_fun(*this, &FWGUIManager::export3dWfObjFile));
       getAction(cmsshow::sLoadConfig)->activated.connect(sigc::mem_fun(*this, &FWGUIManager::promptForLoadConfigurationFile));
       getAction(cmsshow::sLoadPartialConfig)->activated.connect(sigc::mem_fun(*this, &FWGUIManager::promptForPartialLoadConfigurationFile));
       getAction(cmsshow::sSaveConfig)->activated.connect(writeToPresentConfigurationFile_);
@@ -871,6 +873,8 @@ FWGUIManager::savePartialToConfigurationFile()
    writePartialToConfigurationFile_("current");
 }
 
+//==============================================================================
+
 void
 FWGUIManager::exportImageOfMainView()
 {
@@ -993,6 +997,41 @@ FWGUIManager::exportAllViews(const std::string& format, int height)
       f.get();
    }
 }
+
+//------------------------------------------------------------------------------
+
+void
+FWGUIManager::export3dWfObjFile()
+{
+   try {
+      static TString dir(".");
+      const char *  kImageExportTypes[] = {"Wavefront OBJ", "*.obj",
+                                           0, 0};
+
+      TGFileInfo fi;
+      fi.fFileTypes = kImageExportTypes;
+      fi.fIniDir    = StrDup(dir);
+      new TGFileDialog(gClient->GetDefaultRoot(), m_cmsShowMainFrame,
+                       kFDSave,&fi);
+      dir = fi.fIniDir;
+      if (fi.fFilename != 0)
+      {
+         std::string name = fi.fFilename;
+         // fi.fFileTypeIdx points to the name of the file type
+         // selected in the drop-down menu, so fi.fFileTypeIdx gives us
+         // the extension
+         std::string ext = kImageExportTypes[fi.fFileTypeIdx + 1] + 1;
+         if (name.find(ext) == name.npos)
+            name += ext;
+
+         FWEveWriteToObjFile ttt(gEve->GetListTree()->GetFirstItem());
+         ttt.save_to_obj(name.c_str());
+      }
+   }
+   catch (std::runtime_error &e) { std::cout << e.what() << std::endl; }
+}
+
+//==============================================================================
 
 static const std::string kMainWindow("main window");
 static const std::string kViews("views");

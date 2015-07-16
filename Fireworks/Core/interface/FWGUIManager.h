@@ -121,6 +121,7 @@ public:
    void exportImageOfMainView();
    void exportImagesOfAllViews();
    void exportAllViews(const std::string& format, int height);
+   void export3dWfObjFile();
 
    void createEDIFrame();
    ///Allowed values are -1 or ones from FWDataCategories enum

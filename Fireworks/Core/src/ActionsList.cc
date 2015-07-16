@@ -24,6 +24,7 @@ const std::string cmsshow::sSavePartialConfigAs         = "Save Partial Configur
 
 const std::string cmsshow::sExportImage          = "Export Main View Image";
 const std::string cmsshow::sExportAllImages      = "Export Images of All Views";
+const std::string cmsshow::sExportAsWfObj        = "Export As Wavefront Obj";
 
 const std::string cmsshow::sQuit                 = "Quit";
 

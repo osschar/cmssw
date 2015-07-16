@@ -100,6 +100,8 @@ CmsShowMainFrame::CmsShowMainFrame(const TGWindow *p,UInt_t w,UInt_t h,FWGUIMana
 
    CSGAction *exportImage  = new CSGAction(this, cmsshow::sExportImage.c_str());
    CSGAction *exportImages = new CSGAction(this, cmsshow::sExportAllImages.c_str());
+   CSGAction *exportWFObj  = new CSGAction(this, cmsshow::sExportAsWfObj.c_str());
+
    CSGAction *quit = new CSGAction(this, cmsshow::sQuit.c_str());
 
    CSGAction *undo = new CSGAction(this, cmsshow::sUndo.c_str());
@@ -179,6 +181,7 @@ CmsShowMainFrame::CmsShowMainFrame(const TGWindow *p,UInt_t w,UInt_t h,FWGUIMana
     
    exportImage->createMenuEntry(fileMenu);
    exportImages->createMenuEntry(fileMenu);
+   exportWFObj->createMenuEntry(fileMenu);
    fileMenu->AddSeparator();
 
    quit->createMenuEntry(fileMenu);
@@ -190,6 +193,7 @@ CmsShowMainFrame::CmsShowMainFrame(const TGWindow *p,UInt_t w,UInt_t h,FWGUIMana
    exportImage->createShortcut(kKey_P, "CTRL", GetId());
    // comment out the followinf one, seems to get double open file dialog events on OSX
    // exportImages->createShortcut(kKey_P, "CTRL+SHIFT", GetId());
+
    quit->createShortcut(kKey_Q, "CTRL", GetId());
 
    loadPartialConfig->createShortcut(kKey_W, "CTRL", GetId());
