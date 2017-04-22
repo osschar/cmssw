@@ -115,7 +115,7 @@ public:
    std::string modelName(int iIndex) const;
 
    ///one value from the model which is normally used for the popup
-  const  FWItemValueGetter& valueGetter() const { return m_interestingValueGetter; }
+   const  FWItemValueGetter& valueGetter() const { return m_interestingValueGetter; }
    bool haveInterestingValue() const;
    const std::string& modelInterestingValueAsString(int iIndex) const;
 
@@ -146,7 +146,6 @@ public:
    const edm::EventBase *getEvent () const {
       return m_event;
    }
-
 
    ///returns true if failed to get data for this event
    bool hasError() const;
