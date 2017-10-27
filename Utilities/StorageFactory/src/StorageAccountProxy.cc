@@ -25,6 +25,8 @@ StorageAccountProxy::~StorageAccountProxy (void)
 IOSize
 StorageAccountProxy::read (void *into, IOSize n)
 {
+  printf("READ_NO_OFF %zu\n", n);
+
   StorageAccount::Stamp stats (m_statsRead);
   IOSize result = m_baseStorage->read (into, n);
   stats.tick (result);
@@ -34,6 +36,8 @@ StorageAccountProxy::read (void *into, IOSize n)
 IOSize
 StorageAccountProxy::read (void *into, IOSize n, IOOffset pos)
 {
+  printf("READ [%zu %ld]\n", n, pos);
+
   StorageAccount::Stamp stats (m_statsRead);
   IOSize result = m_baseStorage->read (into, n, pos);
   stats.tick (result);
@@ -43,6 +47,10 @@ StorageAccountProxy::read (void *into, IOSize n, IOOffset pos)
 IOSize
 StorageAccountProxy::readv (IOBuffer *into, IOSize n)
 {
+  printf("READV_NO_OFF %zu", n);
+  for (IOSize i = 0; i < n; ++i) printf(" %zu", into[i].size());
+  printf("\n");
+
   StorageAccount::Stamp stats (m_statsReadV);
   IOSize result = m_baseStorage->readv (into, n);
   stats.tick (result, n);
@@ -52,6 +60,10 @@ StorageAccountProxy::readv (IOBuffer *into, IOSize n)
 IOSize
 StorageAccountProxy::readv (IOPosBuffer *into, IOSize n)
 {
+  printf("READV %zu", n);
+  for (IOSize i = 0; i < n; ++i) printf(" [%zu %ld]", into[i].size(), into[i].offset());
+  printf("\n");
+
   StorageAccount::Stamp stats (m_statsReadV);
   IOSize result = m_baseStorage->readv (into, n);
   stats.tick (result, n);

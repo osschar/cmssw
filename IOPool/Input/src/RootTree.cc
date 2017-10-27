@@ -471,6 +471,7 @@ namespace edm {
     getEntry(TBranch* branch, EntryNumber entryNumber) {
       Int_t n = 0;
       try {
+        printf("GET_BRANCH_ENTRY %s %s %lld\n", branch->GetTree()->GetName(), branch->GetName(), entryNumber);
         n = branch->GetEntry(entryNumber);
       }
       catch(cms::Exception const& e) {
@@ -483,6 +484,7 @@ namespace edm {
     getEntry(TTree* tree, EntryNumber entryNumber) {
       Int_t n = 0;
       try {
+        printf("GET_TREE_ENTRY %s %lld\n", tree->GetName(), entryNumber);
         n = tree->GetEntry(entryNumber);
       }
       catch(cms::Exception const& e) {
