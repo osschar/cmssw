@@ -228,4 +228,7 @@ private:
   Int_t G4StepFreq[100000];
 };
 
+#undef UPDATE
+#undef OBSERVES
+
 #endif
