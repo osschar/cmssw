@@ -100,9 +100,12 @@ process.generator = cms.EDProducer("CloseByParticleGunProducer",
         ControlledByEta = cms.bool(False),
         Delta = cms.double(10),
 
+        # SignlePhoton
         # EnMax = cms.double(200.01), EnMin = cms.double(199.99),
         # PartID = cms.vint32(22),
         # NParticles = cms.int32(1),
+
+        # Mix50
         EnMax = cms.double(20.00),  EnMin = cms.double(5.00),
 		PartID = cms.vint32(11, -11, 12, -12, 22, 211, -211, 130, 310, 321, -321, 2212),
         NParticles = cms.int32(50),
@@ -161,8 +164,8 @@ process = customiseEarlyDelete(process)
 process.g4SimHits.Watchers = cms.VPSet(cms.PSet(
     type = cms.string('G4Snitch'),
     verbose = cms.untracked.bool(True),
-    verbose = cms.untracked.bool(True),
+    verbose_stack_level = cms.untracked.bool(False),
     verbose_transport = cms.untracked.bool(False),
     verbose_skip = cms.untracked.bool(True),
-    verbose_skip_with_ids = cms.untracked.bool(True)
+    verbose_skip_with_ids = cms.untracked.bool(False)
     ))
