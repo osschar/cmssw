@@ -188,13 +188,13 @@ void G4Snitch::update(const BeginOfTrack* bot)
       m_tracking = true;
     }
     m_stack.pop_back();
-    if (m_verbose_stack_level)
+    if (m_verbose_stack_level && (m_tracking || m_verbose_skip_with_ids))
       printf("--- UP 1 level to %d\n", stack_level());
   }
   m_stack.push_back(gid);
-  if (m_verbose_stack_level) {
+  if (m_verbose_stack_level && (m_tracking || m_verbose_skip_with_ids)) {
     printf("+++ DOWN 1 level to %d\n", stack_level());
-  } else if (m_verbose) {
+  } else if (m_verbose && (m_tracking || m_verbose_skip_with_ids)) {
     int delta = stack_level() - prev_level;
     if (delta != 0)
       printf("%s %d level%s to %d\n", (delta > 0 ? "+++ DOWN" : "--- UP"),
