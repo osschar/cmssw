@@ -9,3 +9,11 @@
 <use name="MagneticField/Engine"/>
 <use name="MagneticField/Records"/>
 <use name="SimG4Core/Physics"/>
+
+<lib name="ROOTEve"/>
+<lib name="RootG4Snitch"/>
+<!--
+<export>
+  <lib name="1"/>
+</export>
+-->
