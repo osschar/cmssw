@@ -105,14 +105,14 @@ process.generator = cms.EDProducer("CloseByParticleGunProducer",
         Delta = cms.double(10),
 
         # Single particle
-		EnMin = cms.double(199.99),
-        EnMax = cms.double(200.01),
+		VarMin = cms.double(199.99),
+        VarMax = cms.double(200.01),
         PartID = cms.vint32(2212),
         NParticles = cms.int32(1),
 
         # Mix50
-		# EnMin = cms.double(0.5),
-        # EnMax = cms.double(20.00),
+		# VarMin = cms.double(0.5),
+        # VarMax = cms.double(20.00),
 		# PartID = cms.vint32(11, -11, 12, -12, 22, 211, -211, 130, 310, 321, -321, 2212),
         # NParticles = cms.int32(500),
 
