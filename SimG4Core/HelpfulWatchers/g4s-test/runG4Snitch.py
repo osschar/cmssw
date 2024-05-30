@@ -116,7 +116,7 @@ process.generator = cms.EDProducer("CloseByParticleGunProducer",
 		# PartID = cms.vint32(11, -11, 12, -12, 22, 211, -211, 130, 310, 321, -321, 2212),
         # NParticles = cms.int32(500),
 
-        MaxEnSpread = cms.bool(False),
+        MaxVarSpread = cms.bool(False),
         Overlapping = cms.bool(False),
         Pointing = cms.bool(True),
         RandomShoot = cms.bool(False),
