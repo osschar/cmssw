@@ -34,10 +34,11 @@ process.maxEvents = cms.untracked.PSet(
 process.source = cms.Source("EmptySource")
 
 process.options = cms.untracked.PSet(
-    FailPath = cms.untracked.vstring(),
+	# Errors out in 14_1 -- Illegal parameters found in configuration.
+    # FailPath = cms.untracked.vstring(),
+    # SkipEvent = cms.untracked.vstring(),
     IgnoreCompletely = cms.untracked.vstring(),
     Rethrow = cms.untracked.vstring(),
-    SkipEvent = cms.untracked.vstring(),
     accelerators = cms.untracked.vstring('*'),
     allowUnscheduled = cms.obsolete.untracked.bool,
     canDeleteEarly = cms.untracked.vstring(),
