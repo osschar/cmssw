@@ -158,8 +158,9 @@ void G4Snitch::update(const BeginOfTrack* bot)
     m_part_vec->resize(m_g4_num_primaries + 1);
     m_vec_size = m_g4_num_primaries + 1;
     m_info->m_n_primaries = m_g4_num_primaries; // XXX might not be true !!! fix at end !!!
+    m_event_tracks_accepted = m_event_tracks_skipped = 0;
 
-    m_event_n_accepted_tracks = m_primary_n_accepted_tracks = 0;
+    m_primary_n_accepted_tracks = 0;
 
     m_last_g4_id = -1;
 
@@ -184,7 +185,7 @@ void G4Snitch::update(const BeginOfTrack* bot)
       if (m_verbose_skip)
         printf("TRACKING RESUMED, skipped %d tracks, %d steps, daughters=%d\n",
                m_tracks_skipped, m_steps_skipped, m_daughters_skipped);
-      m_total_tracks_skipped += m_tracks_skipped;
+      m_event_tracks_skipped += m_tracks_skipped;
       m_tracking = true;
     }
     m_stack.pop_back();
@@ -250,7 +251,7 @@ void G4Snitch::update(const BeginOfTrack* bot)
     p.m_g4_level = stack_level();
     ++particle(0).m_daughters_end;
 
-    m_primary_n_accepted_tracks = 0;
+    m_primary_n_accepted_tracks = 1;
   } else {
     // For secondaries, there should be an assigned location in the output vector.
     auto tpmi = m_gtp2vid.find(iTrk);
@@ -268,9 +269,6 @@ void G4Snitch::update(const BeginOfTrack* bot)
   p.m_daughters_begin = p.m_daughters_end = m_vec_size;
   p.m_g4_id = gid;
   p.m_was_tracked = true;
-
-  ++m_event_n_accepted_tracks;
-  ++m_primary_n_accepted_tracks;
 
   m_num_accepted_daugters_for_track = 0;
   m_num_total_daugters_for_track = 0;
@@ -350,17 +348,14 @@ void G4Snitch::update(const G4Step *iStep)
                 new_gid, m_vec_size,
                 b2yn(gp->GetPDGStable()), gp->GetPDGEncoding(), gt->GetKineticEnergy());
         m_gtp2vid.insert(std::make_pair(gt, m_vec_size));
-        ++m_num_accepted_daugters_for_track;
 
         if (m_vec_size >= m_vec_capacity) {
-          double grow_fac;
           if (2 * m_id_current_primary < m_g4_num_primaries || m_id_current_primary <= 1)
-            grow_fac = 2.0;
+            m_vec_capacity *= 2;
           else
-            grow_fac = (m_event_n_accepted_tracks - m_primary_n_accepted_tracks) / double(m_id_current_primary - 1) * m_g4_num_primaries;
-          m_vec_capacity = (int) std::ceil(1.02 * grow_fac * m_vec_capacity);
+            m_vec_capacity = (m_vec_capacity - m_primary_n_accepted_tracks) / (m_id_current_primary - 1) * m_g4_num_primaries;
           if (m_verbose)
-            printf("MMMMMMM Growing vec memory to %d\n", m_vec_capacity);
+            printf("MMMMMMM Growing vec memory from %d to %d\n", m_vec_size, m_vec_capacity);
           m_part_vec->reserve(m_vec_capacity);
         }
         G4S_Particle p;
@@ -372,6 +367,9 @@ void G4Snitch::update(const G4Step *iStep)
         p.m_g4_level = stack_level() + 1;
         m_part_vec->emplace_back(p);
         ++m_vec_size;
+        ++m_num_accepted_daugters_for_track;
+        ++m_primary_n_accepted_tracks;
+        ++m_event_tracks_accepted;
       }
       ++m_num_total_daugters_for_track;
     }
@@ -406,6 +404,10 @@ void G4Snitch::update(const EndOfTrack* eot)
 void G4Snitch::update(const EndOfEvent *eoe)
 {
   std::cout << "++ signal EndOfEvent -- fill the tree\n";
+  printf(" tracks_accepted=%d, m_event_tracks_skipped=%d\n",
+         m_event_tracks_accepted, m_event_tracks_skipped);
+  m_total_tracks_accepted += m_event_tracks_accepted;
+  m_total_tracks_skipped += m_event_tracks_skipped;
 
   m_tree->Fill();
   reset_output_structs();

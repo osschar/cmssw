@@ -105,6 +105,7 @@ private:
   int m_step_n = -1;
   int m_non_tracking_gid = -1;
   int m_tracks_skipped, m_steps_skipped, m_daughters_skipped;
+  int m_event_tracks_accepted, m_event_tracks_skipped;
   int m_total_tracks_accepted, m_total_tracks_skipped;
   bool m_tracking = true;
   bool m_starting_new_event = false; // for primary initalization
@@ -117,8 +118,7 @@ private:
   int m_g4_id_current_primary = -1; // as it comes from N_prim downwards -- primaries can be filtered!
   int m_id_current_primary = -1; // sequential up from 1
   int m_id; // current particle vector id
-  int m_event_n_accepted_tracks = -1; // needed to estimate kine tree size for vec.reserve()
-  int m_primary_n_accepted_tracks = -1;
+  int m_primary_n_accepted_tracks = -1; // needed to estimate kine tree size for vec.reserve()
 
   std::map<const G4Track*, int> m_gtp2vid;
 

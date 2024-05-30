@@ -94,34 +94,39 @@ process.genstepfilter.triggerConditions=cms.vstring("generation_step")
 from Configuration.AlCa.GlobalTag import GlobalTag
 process.GlobalTag = GlobalTag(process.GlobalTag, 'auto:phase2_realistic_T25', '')
 
+# Generate at HGCal boundary or closer to origin.
+HGC = True
+
 process.generator = cms.EDProducer("CloseByParticleGunProducer",
     AddAntiParticle = cms.bool(False),
     PGunParameters = cms.PSet(
         ControlledByEta = cms.bool(False),
         Delta = cms.double(10),
 
-        # SignlePhoton
-        # EnMax = cms.double(200.01), EnMin = cms.double(199.99),
-        # PartID = cms.vint32(22),
-        # NParticles = cms.int32(1),
+        # Single particle
+		EnMin = cms.double(199.99),
+        EnMax = cms.double(200.01),
+        PartID = cms.vint32(2212),
+        NParticles = cms.int32(1),
 
         # Mix50
-        EnMax = cms.double(20.00),  EnMin = cms.double(5.00),
-		PartID = cms.vint32(11, -11, 12, -12, 22, 211, -211, 130, 310, 321, -321, 2212),
-        NParticles = cms.int32(50),
+		# EnMin = cms.double(0.5),
+        # EnMax = cms.double(20.00),
+		# PartID = cms.vint32(11, -11, 12, -12, 22, 211, -211, 130, 310, 321, -321, 2212),
+        # NParticles = cms.int32(500),
 
         MaxEnSpread = cms.bool(False),
-        MaxEta = cms.double(2.7),
-        MaxPhi = cms.double(3.14159265359),
-        MinEta = cms.double(1.7),
-        MinPhi = cms.double(-3.14159265359),
         Overlapping = cms.bool(False),
         Pointing = cms.bool(True),
-        RMax = cms.double(55.01),
-        RMin = cms.double(54.99),
         RandomShoot = cms.bool(False),
-        ZMax = cms.double(321.01),
-        ZMin = cms.double(320.99)
+        MinPhi = cms.double(-3.14159265359),
+        MaxPhi = cms.double(3.14159265359),
+        MinEta = cms.double(1.7 if HGC else 0),
+        MaxEta = cms.double(2.7 if HGC else 2.4),
+        RMin = cms.double(54.99  if HGC else 0.01),
+        RMax = cms.double(55.01  if HGC else 10.0),
+        ZMin = cms.double(320.99 if HGC else -7.5),
+        ZMax = cms.double(321.01 if HGC else  7.5),
     ),
     Verbosity = cms.untracked.int32(0),
     firstRun = cms.untracked.uint32(1),
@@ -166,6 +171,6 @@ process.g4SimHits.Watchers = cms.VPSet(cms.PSet(
     verbose = cms.untracked.bool(True),
     verbose_stack_level = cms.untracked.bool(False),
     verbose_transport = cms.untracked.bool(False),
-    verbose_skip = cms.untracked.bool(True),
+    verbose_skip = cms.untracked.bool(False),
     verbose_skip_with_ids = cms.untracked.bool(False)
     ))
