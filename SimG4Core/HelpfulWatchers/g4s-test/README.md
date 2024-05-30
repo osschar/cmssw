@@ -49,6 +49,12 @@ Compactification requires, of course, index remapping.
 
 ## Development notes
 
+Disabling LTO / biglib speeds up build time significantly (x10).
+```
+scram b disable-biglib
+cmsenv
+```
+
 ### Debug scram build
 USER_CXXFLAGS="-g -O0" scram b -j 16
 
