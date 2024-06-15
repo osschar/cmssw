@@ -95,6 +95,9 @@ private:
   bool m_verbose_skip;
   bool m_verbose_skip_with_ids;
 
+  bool m_output_sensitive_edeps = true;
+  bool m_output_inert_edeps     = true;
+
   TFile *m_file;
   TTree *m_tree;
   std::shared_ptr<G4S_Info> m_info;
@@ -110,7 +113,6 @@ private:
   bool m_tracking = true;
   bool m_starting_new_event = false; // for primary initalization
 
-  std::map<int, int> m_gid2vid; // g4 to vector id
   int m_vec_size = 0, m_vec_capacity = 0;
   int m_num_accepted_daugters_for_track = -1;
   int m_num_total_daugters_for_track = -1;
