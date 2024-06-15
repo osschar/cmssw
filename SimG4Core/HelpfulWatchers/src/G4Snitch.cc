@@ -25,6 +25,11 @@ Description: Outputs a ROOT tree of kinematics.
 #include "G4Step.hh"
 #include "G4VProcess.hh"
 
+#include "G4VPhysicalVolume.hh"
+#include "G4LogicalVolume.hh"
+#include "G4VSensitiveDetector.hh"
+
+
 #include <TFile.h>
 #include <TTree.h>
 
@@ -98,7 +103,6 @@ void G4Snitch::write_tree_close_file() {
 }
 
 void G4Snitch::reset_output_structs() {
-  m_gid2vid.clear();
   m_part_vec->clear();
   m_vec_size = 0;
   m_gtp2vid.clear();
@@ -109,6 +113,7 @@ void G4Snitch::reset_output_structs() {
 //------------------------------------------------------------------------------
 
 bool G4Snitch::filter(const G4Track *t) const {
+  // Returns true if the particle is to be filtered out.
   // ? filter neutrinos
   // ? filter low-E neutrons (considered NOT stable)
   const G4ParticleDefinition* pd = t->GetParticleDefinition();
@@ -240,8 +245,7 @@ void G4Snitch::update(const BeginOfTrack* bot)
     m_g4_id_current_primary = gid;
     ++m_id_current_primary;
 
-    m_gid2vid.clear(); // no need to schlep finished primaries' ids along.
-    m_gid2vid.insert(std::make_pair(gid, m_id_current_primary));
+    // no need to schlep finished primaries and their daughters along.
     m_gtp2vid.clear();
 
     m_id = m_id_current_primary;
