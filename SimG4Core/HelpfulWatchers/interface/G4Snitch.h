@@ -89,20 +89,24 @@ private:
 
   float expected_event_progress() const;
 
-  bool m_verbose;
-  bool m_verbose_stack_level;
-  bool m_verbose_transport;
-  bool m_verbose_skip;
-  bool m_verbose_skip_with_ids;
+  bool m_verbose = false;
+  bool m_verbose_stack_level = false;
+  bool m_verbose_transport = false;
+  bool m_verbose_skip = false;
+  bool m_verbose_skip_with_ids = false;
 
   bool m_output_sensitive_edeps = true;
   bool m_output_inert_edeps     = true;
 
   TFile *m_file;
   TTree *m_tree;
+
   std::shared_ptr<G4S_Info> m_info;
   std::shared_ptr<std::vector<G4S_Particle>> m_part_vec;
+  std::shared_ptr<std::vector<G4S_ParticleSteps>> m_psteps_vec;
+
   G4S_Particle& particle(int i) { return (*m_part_vec)[i]; }
+  G4S_ParticleSteps& particle_steps(int i) { return (*m_psteps_vec)[i]; }
 
   int m_event = 0;
   int m_step_n = -1;
