@@ -82,6 +82,15 @@ struct G4S_EDep {
   double m_total {0};
   double m_niel  {0}; // non-ionizing energy loss (for low energy ions only?)
 
+  void set_edep(double t, double n) {
+    m_total = t;
+    m_niel  = n;
+  }
+  void add_edep(double t, double n) {
+    m_total += t;
+    m_niel  += n;
+  }
+
   // G4S_EDep() = default;
   // G4S_EDep& operator=(const G4S_EDep&) = default;
 };
@@ -93,10 +102,11 @@ struct G4S_Step {
   Vec4D    m_x_beg;
   Vec4D    m_x_end;
   G4S_EDep m_edep;
-  // process type at step-end; also, do we need to filter by process type in the snitch?
-  int      m_parent {-1};    // Index into G4S_Particle vector (somewhat redundant)
-  int      m_g4_pid;         // G4 particle id -- to distinguish this particle or untracked secondaries.
-  int      m_g4_phys_vol_id; // Or some other relevant data.
+  // To add: process type at step-end
+  // Also, do we need to filter by process type in the snitch?
+  int      m_g4_pid;   // G4 particle id -- to distinguish this particle or untracked secondaries.
+  int      m_g4_pv_id; // PhysicalVolume -- actually does not exist.
+                       // TODO: figure out what we need here.
 
   // G4S_Step() = default;
   // G4S_Step& operator=(const G4S_Step&) = default;
@@ -105,10 +115,23 @@ struct G4S_Step {
 // Step and EDep storage, one per Particle.
 
 struct G4S_ParticleSteps {
-  std::vector<G4S_Step> m_steps;
+  std::vector<G4S_Step> m_steps_sensitive;
+  std::vector<G4S_Step> m_steps_inert;
 
-  G4S_EDep m_edep_sum_below_threshold; // Summed-up E-deposits from steps with E-dep below threshold
-  int      m_n_edeps_below_threshold {0};
+  G4S_EDep m_edep_sum_all; // Summed-up E-deposits from all steps
+  int      m_n_edeps_all {0};
+
+  G4S_EDep m_edep_sum_sensitive; // Summed-up E-deposits from steps with E-dep below threshold
+  int      m_n_edeps_sensitive {0};
+
+  void add_edep(double t, double n, bool is_sensitive) {
+    m_edep_sum_all.add_edep(t, n);
+    ++m_n_edeps_all;
+    if (is_sensitive) {
+      m_edep_sum_sensitive.add_edep(t, n);
+      ++m_n_edeps_sensitive;
+    }
+  }
 
   // G4S_ParticleSteps() = default;
   // G4S_ParticleSteps(G4S_ParticleSteps &&) = default;

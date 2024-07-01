@@ -36,8 +36,13 @@ Description: Outputs a ROOT tree of kinematics.
 namespace {
 
   // Cuts in G4 units
+  // Minimum kinetic energy at particle creation for that particle to be tracked.
+  // Unstable particles are treated correctly, see filter().
   constexpr double E_cut = 10.0;
+  // Kinetic energy below which the end position/momentum of a particle
+  // are no longer updated in the G4S_Particle structure.
   constexpr double E_final_cut = 1.0;
+
   // Conversion to TTree units, all printouts are in G4 units
   constexpr double Pos_fac = 0.1;   // mm => cm
   constexpr double Mom_fac = 0.001; // MeV => GeV
@@ -47,7 +52,6 @@ namespace {
     auto &pos = t->GetPosition();
     x.Set(Pos_fac * pos.x(), Pos_fac * pos.y(), Pos_fac * pos.z());
     x.fT = t->GetGlobalTime();
-
   }
   void g4_mom_to_cms(const G4Track *t, G4S_Particle::Vec4D &p) {
     auto  mom = t->GetMomentum();
@@ -63,6 +67,17 @@ namespace {
   }
   void g4_pos_mom_to_cms_end(const G4Track *t, G4S_Particle &part) {
     g4_pos_mom_to_cms(t, part.m_x_end, part.m_p_end);
+  }
+
+  void g4_pos_to_cms_begin(const G4StepPoint *sp, G4S_Step &step) {
+    auto &pos = sp->GetPosition();
+    step.m_x_beg.Set(Pos_fac * pos.x(), Pos_fac * pos.y(), Pos_fac * pos.z());
+    step.m_x_beg.fT = sp->GetGlobalTime();
+  }
+  void g4_pos_to_cms_end(const G4StepPoint *sp, G4S_Step &step) {
+    auto &pos = sp->GetPosition();
+    step.m_x_end.Set(Pos_fac * pos.x(), Pos_fac * pos.y(), Pos_fac * pos.z());
+    step.m_x_end.fT = sp->GetGlobalTime();
   }
 
   const char* b2yn(bool b) { return b ? "yes" : "no"; }
@@ -87,12 +102,18 @@ void G4Snitch::open_file_tree() {
   m_file = TFile::Open("G4Snitch.root", "RECREATE");
   m_tree = new TTree("T", "G4 Dump Tree of some kind");
 
-  m_part_vec.reset(new std::vector<G4S_Particle>);
-  m_part_vec->reserve(16384);
-  m_vec_capacity = 16384;
-  m_tree->Branch("p", m_part_vec.get());
   m_info.reset(new G4S_Info);
   m_tree->Branch("i", m_info.get());
+
+  m_vec_capacity = 16384;
+
+  m_part_vec.reset(new std::vector<G4S_Particle>);
+  m_part_vec->reserve(m_vec_capacity);
+  m_tree->Branch("p", m_part_vec.get());
+
+  m_psteps_vec.reset(new std::vector<G4S_ParticleSteps>);
+  m_psteps_vec->reserve(m_vec_capacity);
+  m_tree->Branch("s", m_psteps_vec.get());
 }
 
 void G4Snitch::write_tree_close_file() {
@@ -104,6 +125,7 @@ void G4Snitch::write_tree_close_file() {
 
 void G4Snitch::reset_output_structs() {
   m_part_vec->clear();
+  m_psteps_vec->clear();
   m_vec_size = 0;
   m_gtp2vid.clear();
   m_stack.clear();
@@ -156,11 +178,13 @@ void G4Snitch::update(const BeginOfTrack* bot)
   if (m_starting_new_event) {
     // G4Id of incoming track is the final primary id ... setup primary slots.
     // The first primary (processed last) will have id 1 (not 0).
-    // They will be reversed into id order, ie, primary i --> slot i - 1;
+    // They will be reversed into id order, ie, primary i --> slot i.
+    // Slot 0 is filled with an "administrative mother" - this is a g4snitch thing.
     m_g4_num_primaries = gid;
     m_id_current_primary = 0;
 
     m_part_vec->resize(m_g4_num_primaries + 1);
+    m_psteps_vec->resize(m_g4_num_primaries + 1);
     m_vec_size = m_g4_num_primaries + 1;
     m_info->m_n_primaries = m_g4_num_primaries; // XXX might not be true !!! fix at end !!!
     m_event_tracks_accepted = m_event_tracks_skipped = 0;
@@ -290,6 +314,51 @@ void G4Snitch::update(const BeginOfTrack* bot)
 
 void G4Snitch::update(const G4Step *iStep)
 {
+  G4Track *iTrk = iStep->GetTrack();
+
+  G4StepPoint *sp1 = iStep->GetPreStepPoint();
+  G4VPhysicalVolume *pv1 = sp1->GetPhysicalVolume();
+  G4LogicalVolume *lv1 = pv1->GetLogicalVolume();
+  // If the following is non-null, the step is in sensitive material.
+  G4VSensitiveDetector *sd1 = lv1->GetSensitiveDetector();
+
+  G4StepPoint *sp2 = iStep->GetPostStepPoint();
+  G4VPhysicalVolume *pv2 = sp2->GetPhysicalVolume();
+  G4LogicalVolume *lv2 = pv2->GetLogicalVolume();
+  G4VSensitiveDetector *sd2 = lv2->GetSensitiveDetector();
+
+  // We process energy deposits in any case.
+  {
+    double tot  = iStep->GetTotalEnergyDeposit();
+    double niel = iStep->GetNonIonizingEnergyDeposit();
+    bool is_sensitive = (sd1 != nullptr);
+
+    auto &psteps = particle_steps(m_id);
+    psteps.add_edep(tot, niel, is_sensitive);
+
+    // Store all, eventually merge inert ones up to some
+    // thresholds on distance / summed up energy / volume-id.
+
+    if (( is_sensitive && m_output_sensitive_edeps) ||
+        (!is_sensitive && m_output_inert_edeps)) {
+      G4S_Step step;
+      g4_pos_to_cms_begin(sp1, step);
+      g4_pos_to_cms_end(sp2, step);
+      step.m_edep.set_edep(tot, niel);
+      step.m_g4_pid = iTrk->GetTrackID();
+      // As it turns out there is no global phys-volume id in G4.
+      // What to do here? Crete own ptr-to-id map + some name?
+      step.m_g4_pv_id = 42;
+      if (is_sensitive) {
+        if (m_output_sensitive_edeps)
+          psteps.m_steps_sensitive.emplace_back(step);
+      } else {
+        if (m_output_inert_edeps)
+          psteps.m_steps_inert.emplace_back(step);
+      }
+    }
+  }
+
   if (m_tracking == false) {
     ++m_steps_skipped;
     int nd_skipped = iStep->GetNumberOfSecondariesInCurrentStep();
@@ -305,14 +374,8 @@ void G4Snitch::update(const G4Step *iStep)
   }
 
   ++m_step_n;
-  G4Track *iTrk = iStep->GetTrack();
-  G4StepPoint *sp1 = iStep->GetPreStepPoint();
-  G4VPhysicalVolume *pv1 = sp1->GetPhysicalVolume();
   // const G4VProcess *p1 = sp1->GetProcessDefinedStep();
   // std::string pn1(p1 ? p1->GetProcessName() : "null");
-
-  G4StepPoint *sp2 = iStep->GetPostStepPoint();
-  G4VPhysicalVolume *pv2 = sp2->GetPhysicalVolume();
   const G4VProcess *p2 = sp2->GetProcessDefinedStep();
   G4ProcessType pt2(p2 ? p2->GetProcessType() : fNotDefined);
   std::string pn2(p2 ? p2->GetProcessName() : "null");
@@ -321,15 +384,17 @@ void G4Snitch::update(const G4Step *iStep)
     g4_pos_mom_to_cms_end(iTrk, particle(m_id));
   }
 
-  if (m_verbose && (m_verbose_transport || pt2 != fTransportation))
-    printf("  %3d. t=%.3f E_kin=%.1f E_tot=%.1f v=%.4f  --  vol-%s '%s' Edep=%f N_sec_curr=%d, N_sec=%d\n",
+  if (m_verbose && (m_verbose_transport || pt2 != fTransportation)) {
+    printf("  %3d. t=%.3f E_kin=%.1f E_tot=%.1f v=%.4f  --  vol-%s '%s' sensitive=%d/%d Edep=%f Eniel=%f N_sec_curr=%d, N_sec=%d\n",
         m_step_n,
         iTrk->GetGlobalTime(), iTrk->GetKineticEnergy(), iTrk->GetTotalEnergy(), iTrk->GetVelocity(),
         (pv1 == pv2) ? "same" : "chng", pn2.c_str(),
-        iStep->GetTotalEnergyDeposit(),
+        (sd1) ? 1 : 0, (sd2) ? 1 : 0,
+        iStep->GetTotalEnergyDeposit(), iStep->GetNonIonizingEnergyDeposit(),
         (int) iStep->GetNumberOfSecondariesInCurrentStep(),
         (int) iStep->GetSecondary()->size()
     );
+  }
 
   // Process any new secondaries, prepare map entries for those that pass. Resize is done in EndOfTrack.
   int nss = (int) iStep->GetNumberOfSecondariesInCurrentStep();
@@ -361,6 +426,7 @@ void G4Snitch::update(const G4Step *iStep)
           if (m_verbose)
             printf("MMMMMMM Growing vec memory from %d to %d\n", m_vec_size, m_vec_capacity);
           m_part_vec->reserve(m_vec_capacity);
+          m_psteps_vec->reserve(m_vec_capacity);
         }
         G4S_Particle p;
         g4_pos_mom_to_cms_begin(gt, p);
@@ -370,6 +436,7 @@ void G4Snitch::update(const G4Step *iStep)
         p.m_parent = m_id;
         p.m_g4_level = stack_level() + 1;
         m_part_vec->emplace_back(p);
+        m_psteps_vec->emplace_back(G4S_ParticleSteps());
         ++m_vec_size;
         ++m_num_accepted_daugters_for_track;
         ++m_primary_n_accepted_tracks;
