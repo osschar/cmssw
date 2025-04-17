@@ -26,7 +26,7 @@ process.load('Configuration.StandardSequences.EndOfProcess_cff')
 process.load('Configuration.StandardSequences.FrontierConditions_GlobalTag_cff')
 
 process.maxEvents = cms.untracked.PSet(
-    input = cms.untracked.int32(1),
+    input = cms.untracked.int32(20),
     output = cms.optional.untracked.allowed(cms.int32,cms.PSet)
 )
 
@@ -102,22 +102,28 @@ process.generator = cms.EDProducer("CloseByParticleGunProducer",
     AddAntiParticle = cms.bool(False),
     PGunParameters = cms.PSet(
         ControlledByEta = cms.bool(False),
-        Delta = cms.double(10),
+        Delta = cms.double(5),
 
         # Single particle
-		VarMin = cms.double(199.99),
-        VarMax = cms.double(200.01),
-        PartID = cms.vint32(2212),
-        NParticles = cms.int32(1),
+        # VarMin = cms.double(199.99),
+        # VarMax = cms.double(200.01),
+        # PartID = cms.vint32(2212),
+        # NParticles = cms.int32(1),
 
         # Mix50
-		# VarMin = cms.double(0.5),
+        # VarMin = cms.double(0.5),
         # VarMax = cms.double(20.00),
-		# PartID = cms.vint32(11, -11, 12, -12, 22, 211, -211, 130, 310, 321, -321, 2212),
+        # PartID = cms.vint32(11, -11, 12, -12, 22, 211, -211, 130, 310, 321, -321, 2212),
         # NParticles = cms.int32(500),
 
+        # 2-particles
+		VarMin = cms.double(20.00),
+        VarMax = cms.double(50.00),
+        PartID = cms.vint32(11, -11, 22, 111, 211, -211, 2112, 2212),
+        NParticles = cms.int32(2),
+
         MaxVarSpread = cms.bool(False),
-        Overlapping = cms.bool(False),
+        Overlapping = cms.bool(True),
         Pointing = cms.bool(True),
         RandomShoot = cms.bool(False),
         MinPhi = cms.double(-3.14159265359),
