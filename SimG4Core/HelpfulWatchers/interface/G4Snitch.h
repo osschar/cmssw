@@ -95,8 +95,10 @@ private:
   bool m_verbose_skip = false;
   bool m_verbose_skip_with_ids = false;
 
-  bool m_output_sensitive_edeps = true;
-  bool m_output_inert_edeps     = true;
+  bool m_output_sensitive_steps = true;
+  bool m_output_inert_steps     = true;
+  double m_sensitive_step_ecut = 0.0;
+  double m_inert_step_ecut = 10e-6; // 10 keV
 
   TFile *m_file;
   TTree *m_tree;

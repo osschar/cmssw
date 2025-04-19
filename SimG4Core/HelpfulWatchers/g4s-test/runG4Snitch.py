@@ -1,8 +1,9 @@
+# MT 2025-04-18 : runTheMatrix.py -w upgrade -l 29696
 # Auto generated configuration file
 # using: 
 # Revision: 1.19 
 # Source: /local/reps/CMSSW/CMSSW/Configuration/Applications/python/ConfigBuilder.py,v 
-# with command line options: CE_E_Front_120um_cfi -s GEN,SIM -n 10 --conditions auto:phase2_realistic_T25 --beamspot HGCALCloseBy --datatier GEN-SIM --eventcontent FEVTDEBUG --geometry Extended2026D98 --era Phase2C17I13M9 --relval 9000,100
+# with command line options: CE_E_Front_120um_cfi -s GEN,SIM -n 10 --conditions auto:phase2_realistic_T33 --beamspot HGCALCloseBy --datatier GEN-SIM --eventcontent FEVTDEBUG --geometry ExtendedRun4D110 --era Phase2C17I13M9 --relval 9000,100 --fileout file:step1.root
 import FWCore.ParameterSet.Config as cms
 
 from Configuration.Eras.Era_Phase2C17I13M9_cff import Phase2C17I13M9
@@ -15,8 +16,8 @@ process.load('SimGeneral.HepPDTESSource.pythiapdt_cfi')
 process.load('FWCore.MessageService.MessageLogger_cfi')
 process.load('Configuration.EventContent.EventContent_cff')
 process.load('SimGeneral.MixingModule.mixNoPU_cfi')
-process.load('Configuration.Geometry.GeometryExtended2026D98Reco_cff')
-process.load('Configuration.Geometry.GeometryExtended2026D98_cff')
+process.load('Configuration.Geometry.GeometryExtendedRun4D110Reco_cff')
+process.load('Configuration.Geometry.GeometryExtendedRun4D110_cff')
 process.load('Configuration.StandardSequences.MagneticField_cff')
 process.load('Configuration.StandardSequences.Generator_cff')
 process.load('IOMC.EventVertexGenerators.VtxSmearedHGCALCloseBy_cfi')
@@ -34,11 +35,9 @@ process.maxEvents = cms.untracked.PSet(
 process.source = cms.Source("EmptySource")
 
 process.options = cms.untracked.PSet(
-	# Errors out in 14_1 -- Illegal parameters found in configuration.
-    # FailPath = cms.untracked.vstring(),
-    # SkipEvent = cms.untracked.vstring(),
     IgnoreCompletely = cms.untracked.vstring(),
     Rethrow = cms.untracked.vstring(),
+    TryToContinue = cms.untracked.vstring(),
     accelerators = cms.untracked.vstring('*'),
     allowUnscheduled = cms.obsolete.untracked.bool,
     canDeleteEarly = cms.untracked.vstring(),
@@ -55,6 +54,7 @@ process.options = cms.untracked.PSet(
     forceEventSetupCacheClearOnNewRun = cms.untracked.bool(False),
     holdsReferencesToDeleteEarly = cms.untracked.VPSet(),
     makeTriggerResults = cms.obsolete.untracked.bool,
+    modulesToCallForTryToContinue = cms.untracked.vstring(),
     modulesToIgnoreForDeleteEarly = cms.untracked.vstring(),
     numberOfConcurrentLuminosityBlocks = cms.untracked.uint32(0),
     numberOfConcurrentRuns = cms.untracked.uint32(1),
@@ -63,7 +63,7 @@ process.options = cms.untracked.PSet(
     printDependencies = cms.untracked.bool(False),
     sizeOfStackForThreadsInKB = cms.optional.untracked.uint32,
     throwIfIllegalParameter = cms.untracked.bool(True),
-    wantSummary = cms.untracked.bool(True) # was False
+    wantSummary = cms.untracked.bool(False)
 )
 
 # Production Info
@@ -83,7 +83,7 @@ process.FEVTDEBUGoutput = cms.OutputModule("PoolOutputModule",
         dataTier = cms.untracked.string('GEN-SIM'),
         filterName = cms.untracked.string('')
     ),
-    fileName = cms.untracked.string('CE_E_Front_120um_cfi_GEN_SIM.root'),
+    fileName = cms.untracked.string('file:step1.root'),
     outputCommands = process.FEVTDEBUGEventContent.outputCommands,
     splitLevel = cms.untracked.int32(0)
 )
@@ -93,7 +93,7 @@ process.FEVTDEBUGoutput = cms.OutputModule("PoolOutputModule",
 # Other statements
 process.genstepfilter.triggerConditions=cms.vstring("generation_step")
 from Configuration.AlCa.GlobalTag import GlobalTag
-process.GlobalTag = GlobalTag(process.GlobalTag, 'auto:phase2_realistic_T25', '')
+process.GlobalTag = GlobalTag(process.GlobalTag, 'auto:phase2_realistic_T33', '')
 
 # Generate at HGCal boundary or closer to origin.
 HGC = True
@@ -134,6 +134,9 @@ process.generator = cms.EDProducer("CloseByParticleGunProducer",
         RMax = cms.double(55.01  if HGC else 10.0),
         ZMin = cms.double(320.99 if HGC else -7.5),
         ZMax = cms.double(321.01 if HGC else  7.5),
+        TMax = cms.double(0.05),
+        TMin = cms.double(0.0),
+        UseDeltaT = cms.bool(False),
     ),
     Verbosity = cms.untracked.int32(0),
     firstRun = cms.untracked.uint32(1),
@@ -179,5 +182,10 @@ process.g4SimHits.Watchers = cms.VPSet(cms.PSet(
     verbose_stack_level = cms.untracked.bool(False),
     verbose_transport = cms.untracked.bool(False),
     verbose_skip = cms.untracked.bool(False),
-    verbose_skip_with_ids = cms.untracked.bool(False)
+    verbose_skip_with_ids = cms.untracked.bool(False),
+
+    output_sensitive_steps  = cms.untracked.bool(True),
+	output_inert_steps = cms.untracked.bool(True),
+	sensitive_step_ecut = cms.untracked.double(0.0),
+	inert_step_ecut = cms.untracked.double(10e-6),
     ))
