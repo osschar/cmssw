@@ -32,6 +32,7 @@ Description: Outputs a ROOT tree of kinematics.
 
 #include <TFile.h>
 #include <TTree.h>
+#include <TSystem.h>
 
 namespace {
 
@@ -90,7 +91,16 @@ G4Snitch::G4Snitch(const edm::ParameterSet &pSet)
         m_verbose_stack_level(pSet.getUntrackedParameter<bool>("verbose_stack_level", false)),
         m_verbose_transport(pSet.getUntrackedParameter<bool>("verbose_transport", false)),
         m_verbose_skip(pSet.getUntrackedParameter<bool>("verbose_skip", false)),
-        m_verbose_skip_with_ids(pSet.getUntrackedParameter<bool>("verbose_skip_with_ids", false)) {
+        m_verbose_skip_with_ids(pSet.getUntrackedParameter<bool>("verbose_skip_with_ids", false)),
+
+        m_output_sensitive_steps(pSet.getUntrackedParameter<bool>("output_sensitive_steps", true)),
+        m_output_inert_steps(pSet.getUntrackedParameter<bool>("output_inert_steps", true)),
+        m_sensitive_step_ecut(pSet.getUntrackedParameter<double>("sensitive_step_ecut", 0.0)),
+        m_inert_step_ecut(pSet.getUntrackedParameter<double>("inert_step_ecut", 1e-6))
+{
+  // 2025-04-18 Linking through BuildFile.xml no longer works (-Wl,--as-needed)
+  // so we just pull the dicts in here.
+  gSystem->Load("libRootG4Snitch.so");
 }
 
 // this never gets called, sigh
@@ -339,8 +349,8 @@ void G4Snitch::update(const G4Step *iStep)
     // Store all, eventually merge inert ones up to some
     // thresholds on distance / summed up energy / volume-id.
 
-    if (( is_sensitive && m_output_sensitive_edeps) ||
-        (!is_sensitive && m_output_inert_edeps)) {
+    if (( is_sensitive && m_output_sensitive_steps) ||
+        (!is_sensitive && m_output_inert_steps)) {
       G4S_Step step;
       g4_pos_to_cms_begin(sp1, step);
       g4_pos_to_cms_end(sp2, step);
@@ -350,10 +360,10 @@ void G4Snitch::update(const G4Step *iStep)
       // What to do here? Crete own ptr-to-id map + some name?
       step.m_g4_pv_id = 42;
       if (is_sensitive) {
-        if (m_output_sensitive_edeps)
+        if (m_output_sensitive_steps && tot >= m_sensitive_step_ecut)
           psteps.m_steps_sensitive.emplace_back(step);
       } else {
-        if (m_output_inert_edeps)
+        if (m_output_inert_steps && tot >= m_inert_step_ecut)
           psteps.m_steps_inert.emplace_back(step);
       }
     }

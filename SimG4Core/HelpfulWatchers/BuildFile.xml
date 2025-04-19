@@ -10,10 +10,6 @@
 <use name="MagneticField/Records"/>
 <use name="SimG4Core/Physics"/>
 
+<use name="rootcore"/>
 <lib name="ROOTEve"/>
 <lib name="RootG4Snitch"/>
-<!--
-<export>
-  <lib name="1"/>
-</export>
--->
