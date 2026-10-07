@@ -1,6 +1,7 @@
 #include <memory>
 #include <limits>
 #include <algorithm>
+#include <stdexcept>
 
 #include "RecoTracker/MkFitCore/interface/cms_common_macros.h"
 
@@ -13,18 +14,26 @@
 #include "FindingFoos.h"
 #include "MkFitter.h"
 #include "MkFinder.h"
+#include "MkFinderV2p2.h"
 
 #ifdef MKFIT_STANDALONE
 #include "RecoTracker/MkFitCore/standalone/Event.h"
+#include "RecoTracker/MkFitCore/standalone/V2p2Diag.h"
+#endif
+
+#ifdef MKFIT_TRACE
+#include "RecoTracker/MkFitCore/standalone/DataFormats/RntStructs.h"
+#include "RecoTracker/MkFitCore/standalone/DataFormats/RntConversions.h"
 #endif
 
 //#define DEBUG
-// #define DEBUG_FIT
 #include "Debug.h"
 //#define DEBUG_FINAL_FIT
+//#define DEBUG_FIT
 
 #include "oneapi/tbb/parallel_for.h"
 #include "oneapi/tbb/parallel_for_each.h"
+#include "MkFitTbb.h"
 
 namespace mkfit {
 
@@ -39,21 +48,43 @@ namespace mkfit {
     Pool<CandCloner> m_cloners;
     Pool<MkFitter> m_fitters;
     Pool<MkFinder> m_finders;
+    Pool<MkFinderV2p2> m_findersV2p2;
 
     void populate(int n_thr) {
       m_cloners.populate(n_thr - m_cloners.size());
       m_fitters.populate(n_thr - m_fitters.size());
       m_finders.populate(n_thr - m_finders.size());
+      m_findersV2p2.populate(n_thr - m_findersV2p2.size());
     }
 
     void clear() {
       m_cloners.clear();
       m_fitters.clear();
       m_finders.clear();
+      m_findersV2p2.clear();
     }
   };
 
   CMS_SA_ALLOW ExecutionContext g_exe_ctx;
+
+  //==============================================================================
+  // Track scorers of MkFinderV2p2
+  //==============================================================================
+
+  namespace {
+    // For the final pick of the forward search, where score_in is the summed
+    // layer-step score of the search (V2p2Score.h). Compares candidates of one
+    // seed only: the score carries the seed's own score from importSeed().
+    float trackScoreV2p2Llh(const TrackScoreInput &in) {
+      namespace po = Config::V2p2::Policy;
+      return in.score_in - po::final_pick_hole_penalty * in.n_inside_holes -
+             po::final_pick_tail_penalty * in.n_tail_holes;
+    }
+
+    CMS_SA_ALLOW struct register_v2p2_track_scorers {
+      register_v2p2_track_scorers() { IterationConfig::register_track_scorer("v2p2:llh", trackScoreV2p2Llh); }
+    } rv2p2ts_instance;
+  }  // namespace
 
 }  // end namespace mkfit
 
@@ -205,6 +236,7 @@ namespace mkfit {
   //------------------------------------------------------------------------------
 
   void MkBuilder::begin_event(MkJob *job, Event *ev, const char *build_type) {
+    m_cands_from_v2p2 = false;
     m_nan_n_silly_per_layer_count = 0;
 
     m_job = job;
@@ -317,10 +349,17 @@ namespace mkfit {
 
     dprintf("MkBuilder::filter_comb_cands Entering filter size eoccs.size=%d\n", eoccs.size());
 
+    // After the backward search, with its gate on, the best candidate must add found hits on enough
+    // pixel layers, else the candidate from before the search replaces it (cms-sw#52015). The other
+    // candidates are not tried against the gate.
+    const bool bkw_gate = eoccs.cands_in_backward_rep() && eoccs.hasBkwSearchGate();
+
     std::vector<int> removed_cnts(m_job->num_regions());
     while (i < eoccs.size()) {
       if (eoccs.cands_in_backward_rep())
         eoccs[i].repackCandPostBkwSearch(0);
+      if (bkw_gate && !eoccs.passesBkwSearchGate(i, eoccs[i].front(), m_job->m_trk_info))
+        eoccs.restorePreBkwSearchCand(i);  // leaves one candidate
       bool passed = filter(eoccs[i].front(), *m_job);
 
       if (!passed && attempt_all_cands) {
@@ -402,6 +441,20 @@ namespace mkfit {
       if (!eoccs[i].empty()) {
         const TrackCand &bcand = eoccs[i].front();
         out_vec.emplace_back(bcand.exportTrack(remove_missing_hits));
+#ifdef MKFIT_TRACE
+        // Only the v2p2 path assigns trace states -- m_trace_state_id is set in
+        // MkFinderV2p2 and in findTracksStandardv2p2(), and defaults to -1
+        // everywhere else. tr_candstate() is an unchecked vector index, so
+        // without this guard any MKFIT_TRACE build segfaults here as soon as
+        // findTracksCloneEngine or findTracksStandard is used, i.e. --build-mimi
+        // without --build-mimi-v2p2.
+        if (bcand.m_trace_state_id >= 0) {
+          auto &cs = m_event->tr_candstate(bcand.m_trace_state_id);
+          auto &cm = m_event->tr_candmeta(cs.meta_id);
+          cm.global_seed = m_event->currentSeed(cm.seed).label();
+          cm.cand = out_vec.size() - 1;
+        }
+#endif
       }
     }
   }
@@ -472,6 +525,7 @@ namespace mkfit {
   }
 
   void MkBuilder::findTracksBestHit(SteeringParams::IterationType_e iteration_dir) {
+    m_cands_from_v2p2 = false;
     // bool debug = true;
 
     TrackVec &cands = m_tracks;
@@ -667,10 +721,25 @@ namespace mkfit {
               ccand[ic].addHitIdx(-2, layer, 0.0f);
               continue;
             }
-            // Check if the candidate is close to it's max_r, pi/2 - 0.2 rad (11.5 deg)
+            // Stop the candidate once the transverse angle between position and
+            // momentum exceeds pi/2 - 0.2 rad (78.5 deg): hits at that grazing
+            // an incidence are wide and spoil the measurement.
+            //
+            // dphi is |posPhi - momPhi| with both wrapped to (-pi, pi], so an
+            // angle past the limit appears either as dphi > kMaxAngPosMom or,
+            // when the pair straddles the +-pi branch cut, as
+            // dphi < TwoPI - kMaxAngPosMom. The upper bound is the wrap image of
+            // the lower and must be DERIVED from it -- the previous hardcoded
+            // 4.512f was pi + kMaxAngPosMom, letting the 78.5-101.5 deg band
+            // escape whenever the pair straddled (3.2% of the (posPhi, momPhi)
+            // square, ~0.1% of displaced low-pT tracks, each stopped by 101.5
+            // deg anyway). As written the test is exactly equivalent to
+            // cos(momPhi - posPhi) < sin(0.2), verified over a 1200x1200 grid.
             if (iteration_dir == SteeringParams::IT_FwdSearch && ccand[ic].pT() < 1.2f) {
+              constexpr float kMaxAngPosMom = Const::PIOver2 - 0.2f;
               const float dphi = std::abs(ccand[ic].posPhi() - ccand[ic].momPhi());
-              if (ccand[ic].posRsq() > 625.f && dphi > 1.371f && dphi < 4.512f) {
+              if (ccand[ic].posRsq() > 625.f && dphi > kMaxAngPosMom &&
+                  dphi < Const::TwoPI - kMaxAngPosMom) {
                 // printf("Stopping cand at r=%f, posPhi=%.1f momPhi=%.2f pt=%.2f emomEta=%.2f\n",
                 //        ccand[ic].posR(), ccand[ic].posPhi(), ccand[ic].momPhi(), ccand[ic].pT(), ccand[ic].momEta());
                 ccand[ic].addHitIdx(-2, layer, 0.0f);
@@ -759,11 +828,161 @@ namespace mkfit {
     }
   }
 
+
   //------------------------------------------------------------------------------
-  // FindTracksCombinatorial: Standard TBB
+  // findTracksStandardv2p2 -- thin-thick layers version
+  //------------------------------------------------------------------------------
+
+  void MkBuilder::findTracksStandardv2p2(SteeringParams::IterationType_e iteration_dir) {
+    m_cands_from_v2p2 = true;
+    // debug = true;
+
+    EventOfCombCandidates &eoccs = m_event_of_comb_cands;
+
+  #ifdef MKFIT_TRACE
+    // The trace below marks the best candidate of the backward search as final. The gate can replace
+    // that candidate afterwards, in the post-search filter, and the trace would describe a track that
+    // is not exported.
+    if (iteration_dir == SteeringParams::IT_BkwSearch && eoccs.hasBkwSearchGate())
+      throw std::runtime_error("MkBuilder::findTracksStandardv2p2: tracing does not support the backward-search gate");
+    for (int i = 0; i < eoccs.size(); ++i) {
+      CombCandidate &cc = eoccs[i];
+      assert(cc.size() == 1 && "CombCandidate expected to have a single TrackCand at this point");
+      if (cc.m_trace_meta_id == -1) {
+        cc.m_trace_meta_id = m_event->trace_new_cand_meta(m_event->evtID(), cc.seed_origin_index());
+      }
+      TrackCand &tc = cc.front();
+      auto [stage_id, state_id] = m_event->trace_new_cand_stage_and_state(
+        cc.m_trace_meta_id, cc.m_trace_stage_id, iteration_dir,
+        cc.pickupLayer(), track2bivec3(tc), tc.state());
+      cc.m_trace_stage_id = stage_id;
+      tc.m_trace_state_id = state_id;
+      m_event->tr_candmeta(cc.m_trace_meta_id).stage_ids[iteration_dir] = stage_id;
+    }
+  #endif
+
+    TBB_PARALLEL_FOR_EACH(m_job->regions_begin(), m_job->regions_end(), [&](int region) {
+      if (iteration_dir == SteeringParams::IT_BkwSearch && !m_job->steering_params(region).has_bksearch_plan()) {
+        printf("No backward search plan for region %d\n", region);
+        return;
+      }
+
+      const SteeringParams &st_par = m_job->steering_params(region);
+
+      const RegionOfSeedIndices rosi(m_seedEtaSeparators, region);
+
+      // adaptive seeds per task based on the total estimated amount of work to divide among all threads
+      const int adaptiveSPT = std::clamp(
+          Config::numThreadsEvents * eoccs.size() / Config::numThreadsFinder + 1, 4, Config::numSeedsPerTask);
+      dprint("adaptiveSPT " << adaptiveSPT << " fill " << rosi.count() << "/" << eoccs.size() << " region " << region);
+
+      // loop over seeds
+      TBB_PARALLEL_FOR(rosi.tbb_blk_rng_std(adaptiveSPT), [&](const tbb::blocked_range<int> &seeds) {
+        auto mkfndr = g_exe_ctx.m_findersV2p2.makeOrGet();
+
+        const int start_seed = seeds.begin();
+        const int end_seed = seeds.end();
+
+        auto layer_plan_it = st_par.make_iterator(iteration_dir);
+
+        dprintf("Made iterator for %d, first layer=%d ... end layer=%d\n",
+                iteration_dir,
+                layer_plan_it.layer(),
+                layer_plan_it.last_layer());
+
+        assert(layer_plan_it.is_pickup_only());
+
+        mkfndr->setup(m_job, eoccs, start_seed, end_seed, layer_plan_it, m_event);
+
+        mkfndr->awaken_candidates();
+
+        dprintf("\nMkBuilder::FindTracksStandardv2p2 region=%d, seed_pickup_layer=%d/%d, first_layer=%d/%d\n",
+                region,
+                layer_plan_it.layer(), layer_plan_it.layer_sec(),
+                layer_plan_it.next_layer(), layer_plan_it.next_layer_sec());
+
+        // Loop over layers, starting from after the initial pickup-only.
+        // I think pickup-only is now also honored in the finder -- crosscheck.
+        while (++layer_plan_it) {
+
+          dprintf("\n* Processing layer %d/%d\n", layer_plan_it.layer(), layer_plan_it.layer_sec());
+
+          mkfndr->begin_layer();
+
+          dprintf("  Number of candidates to process: %d, nHits in layer: %d\n",
+                   mkfndr->batch_mgr().n_finding(), m_job->m_event_of_hits[layer_plan_it.layer()].nHits());
+
+          mkfndr->process_layer();
+
+          mkfndr->end_layer();
+
+        }  // end of layer loop
+        mkfndr->release();
+
+        // final sorting
+        for (int iseed = start_seed; iseed < end_seed; ++iseed) {
+#if defined(MKFIT_STANDALONE)
+          if (Config::V2p2::Diag::final_beam_purity && iteration_dir == SteeringParams::IT_FwdSearch)
+            v2p2_final_pick_record(eoccs[iseed]);
+#endif
+          if (iteration_dir == SteeringParams::IT_BkwSearch)
+            eoccs[iseed].addPreBkwSearchHoles();
+          // score() still holds the summed layer-step score of the search, which a
+          // final-pick scorer sees as TrackScoreInput::score_in (e.g. "v2p2:llh").
+          eoccs[iseed].mergeCandsAndBestShortOne(
+              m_job->params(),
+              iteration_dir == SteeringParams::IT_FwdSearch ? st_par.m_final_pick_track_scorer : st_par.m_track_scorer,
+              true,
+              true);
+        }
+      });  // end parallel-for over chunk of seeds within region
+    });    // end of parallel-for-each over eta regions
+
+#if defined(MKFIT_STANDALONE)
+    if (Config::V2p2::Diag::final_beam_purity && iteration_dir == SteeringParams::IT_FwdSearch)
+      v2p2_final_beam_diag(m_event, eoccs);
+#endif
+
+  #ifdef MKFIT_TRACE
+    for (int i = 0; i < eoccs.size(); ++i) {
+      CombCandidate &cc = eoccs[i];
+      assert (!cc.empty());
+      const TrackCand &bcand = cc.front();
+      auto &cstate = m_event->tr_candstate(bcand.m_trace_state_id);
+      auto &cstage = m_event->tr_candstage(cc.m_trace_stage_id);
+      cstage.final_state_id = cstate.id;
+      cstate.on_final_path = true;
+      if (iteration_dir == SteeringParams::IT_FwdSearch) {
+        auto &cmeta = m_event->tr_candmeta(cstate.meta_id);
+        cmeta.fwd_rank_max = bcand.m_rank_max;
+        cmeta.fwd_rank_max_layer = bcand.m_rank_max_layer;
+        cmeta.fwd_rank_over_layer = bcand.m_rank_over_layer;
+        const Track ft = bcand.exportTrack();
+        unsigned long long h = 1469598103934665603ull;
+        for (int ih = 0; ih < ft.nTotalHits(); ++ih) {
+          const HitOnTrack hot = ft.getHitOnTrack(ih);
+          h = (h ^ (unsigned long long) (hot.layer * 1000003 + hot.index)) * 1099511628211ull;
+        }
+        cmeta.fwd_hits_hash = h;
+      }
+      int pid = cstate.parent_id;
+      while (pid >= 0) {
+        auto &pstate = m_event->tr_candstate(pid);
+        pstate.on_final_path = true;
+        pid = pstate.parent_id;
+      }
+    }
+  #endif
+
+    // debug = false;
+  }
+
+  //------------------------------------------------------------------------------
+  // findTracksStandard -- original version
   //------------------------------------------------------------------------------
 
   void MkBuilder::findTracksStandard(SteeringParams::IterationType_e iteration_dir) {
+    m_cands_from_v2p2 = false;
     // debug = true;
 
     EventOfCombCandidates &eoccs = m_event_of_comb_cands;
@@ -922,7 +1141,7 @@ namespace mkfit {
                 }
 
                 if (tc.getLastHitIdx() != -2) {
-                  eoccs[start_seed + is].emplace_back(tc);
+                  eoccs[start_seed + is].push_back(tc);
                   ++n_placed;
                 } else if (first_short) {
                   first_short = false;
@@ -940,8 +1159,12 @@ namespace mkfit {
         mkfndr->release();
 
         // final sorting
+        const track_score_func &final_scorer =
+            iteration_dir == SteeringParams::IT_FwdSearch ? st_par.m_final_pick_track_scorer : st_par.m_track_scorer;
         for (int iseed = start_seed; iseed < end_seed; ++iseed) {
-          eoccs[iseed].mergeCandsAndBestShortOne(m_job->params(), st_par.m_track_scorer, true, true);
+          if (iteration_dir == SteeringParams::IT_BkwSearch)
+            eoccs[iseed].addPreBkwSearchHoles();
+          eoccs[iseed].mergeCandsAndBestShortOne(m_job->params(), final_scorer, true, true);
         }
       });  // end parallel-for over chunk of seeds within region
     });    // end of parallel-for-each over eta regions
@@ -954,6 +1177,7 @@ namespace mkfit {
   //------------------------------------------------------------------------------
 
   void MkBuilder::findTracksCloneEngine(SteeringParams::IterationType_e iteration_dir) {
+    m_cands_from_v2p2 = false;
     // debug = true;
 
     EventOfCombCandidates &eoccs = m_event_of_comb_cands;
@@ -963,6 +1187,9 @@ namespace mkfit {
         printf("No backward search plan for region %d\n", region);
         return;
       }
+
+      // Only do barrel
+      //if (region != 2) return;
 
       const RegionOfSeedIndices rosi(m_seedEtaSeparators, region);
 
@@ -1222,8 +1449,12 @@ namespace mkfit {
     cloner.end_eta_bin();
 
     // final sorting
+    const track_score_func &final_scorer =
+        iteration_dir == SteeringParams::IT_FwdSearch ? st_par.m_final_pick_track_scorer : st_par.m_track_scorer;
     for (int iseed = start_seed; iseed < end_seed; ++iseed) {
-      eoccs[iseed].mergeCandsAndBestShortOne(m_job->params(), st_par.m_track_scorer, true, true);
+      if (iteration_dir == SteeringParams::IT_BkwSearch)
+        eoccs[iseed].addPreBkwSearchHoles();
+      eoccs[iseed].mergeCandsAndBestShortOne(m_job->params(), final_scorer, true, true);
     }
   }
 
@@ -1396,15 +1627,25 @@ namespace mkfit {
       }
 #endif
 
-      if (Config::usePropToPlane) {
+      // v2p2 always propagates to planes, whatever Config::usePropToPlane says.
+      if (Config::usePropToPlane || m_cands_from_v2p2) {
         // input tracks
         mkfndr->bkFitInputTracks(eoccs, icand, end);
         // fit tracks back to first layer
-        mkfndr->bkFitFitTracksProp2Plane(m_job->m_event_of_hits, st_par, end - icand, chi_debug);
+        if (m_cands_from_v2p2)
+          mkfndr->bkFitFitTracksV2p2(m_job->m_event_of_hits, st_par, end - icand, chi_debug);
+        else
+          mkfndr->bkFitFitTracksProp2Plane(m_job->m_event_of_hits, st_par, end - icand, chi_debug);
         // tracks are put back into correcponding TrackCand when finsihed in the above function
         // now move one last time to PCA
         if (prop_config.backward_fit_to_pca) {
-          mkfndr->bkFitInputTracks(eoccs, icand, end);
+          // Re-load is REQUIRED, not redundant: the fit loop does not mask
+          // finished lanes -- propagate/update/chargeFlip all run over N_proc
+          // until the slowest lane drains -- so a lane's registers are clobbered
+          // after its own copy-out. The TrackCands are the only place its final
+          // state survives. scale_errors=false because that state is already
+          // fitted; scaling here would inflate its covariance a second time.
+          mkfndr->bkFitInputTracks(eoccs, icand, end, false);
           mkfndr->bkFitPropTracksToPCA(end - icand);
           mkfndr->bkFitOutputTracks(eoccs, icand, end, prop_config.backward_fit_to_pca);
         }

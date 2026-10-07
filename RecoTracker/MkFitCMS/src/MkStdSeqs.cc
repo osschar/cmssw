@@ -8,6 +8,15 @@
 
 #include "RecoTracker/MkFitCore/interface/binnor.h"
 
+#if defined(MKFIT_STANDALONE)
+#include "RecoTracker/MkFitCore/src/V2p2Config.h"
+#include "RecoTracker/MkFitCore/standalone/V2p2Diag.h"
+#endif
+
+#include <algorithm>
+#include <cstdint>
+#include <vector>
+
 namespace mkfit {
 
   namespace StdSeq {
@@ -502,32 +511,65 @@ namespace mkfit {
       remove_duplicates(tracks);
     }
 
-    // pixelPriority = false is the phase-1 pixelseed cleaner; true adds the pixel-priority rules.
-    template <bool pixelPriority>
-    void clean_duplicates_sharedhits_pixelseed_impl(TrackVec &tracks,
-                                                    const IterationConfig &itconf,
-                                                    const TrackerInfo &trk_inf) {
-      const float fraction = itconf.dc_fracSharedHits;
-      const float drth_central = itconf.dc_drth_central;
-      const float drth_obarrel = itconf.dc_drth_obarrel;
-      const float drth_forward = itconf.dc_drth_forward;
-      const auto ntracks = tracks.size();
+    namespace {
+      // Valid hits of all tracks as sorted (layer, index) keys, one flat array,
+      // plus each track's slot-0 key (-1 when slot 0 is not a valid hit).
+      struct DupCleanHitKeys {
+        std::vector<int64_t> keys;
+        std::vector<int> begin;  // track t's keys are [begin[t], begin[t + 1])
+        std::vector<int64_t> first;
 
-      std::vector<float> ctheta(ntracks);
-      std::vector<bool> hasPixel(pixelPriority ? ntracks : 0, false);
-      for (auto itrack = 0U; itrack < ntracks; itrack++) {
-        auto &trk = tracks[itrack];
-        ctheta[itrack] = 1.f / std::tan(trk.theta());
-        if constexpr (pixelPriority) {
-          int npix = 0;
-          for (int i = 0; i < trk.nTotalHits(); ++i)
-            if (trk.getHitIdx(i) >= 0 && trk_inf[trk.getHitLyr(i)].is_pixel())
-              ++npix;
-          hasPixel[itrack] = npix >= 2;
+        explicit DupCleanHitKeys(const TrackVec &tracks) {
+          const int n = tracks.size();
+          begin.resize(n + 1);
+          first.assign(n, -1);
+          for (int t = 0; t < n; ++t) {
+            const Track &trk = tracks[t];
+            begin[t] = keys.size();
+            for (int i = 0; i < trk.nTotalHits(); ++i) {
+              if (trk.getHitIdx(i) < 0)
+                continue;
+              const int64_t k = (int64_t(trk.getHitLyr(i)) << 32) | uint32_t(trk.getHitIdx(i));
+              keys.push_back(k);
+              if (i == 0)
+                first[t] = k;
+            }
+            std::sort(keys.begin() + begin[t], keys.end());
+          }
+          begin[n] = keys.size();
         }
-      }
+
+        // Number of equal (i, j) key pairs between two tracks, multiplicities
+        // included, which is what the all-pairs hit loop counted.
+        int count_equal_pairs(int a, int b) const {
+          int n = 0;
+          int i = begin[a], j = begin[b];
+          const int ie = begin[a + 1], je = begin[b + 1];
+          while (i < ie && j < je) {
+            if (keys[i] < keys[j])
+              ++i;
+            else if (keys[j] < keys[i])
+              ++j;
+            else {
+              const int64_t k = keys[i];
+              int ni = 0, nj = 0;
+              while (i < ie && keys[i] == k) {
+                ++i;
+                ++ni;
+              }
+              while (j < je && keys[j] == k) {
+                ++j;
+                ++nj;
+              }
+              n += ni * nj;
+            }
+          }
+          return n;
+        }
+      };
+
       // Two tracks with pixel hits but no shared pixel hit come from different pixel seeds: not duplicates.
-      auto sharePixelHit = [&](const Track &t1, const Track &t2) {
+      bool dupclean_share_pixel_hit(const Track &t1, const Track &t2, const TrackerInfo &trk_inf) {
         for (int i = 0; i < t1.nTotalHits(); ++i) {
           if (t1.getHitIdx(i) < 0 || !trk_inf[t1.getHitLyr(i)].is_pixel())
             continue;
@@ -536,97 +578,153 @@ namespace mkfit {
               return true;
         }
         return false;
-      };
-      // With pixelPriority a track with pixel hits beats a pixel-less one; otherwise the higher score wins.
-      auto pixelOrScoreWins = [&](unsigned i, unsigned j) -> bool {
-        if constexpr (pixelPriority) {
-          if (hasPixel[i] != hasPixel[j])
-            return hasPixel[i];
-        }
-        return tracks[i].score() > tracks[j].score();
-      };
+      }
 
-      float phi1, invpt1, dctheta, ctheta1, dphi, dr2;
-      for (auto itrack = 0U; itrack < ntracks; itrack++) {
+      // One pair, itrack < jtrack. The body is asymmetric (the region threshold
+      // comes from itrack's cot(theta), and a tie marks itrack), so the order of
+      // the arguments is the original loop's. hasPixel: with pixelPriority, whether
+      // each track has at least two pixel hits.
+      template <bool pixelPriority>
+      void dupclean_pair(TrackVec &tracks,
+                         const std::vector<float> &ctheta,
+                         int itrack,
+                         int jtrack,
+                         const IterationConfig &itconf,
+                         const DupCleanHitKeys &hk,
+                         const std::vector<bool> &hasPixel,
+                         const TrackerInfo &trk_inf) {
         auto &trk = tracks[itrack];
-        phi1 = trk.momPhi();
-        invpt1 = trk.invpT();
-        ctheta1 = ctheta[itrack];
-        for (auto jtrack = itrack + 1; jtrack < ntracks; jtrack++) {
-          auto &track2 = tracks[jtrack];
-          if (trk.label() == track2.label())
+        auto &track2 = tracks[jtrack];
+        if (trk.label() == track2.label())
+          return;
+        const float ctheta1 = ctheta[itrack];
+        const float dctheta = std::abs(ctheta[jtrack] - ctheta1);
+        if (dctheta > Config::maxdcth)
+          return;
+        const float dphi = std::abs(squashPhiMinimal(trk.momPhi() - track2.momPhi()));
+        if (dphi > Config::maxdphi)
+          return;
+
+        if constexpr (pixelPriority) {
+          if (hasPixel[itrack] && hasPixel[jtrack] && !dupclean_share_pixel_hit(trk, track2, trk_inf))
+            return;
+        }
+        // With pixelPriority a track with pixel hits beats a pixel-less one; otherwise the higher score wins.
+        bool iWins = trk.score() > track2.score();
+        if constexpr (pixelPriority) {
+          if (hasPixel[itrack] != hasPixel[jtrack])
+            iWins = hasPixel[itrack];
+        }
+
+        float maxdRSquared = itconf.dc_drth_central * itconf.dc_drth_central;
+        if (std::abs(ctheta1) > Config::maxcth_fw)
+          maxdRSquared = itconf.dc_drth_forward * itconf.dc_drth_forward;
+        else if (std::abs(ctheta1) > Config::maxcth_ob)
+          maxdRSquared = itconf.dc_drth_obarrel * itconf.dc_drth_obarrel;
+        const float dr2 = dphi * dphi + dctheta * dctheta;
+        if (dr2 < maxdRSquared) {
+          //Keep track with best score
+          if (iWins)
+            track2.setDuplicateValue(true);
+          else
+            trk.setDuplicateValue(true);
+#if defined(MKFIT_STANDALONE)
+          if (Config::V2p2::Diag::dupclean_pairs)
+            iWins ? v2p2_dupclean_record(trk, track2, 0) : v2p2_dupclean_record(track2, trk, 0);
+#endif
+          return;
+        }
+
+        if (std::abs(track2.invpT() - trk.invpT()) > Config::maxd1pt)
+          return;
+
+        const auto minFoundHits = std::min(trk.nFoundHits(), track2.nFoundHits());
+        const int sharedCount = hk.count_equal_pairs(itrack, jtrack);
+        const int sharedFirst = (hk.first[itrack] >= 0 && hk.first[itrack] == hk.first[jtrack]) ? 1 : 0;
+
+        //selection here - 11percent fraction of shared hits to label a duplicate
+        if ((sharedCount - sharedFirst) >= ((minFoundHits - sharedFirst) * itconf.dc_fracSharedHits)) {
+          if (iWins)
+            track2.setDuplicateValue(true);
+          else
+            trk.setDuplicateValue(true);
+#if defined(MKFIT_STANDALONE)
+          if (Config::V2p2::Diag::dupclean_pairs)
+            iWins ? v2p2_dupclean_record(trk, track2, 1) : v2p2_dupclean_record(track2, trk, 1);
+#endif
+        }
+      }
+    }  // namespace
+
+    // Same decisions as visiting all pairs, which is what this did before, at
+    // about a tenth of the cost on PU200. A pair can only be marked if its
+    // |dcot(theta)| is within Config::maxdcth, so pairs are visited in cot(theta)
+    // order within that window. A duplicate mark is only ever set, so the visiting
+    // order does not change the outcome. A track with a non-finite cot(theta) is
+    // paired with every other one, and the pair's own dcot(theta) cut decides.
+    // Shared hits are counted by merging sorted (layer, index) keys; the early
+    // continues of the old all-pairs hit loop changed neither count.
+
+    // pixelPriority = false is the phase-1 pixelseed cleaner; true adds the pixel-priority rules.
+    template <bool pixelPriority>
+    void clean_duplicates_sharedhits_pixelseed_impl(TrackVec &tracks,
+                                                    const IterationConfig &itconf,
+                                                    const TrackerInfo &trk_inf) {
+      const int n = tracks.size();
+
+      std::vector<float> ctheta(n);
+      std::vector<bool> hasPixel(pixelPriority ? n : 0, false);
+      for (int t = 0; t < n; ++t) {
+        ctheta[t] = 1.f / std::tan(tracks[t].theta());
+        if constexpr (pixelPriority) {
+          const Track &trk = tracks[t];
+          int npix = 0;
+          for (int i = 0; i < trk.nTotalHits(); ++i)
+            if (trk.getHitIdx(i) >= 0 && trk_inf[trk.getHitLyr(i)].is_pixel())
+              ++npix;
+          hasPixel[t] = npix >= 2;
+        }
+      }
+
+      std::vector<int> ord, nonfin;
+      ord.reserve(n);
+      for (int t = 0; t < n; ++t)
+        (isFinite(ctheta[t]) ? ord : nonfin).push_back(t);
+      std::sort(ord.begin(), ord.end(), [&](int a, int b) { return ctheta[a] < ctheta[b]; });
+
+      const DupCleanHitKeys hk(tracks);
+
+      // Sorted copies of what the first two tests read, so a pair rejected by
+      // them never touches a Track. Same floats, and the phi difference is taken
+      // lower index first, as in the pair body.
+      const int m = ord.size();
+      std::vector<float> cs(m), ps(m);
+      std::vector<int> ls(m);
+      for (int p = 0; p < m; ++p) {
+        cs[p] = ctheta[ord[p]];
+        ps[p] = tracks[ord[p]].momPhi();
+        ls[p] = tracks[ord[p]].label();
+      }
+      for (int p = 0; p < m; ++p) {
+        for (int q = p + 1; q < m && cs[q] - cs[p] <= Config::maxdcth; ++q) {
+          if (ls[p] == ls[q])
             continue;
-
-          dctheta = std::abs(ctheta[jtrack] - ctheta1);
-
-          if (dctheta > Config::maxdcth)
-            continue;
-
-          dphi = std::abs(squashPhiMinimal(phi1 - track2.momPhi()));
-
+          const bool p_lower = ord[p] < ord[q];
+          const float dphi = std::abs(squashPhiMinimal(p_lower ? ps[p] - ps[q] : ps[q] - ps[p]));
           if (dphi > Config::maxdphi)
             continue;
-
-          if constexpr (pixelPriority) {
-            if (hasPixel[itrack] && hasPixel[jtrack] && !sharePixelHit(trk, track2))
-              continue;
-          }
-
-          float maxdRSquared = drth_central * drth_central;
-          if (std::abs(ctheta1) > Config::maxcth_fw)
-            maxdRSquared = drth_forward * drth_forward;
-          else if (std::abs(ctheta1) > Config::maxcth_ob)
-            maxdRSquared = drth_obarrel * drth_obarrel;
-          dr2 = dphi * dphi + dctheta * dctheta;
-          if (dr2 < maxdRSquared) {
-            //Keep track with best score
-            if (pixelOrScoreWins(itrack, jtrack))
-              track2.setDuplicateValue(true);
-            else
-              trk.setDuplicateValue(true);
-            continue;
-          }
-
-          if (std::abs(track2.invpT() - invpt1) > Config::maxd1pt)
-            continue;
-
-          auto sharedCount = 0;
-          auto sharedFirst = 0;
-          const auto minFoundHits = std::min(trk.nFoundHits(), track2.nFoundHits());
-
-          for (int i = 0; i < trk.nTotalHits(); ++i) {
-            if (trk.getHitIdx(i) < 0)
-              continue;
-            const int a = trk.getHitLyr(i);
-            const int b = trk.getHitIdx(i);
-            for (int j = 0; j < track2.nTotalHits(); ++j) {
-              if (track2.getHitIdx(j) < 0)
-                continue;
-              const int c = track2.getHitLyr(j);
-              const int d = track2.getHitIdx(j);
-
-              //this is to count once shared matched hits (may be done more properly...)
-              if (a == c && b == d)
-                sharedCount += 1;
-              if (j == 0 && i == 0 && a == c && b == d)
-                sharedFirst += 1;
-
-              if ((sharedCount - sharedFirst) >= ((minFoundHits - sharedFirst) * fraction))
-                continue;
-            }
-            if ((sharedCount - sharedFirst) >= ((minFoundHits - sharedFirst) * fraction))
-              continue;
-          }
-
-          //selection here - 11percent fraction of shared hits to label a duplicate
-          if ((sharedCount - sharedFirst) >= ((minFoundHits - sharedFirst) * fraction)) {
-            if (pixelOrScoreWins(itrack, jtrack))
-              track2.setDuplicateValue(true);
-            else
-              trk.setDuplicateValue(true);
-          }
+          dupclean_pair<pixelPriority>(
+              tracks, ctheta, std::min(ord[p], ord[q]), std::max(ord[p], ord[q]), itconf, hk, hasPixel, trk_inf);
         }
-      }  //end loop one over tracks
+      }
+      for (int x = 0; x < (int) nonfin.size(); ++x) {
+        const int a = nonfin[x];
+        for (int b = 0; b < n; ++b) {
+          if (b == a || (!isFinite(ctheta[b]) && b < a))
+            continue;  // a pair of two non-finite tracks is visited once
+          dupclean_pair<pixelPriority>(tracks, ctheta, std::min(a, b), std::max(a, b), itconf, hk, hasPixel, trk_inf);
+        }
+      }
 
       remove_duplicates(tracks);
     }
@@ -785,32 +883,47 @@ namespace mkfit {
     // Track scoring
     //=========================================================================
 
-    float trackScoreDefault(const int nfoundhits,
-                            const int ntailholes,
-                            const int noverlaphits,
-                            const int nmisshits,
-                            const float chi2,
-                            const float pt,
-                            const bool inFindCandidates) {
+    float trackScoreDefault(const TrackScoreInput &in) {
+      const int ntailholes = in.penalize_tail_holes ? in.n_tail_holes : 0;
       float maxBonus = 8.0;
-      float bonus = Config::validHitSlope_ * nfoundhits + Config::validHitBonus_;
+      float bonus = Config::validHitSlope_ * in.n_found_hits + Config::validHitBonus_;
       float penalty = Config::missingHitPenalty_;
       float tailPenalty = Config::tailMissingHitPenalty_;
       float overlapBonus = Config::overlapHitBonus_;
-      if (pt < 0.9) {
-        penalty *= inFindCandidates ? 1.7f : 1.5f;
-        bonus = std::min(bonus * (inFindCandidates ? 0.9f : 1.0f), maxBonus);
+      if (in.pt < 0.9) {
+        penalty *= in.in_find_candidates ? 1.7f : 1.5f;
+        bonus = std::min(bonus * (in.in_find_candidates ? 0.9f : 1.0f), maxBonus);
       }
-      float score =
-          bonus * nfoundhits + overlapBonus * noverlaphits - penalty * nmisshits - tailPenalty * ntailholes - chi2;
+      float score = bonus * in.n_found_hits + overlapBonus * in.n_overlap_hits - penalty * in.n_inside_holes -
+                    tailPenalty * ntailholes - in.chi2;
       return score;
     }
+
+    float trackScoreLstIntoPixels(const TrackScoreInput &in) {
+      const int ntailholes = in.penalize_tail_holes ? in.n_tail_holes : 0;
+      float bonus = 30;
+      // Max chi2 is 30 -- having a hit is always better
+      // We keep penalty the same for inner hits ... this is for T5 into pix!
+      // - Note that we keep too many -1 hits -- this needs to be done better.
+
+      float penalty = Config::missingHitPenalty_;
+      float tailPenalty = Config::missingHitPenalty_; // !!! not tailMissingHitPenalty_ !!!!
+      // float overlapBonus = 0; // Config::overlapHitBonus_;
+      float score = bonus * in.n_found_hits - penalty * in.n_inside_holes - tailPenalty * ntailholes - in.chi2;
+      return score;
+    }
+
+    // Keeps the score the track carries. For a task scorer (final pick, after the
+    // backward fit, before the duplicate cleaner) that should not re-score.
+    float trackScoreKeep(const TrackScoreInput &in) { return in.score_in; }
 
     namespace {
       CMS_SA_ALLOW struct register_track_scorers {
         register_track_scorers() {
           IterationConfig::register_track_scorer("default", trackScoreDefault);
           IterationConfig::register_track_scorer("phase1:default", trackScoreDefault);
+          IterationConfig::register_track_scorer("phase2:LstIntoPix", trackScoreLstIntoPixels);
+          IterationConfig::register_track_scorer("keep", trackScoreKeep);
         }
       } rts_instance;
     }  // namespace

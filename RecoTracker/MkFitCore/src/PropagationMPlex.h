@@ -2,6 +2,7 @@
 #define RecoTracker_MkFitCore_src_PropagationMPlex_h
 
 #include "Matrix.h"
+#include "RecoTracker/MkFitCore/interface/MathInlineCore.h"
 
 namespace mkfit {
 

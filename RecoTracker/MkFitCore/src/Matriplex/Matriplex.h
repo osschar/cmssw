@@ -23,6 +23,7 @@ namespace std {
 #include "vdt/sin.h"
 #include "vdt/cos.h"
 #include "vdt/tan.h"
+#include "vdt/atan.h"
 #include "vdt/atan2.h"
 #endif
 #endif
@@ -48,7 +49,10 @@ namespace Matriplex {
     T fArray[kTotSize];
 
     Matriplex() {}
-    Matriplex(T v) { setVal(v); }
+
+    // Allow construction from scalar T only, do not support automatic conversions.
+    template<typename R, typename = typename std::enable_if<std::is_same<T, R>::value>::type>
+    Matriplex(R v) { setVal(v); }
 
     idx_t plexSize() const { return N; }
 
@@ -95,6 +99,9 @@ namespace Matriplex {
 
     T& operator()(idx_t n, idx_t i, idx_t j) { return fArray[(i * D2 + j) * N + n]; }
     const T& operator()(idx_t n, idx_t i, idx_t j) const { return fArray[(i * D2 + j) * N + n]; }
+
+    T* Elements(idx_t i, idx_t j) { return fArray + (i * D2 + j) * N; }
+    const T* Elements(idx_t i, idx_t j) const { return fArray + (i * D2 + j) * N; }
 
     // reduction operators
 
@@ -271,6 +278,17 @@ namespace Matriplex {
       return *this;
     }
 
+    Matriplex& atan(const Matriplex& a) {
+      for (idx_t i = 0; i < kTotSize; ++i)
+        fArray[i] = std::atan(a.fArray[i]);
+      return *this;
+    }
+    Matriplex& atan() {
+      for (idx_t i = 0; i < kTotSize; ++i)
+        fArray[i] = std::atan(fArray[i]);
+      return *this;
+    }
+
     Matriplex& atan2(const Matriplex& y, const Matriplex& x) {
       for (idx_t i = 0; i < kTotSize; ++i)
         fArray[i] = std::atan2(y.fArray[i], x.fArray[i]);
@@ -337,6 +355,15 @@ namespace Matriplex {
       return *this;
     }
 
+    Matriplex& fast_atan(const Matriplex& a) {
+      VDT_INVOKE(ASS, atan, A_ARR);
+      return *this;
+    }
+    Matriplex& fast_atan() {
+      VDT_INVOKE(ASS, atan, ARR);
+      return *this;
+    }
+
     Matriplex& fast_atan2(const Matriplex& y, const Matriplex& x) {
       VDT_INVOKE(ASS, atan2, y.fArray[i], x.fArray[i]);
       return *this;
@@ -355,6 +382,13 @@ namespace Matriplex {
     }
 
     //---------------------------------------------------------
+
+    void loadElements(idx_t i, idx_t j, const T *src) {
+      T *pos = Elements(i, j);
+      for (idx_t i = 0; i < N; ++i) {
+        *(pos++) = *(src++);
+      }
+    }
 
     void copySlot(idx_t n, const Matriplex& m) {
       for (idx_t i = n; i < kTotSize; i += N) {
@@ -645,6 +679,12 @@ namespace Matriplex {
   }
 
   template <typename T, idx_t D1, idx_t D2, idx_t N>
+  MPlex<T, D1, D2, N> atan(const MPlex<T, D1, D2, N>& a) {
+    MPlex<T, D1, D2, N> t;
+    return t.atan(a);
+  }
+
+  template <typename T, idx_t D1, idx_t D2, idx_t N>
   MPlex<T, D1, D2, N> atan2(const MPlex<T, D1, D2, N>& y, const MPlex<T, D1, D2, N>& x) {
     MPlex<T, D1, D2, N> t;
     return t.atan2(y, x);
@@ -682,6 +722,12 @@ namespace Matriplex {
   MPlex<T, D1, D2, N> fast_tan(const MPlex<T, D1, D2, N>& a) {
     MPlex<T, D1, D2, N> t;
     return t.fast_tan(a);
+  }
+
+  template <typename T, idx_t D1, idx_t D2, idx_t N>
+  MPlex<T, D1, D2, N> fast_atan(const MPlex<T, D1, D2, N>& a) {
+    MPlex<T, D1, D2, N> t;
+    return t.fast_atan(a);
   }
 
   template <typename T, idx_t D1, idx_t D2, idx_t N>

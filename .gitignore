@@ -23,3 +23,14 @@ __init__.py
 
 # ignore NFS stale files
 .nfs*
+
+# mkFit analysis scratch. Every one of these is a regenerable output of a
+# committed driver in MkFitCore/standalone/test/ -- the durable record is the
+# .txt report beside it, and the deck keeps its own copies under
+# ~/mic-dev/*-slides/data/. A single trace run can be several GB, so they must
+# never reach git status.
+#
+# SCOPED to that directory rather than a repo-wide *.root: 47 .root files are
+# legitimately tracked elsewhere in CMSSW (Validation/, Geometry/, ... data
+# payloads), and a blanket rule would silently hide a new one.
+/RecoTracker/MkFitCore/standalone/test/*.root

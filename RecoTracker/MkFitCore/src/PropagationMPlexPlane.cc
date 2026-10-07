@@ -104,11 +104,7 @@ namespace {
     const MPF alpha = s * sin_mom_tht * inPar(3, 0) * kinv;
 
     MPF sinah, cosah;
-    if constexpr (Config::useTrigApprox) {
-      mpt::sincos4(0.5f * alpha, sinah, cosah);
-    } else {
-      mpt::fast_sincos(0.5f * alpha, sinah, cosah);
-    }
+    mpt::fast_sincos(0.5f * alpha, sinah, cosah);
 
     outPar.aij(0, 0) = inPar(0, 0) + 2.f * sinah * (cos_mom_phi * cosah - sin_mom_phi * sinah) / (inPar(3, 0) * kinv);
     outPar.aij(1, 0) = inPar(1, 0) + 2.f * sinah * (sin_mom_phi * cosah + cos_mom_phi * sinah) / (inPar(3, 0) * kinv);
@@ -370,16 +366,26 @@ namespace {
              int q,
              float kinv) {
     const float A = delta0 * eta0 + delta1 * eta1 + delta2 * eta2;
+    // p0 is the UNIT momentum direction, so B is O(1) and the 1/pT factor lives
+    // only in rho. B and C are algebraically identical to the older form that
+    // carried `ip` through B once and C twice, just cheaper and better
+    // conditioned.
     const float p0[3] = {cosP * sinT, sinP * sinT, cosT};
     const float B = (p0[0] * eta0 + p0[1] * eta1 + p0[2] * eta2);
     const float rho = kinv * sinT * ipt;
     const float C = -(eta0 * p0[1] - eta1 * p0[0]) * rho * 0.5f;
-    const float s1 = 2.f * A / (-B - std::copysign(std::sqrt(B * B - 4.f * A * C), B));
+    const float sqb2m4ac = std::sqrt(B * B - 4.f * A * C);
+
+    // C is proportional to rho, i.e. to 1/p, so in the stiff-track limit the
+    // textbook (-B +- sqrt)/(2C) cancels in the numerator of the SMALL root --
+    // which is the one wanted. This form does not cancel, and the large root is
+    // not needed at all.
+    const float s = 2.f * A / (-B - std::copysign(sqb2m4ac, B));
 #ifdef DEBUG
     if (debug)
-      std::cout << "A=" << A << " B=" << B << " C=" << C << " s1=" << s1 << std::endl;
+      std::cout << "A=" << A << " B=" << B << " C=" << C << " s=" << s << std::endl;
 #endif
-    return s1;
+    return s;
   }
 
   // The path length to the plane (plPnt, plNrm) is solved in three parts: a first solve from the start

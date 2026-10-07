@@ -7,6 +7,7 @@
 
 //#define DEBUG
 #include "Debug.h"
+#include "vdt/sincos.h"
 
 namespace mkfit {
 
@@ -121,6 +122,7 @@ namespace {
     ASSUME_ALIGNED(c, 64);
 
 #include "MultHelixPropTransp.ah"
+
   }
 
   void MultHelixPropTemp(const MPlexLL& A, const MPlexLL& B, MPlexLL& C, int n) {
@@ -262,12 +264,7 @@ namespace mkfit {
         const float ialpha = (r - r0) * ipt / k;
         //alpha+=ialpha;
 
-        if constexpr (Config::useTrigApprox) {
-          sincos4(ialpha * 0.5f, sinah, cosah);
-        } else {
-          cosah = std::cos(ialpha * 0.5f);
-          sinah = std::sin(ialpha * 0.5f);
-        }
+        vdt::fast_sincosf(ialpha * 0.5f, sinah, cosah);
         const float cosa = 1.f - 2.f * sinah * sinah;
         const float sina = 2.f * sinah * cosah;
 
@@ -595,21 +592,12 @@ namespace {
         D[n - nmin] += id[n - nmin];
       }
 
-      if constexpr (Config::useTrigApprox) {
 #if !defined(__INTEL_COMPILER)
 #pragma omp simd
 #endif
-        for (int n = nmin; n < nmax; ++n) {
-          sincos4(id[n - nmin] * ipt[n - nmin] * kinv[n - nmin] * 0.5f, sinah[n - nmin], cosah[n - nmin]);
-        }
-      } else {
-#if !defined(__INTEL_COMPILER)
-#pragma omp simd
-#endif
-        for (int n = nmin; n < nmax; ++n) {
-          cosah[n - nmin] = std::cos(id[n - nmin] * ipt[n - nmin] * kinv[n - nmin] * 0.5f);
-          sinah[n - nmin] = std::sin(id[n - nmin] * ipt[n - nmin] * kinv[n - nmin] * 0.5f);
-        }
+      for (int n = nmin; n < nmax; ++n) {
+        vdt::fast_sincosf(id[n - nmin] * ipt[n - nmin] * kinv[n - nmin] * 0.5f,
+                          sinah[n - nmin], cosah[n - nmin]);
       }
 
 #pragma omp simd
@@ -725,17 +713,9 @@ namespace {
       dadphi[n - nmin] = dDdphi[n - nmin] * ipt[n - nmin] * kinv[n - nmin];
     }
 
-    if constexpr (Config::useTrigApprox) {
 #pragma omp simd
-      for (int n = nmin; n < nmax; ++n) {
-        sincos4(alpha[n - nmin], sina[n - nmin], cosa[n - nmin]);
-      }
-    } else {
-#pragma omp simd
-      for (int n = nmin; n < nmax; ++n) {
-        cosa[n - nmin] = std::cos(alpha[n - nmin]);
-        sina[n - nmin] = std::sin(alpha[n - nmin]);
-      }
+    for (int n = nmin; n < nmax; ++n) {
+      vdt::fast_sincosf(alpha[n - nmin], sina[n - nmin], cosa[n - nmin]);
     }
 #pragma omp simd
     for (int n = nmin; n < nmax; ++n) {

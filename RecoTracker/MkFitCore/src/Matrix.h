@@ -4,22 +4,6 @@
 #include "RecoTracker/MkFitCore/interface/Config.h"
 #include "RecoTracker/MkFitCore/interface/MatrixSTypes.h"
 
-namespace mkfit {
-
-  inline float hipo(float x, float y) { return std::sqrt(x * x + y * y); }
-
-  inline float hipo_sqr(float x, float y) { return x * x + y * y; }
-
-  inline void sincos4(const float x, float& sin, float& cos) {
-    // Had this writen with explicit division by factorial.
-    // The *whole* fitting test ran like 2.5% slower on MIC, sigh.
-
-    const float x2 = x * x;
-    cos = 1.f - 0.5f * x2 + 0.04166667f * x2 * x2;
-    sin = x - 0.16666667f * x * x2;
-  }
-}  // end namespace mkfit
-
 //==============================================================================
 
 // Matriplex dimensions and typedefs
@@ -76,6 +60,9 @@ namespace mkfit {
   typedef Matriplex::Matriplex<float, LL, 2, NN> MPlexL2;
   typedef Matriplex::Matriplex<float, HH, 2, NN> MPlexH2;
   typedef Matriplex::Matriplex<float, 2, HH, NN> MPlex2H;
+
+  typedef Matriplex::Matriplex<float, 3, 1, NN> MPlex3V;
+  typedef Matriplex::Matriplex<float, 4, 1, NN> MPlex4V;
 
   typedef Matriplex::Matriplex<float, 1, 1, NN> MPlexQF;
   typedef Matriplex::Matriplex<int, 1, 1, NN> MPlexQI;

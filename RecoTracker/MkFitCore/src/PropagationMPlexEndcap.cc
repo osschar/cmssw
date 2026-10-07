@@ -7,6 +7,7 @@
 
 //#define DEBUG
 #include "Debug.h"
+#include "vdt/sincos.h"
 
 namespace {
   using namespace mkfit;
@@ -41,6 +42,7 @@ namespace {
     ASSUME_ALIGNED(c, 64);
 
 #include "MultHelixPropTranspEndcap.ah"
+
   }
 
 }  // namespace
@@ -332,26 +334,11 @@ namespace mkfit {
 
     float cosahTmp[NN];
     float sinahTmp[NN];
-    if constexpr (Config::useTrigApprox) {
 #if !defined(__INTEL_COMPILER)
 #pragma omp simd
 #endif
-      for (int n = 0; n < NN; ++n) {
-        sincos4(alpha[n] * 0.5f, sinahTmp[n], cosahTmp[n]);
-      }
-    } else {
-#if !defined(__INTEL_COMPILER)
-#pragma omp simd
-#endif
-      for (int n = 0; n < NN; ++n) {
-        cosahTmp[n] = std::cos(alpha[n] * 0.5f);
-      }
-#if !defined(__INTEL_COMPILER)
-#pragma omp simd
-#endif
-      for (int n = 0; n < NN; ++n) {
-        sinahTmp[n] = std::sin(alpha[n] * 0.5f);
-      }
+    for (int n = 0; n < NN; ++n) {
+      vdt::fast_sincosf(alpha[n] * 0.5f, sinahTmp[n], cosahTmp[n]);
     }
 
     float cosah[NN];

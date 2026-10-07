@@ -112,6 +112,7 @@ namespace mkfit {
     int subdet() const { return m_subdet; }
     bool is_barrel() const { return m_layer_type == Barrel; }
     bool is_pixel() const { return m_is_pixel; }
+    bool is_strip() const { return ! m_is_pixel; }
     bool is_stereo() const { return m_is_stereo; }
     bool has_charge() const { return m_has_charge; }
 
@@ -120,6 +121,10 @@ namespace mkfit {
     bool is_within_q_limits(float q) const { return is_barrel() ? is_within_z_limits(q) : is_within_r_limits(q); }
 
     bool is_in_r_hole(float r) const { return m_has_r_range_hole ? is_in_r_hole_no_check(r) : false; }
+
+    bool has_r_range_hole() const { return m_has_r_range_hole; }
+    float hole_r_min() const { return m_hole_r_min; }
+    float hole_r_max() const { return m_hole_r_max; }
 
     WSR_Result is_within_z_sensitive_region(float z, float dz) const {
       if (z > m_zmax + dz || z < m_zmin - dz)
