@@ -784,7 +784,7 @@ covariance and rho the local hit density. The hit-versus-hole break-even is then
 derived rather than tuned. It assumes chi2 is trustworthy, which it is to the
 extent the covariance is.
 
-**Term ablation** (`Score::use_rho`, `use_detv`). rho and eps enter the
+**Terms fixed at their mean** (`Score::use_rho`, `use_detv`). rho and eps enter the
 likelihood the same way, so replacing ln rho by a constant equal to its measured
 mean removes only its variation. On F30 in mode 1 with eps 0.99, removing the
 variation of rho costs 114 found tracks and removing that of det V costs 67.

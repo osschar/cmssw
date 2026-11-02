@@ -59,7 +59,7 @@ namespace mkfit {
     short n_holes_so_far = 0;
   };
 
-  // The coefficients, the score mode and the term-ablation switches are in
+  // The coefficients, the score mode and the term switches are in
   // V2p2Config.h, Config::V2p2::Score.
 
   // Log-likelihood ratio against "this layer produced no hit":

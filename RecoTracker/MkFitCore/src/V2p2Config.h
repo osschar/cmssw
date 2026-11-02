@@ -163,7 +163,8 @@ namespace mkfit {
       MKFIT_V2P2_KNOB(V2p2ScoreParams, fwd,
                       (V2p2ScoreParams{.hit_eff = 0.10f, .hit_eff_grp = {-1.0f, -1.0f, 0.14f, 0.20f, -1.0f}}));
       MKFIT_V2P2_KNOB(V2p2ScoreParams, bkw, {});
-      // Term ablation of the likelihood: replace a term by a constant.
+      // Term switches: replace a likelihood term by a constant, its measured mean, to
+      // measure what the term's variation contributes.
       MKFIT_V2P2_KNOB(bool, use_rho, true);
       MKFIT_V2P2_KNOB(float, rho_const, 0.0f);   // ln(hits/cm^2), used when use_rho is false
       MKFIT_V2P2_KNOB(bool, use_detv, true);
@@ -196,8 +197,8 @@ namespace mkfit {
       MKFIT_V2P2_KNOB(bool, dupclean_pairs, false);
     }  // namespace Diag
 
-    // Running sums of the likelihood terms, for measuring the ablation
-    // constants. Not thread safe: accumulate only in a serialised (trace) build.
+    // Running sums of the likelihood terms, for measuring the constants the term
+    // switches use. Not thread safe: accumulate only in a serialised (trace) build.
     namespace ScoreStats {
       MKFIT_V2P2_KNOB(bool, accum, false);
       MKFIT_V2P2_KNOB(long, n_hits, 0);
