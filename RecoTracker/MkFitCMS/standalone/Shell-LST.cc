@@ -291,7 +291,6 @@ namespace mkfit {
 
     for (int is = 0; auto &s : ctx.seeds) {
       // Chomp off pixels, pretending we have T5s
-      // s.sortHitsByR(ctx.ev->layerHits_);
       // s.sortHitsByLayer();
 
       // Spring 2026, trouble with pickup of T5s (and especially T4 - 1 hit).
