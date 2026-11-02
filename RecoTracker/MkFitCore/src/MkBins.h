@@ -29,10 +29,7 @@ namespace mkfit {
   //============================================================================
 
   struct MkBinLimits {
-    MPlexQUH q0, q1, q2, p1, p2;  // q0 in center, to detect dead regions and set WSR.m_in_gap = true
-
-    // would it make sense to store hit ids here (in sth like std::fixed_capacity_vector)?
-    // std::vector<int> hits;
+    MPlexQUH q1, q2, p1, p2;
   };
 
   //============================================================================
@@ -45,10 +42,6 @@ namespace mkfit {
     MPlexQF m_q_min, m_q_max, m_q_center;
 
     MPlexQF m_dphi_track, m_dq_track;  // 3 sigma track errors, from the covariance at m_sp2
-
-    // debug & ntuple dump -- to be local in functions or ifdef MKFIT_STANDALONE
-    // MPlexQF phi_c, dphi;
-    // MPlexQF q_c, qmin, qmax;
 
     int m_n_proc;
     bool m_is_barrel;  // set in prop_to_*()

@@ -218,7 +218,6 @@ namespace mkfit {
         bl.p2[i] = loh.phiMaskApply(pr.end + Window::phi_extra_bins);
 
         // Same for q. The q axis is bounded, so the extension clamps.
-        bl.q0[i] = loh.qBinChecked(m_q_center[i]);
         const float cut_dq = Window::dq_trk_fac * m_dq_track[i] + Window::dq_hit_fac * loh.max_hit_q_half_length();
         auto qr = loh.qRangeBins(m_q_min[i] - cut_dq, m_q_max[i] + cut_dq);
         const int nq = (int)loh.qNBins();
