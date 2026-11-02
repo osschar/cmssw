@@ -158,4 +158,4 @@ namespace mkfit {
     return is_silly;
   }
 
-}
+}  // namespace mkfit

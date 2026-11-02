@@ -112,7 +112,7 @@ namespace mkfit {
     int subdet() const { return m_subdet; }
     bool is_barrel() const { return m_layer_type == Barrel; }
     bool is_pixel() const { return m_is_pixel; }
-    bool is_strip() const { return ! m_is_pixel; }
+    bool is_strip() const { return !m_is_pixel; }
     bool is_stereo() const { return m_is_stereo; }
     bool has_charge() const { return m_has_charge; }
 

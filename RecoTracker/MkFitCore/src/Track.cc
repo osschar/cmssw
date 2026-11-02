@@ -33,18 +33,7 @@ namespace mkfit {
     return is_silly;
   }
 
-  bool TrackBase::hasNanNSillyValues() const {
-    bool is_silly = false;
-    for (int i = 0; i < LL; ++i) {
-      for (int j = 0; j <= i; ++j) {
-        if ((i == j && state_.errors.At(i, j) < 0) || !isFinite(state_.errors.At(i, j))) {
-          is_silly = true;
-          return is_silly;
-        }
-      }
-    }
-    return is_silly;
-  }
+  bool TrackBase::hasNanNSillyValues() const { return state_.hasNanNSillyValues(); }
 
   // If linearize=true, use linear estimate of d0: suitable at pT>~10 GeV (--> 10 micron error)
   float TrackBase::d0BeamSpot(const float x_bs, const float y_bs, bool linearize) const {
@@ -246,20 +235,19 @@ namespace mkfit {
   //==============================================================================
 
   void Track::sortHitsByLayer() {
-    std::stable_sort(hitsOnTrk_.begin(), hitsOnTrk_.end(), [](const auto& h1, const auto& h2) {
-      return h1.layer < h2.layer;
-    });
+    std::stable_sort(
+        hitsOnTrk_.begin(), hitsOnTrk_.end(), [](const auto& h1, const auto& h2) { return h1.layer < h2.layer; });
   }
 
   //==============================================================================
 
   void print(const TrackState& s) {
     std::cout << "State: "
-              << " x:  " << s.x() << " y:  " << s.y() << " z:  " << s.z()
-              << " charge: " << s.charge << " valid: " << s.valid << "\n"
+              << " x:  " << s.x() << " y:  " << s.y() << " z:  " << s.z() << " charge: " << s.charge
+              << " valid: " << s.valid << "\n"
               << "       "
-              << " px: " << s.px() << " py: " << s.py() << " pz: " << s.pz()
-              << " pT: " << s.pT() << " p_eta: " << s.momEta() << " p_phi: " << s.momPhi() << "\n";
+              << " px: " << s.px() << " py: " << s.py() << " pz: " << s.pz() << " pT: " << s.pT()
+              << " p_eta: " << s.momEta() << " p_phi: " << s.momPhi() << "\n";
     dumpMatrix(s.errors, "Errors: ", "       ");
   }
 

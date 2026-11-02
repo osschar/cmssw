@@ -57,12 +57,8 @@ namespace mkfit {
     SVector3& parameters_nc() { return state_.pos_; }
     SMatrixSym33& error_nc() { return state_.err_; }
 
-    float r() const {
-      return hipo(state_.parameters().At(0), state_.parameters().At(1));
-    }
-    float r_sqr() const {
-      return hipo_sqr(state_.parameters().At(0), state_.parameters().At(1));
-    }
+    float r() const { return hipo(state_.parameters().At(0), state_.parameters().At(1)); }
+    float r_sqr() const { return hipo_sqr(state_.parameters().At(0), state_.parameters().At(1)); }
     float x() const { return state_.parameters().At(0); }
     float y() const { return state_.parameters().At(1); }
     float z() const { return state_.parameters().At(2); }

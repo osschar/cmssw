@@ -83,14 +83,10 @@ namespace mkfit {
     // The axis's own half-open range [begin, end) covering [lo, hi] inclusive, with
     // the mask applied after the "+1". Prefer this to a pair of phiBinChecked()
     // calls, which misses the bin holding hi.
-    axis_phi_t::I_pair phiRangeBins(float lo, float hi) const {
-      return m_ax_phi.from_R_minmax_to_N_bins(lo, hi);
-    }
+    axis_phi_t::I_pair phiRangeBins(float lo, float hi) const { return m_ax_phi.from_R_minmax_to_N_bins(lo, hi); }
 
     // q is a bounded axis: its helper clamps where the phi one wraps.
-    axis_eta_t::I_pair qRangeBins(float lo, float hi) const {
-      return m_ax_eta.from_R_minmax_to_N_bins(lo, hi);
-    }
+    axis_eta_t::I_pair qRangeBins(float lo, float hi) const { return m_ax_eta.from_R_minmax_to_N_bins(lo, hi); }
     unsigned int qNBins() const { return m_ax_eta.size_of_N(); }
 
     // Largest hit extents in this layer, computed at fill. The v2p2 fetch uses
@@ -171,7 +167,7 @@ namespace mkfit {
 
 #ifdef COPY_SORTED_HITS
     void alloc_hits(int size);
-    void free_hits()
+    void free_hits();
 
     Hit* m_hits = nullptr;
     int m_capacity = 0;

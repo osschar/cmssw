@@ -102,4 +102,4 @@ namespace mkfit {
 
 }  // namespace mkfit
 
-#endif // RecoTracker_MkFitCore_interface_TrackState_h
+#endif  // RecoTracker_MkFitCore_interface_TrackState_h

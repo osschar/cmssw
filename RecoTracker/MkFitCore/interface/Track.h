@@ -36,7 +36,7 @@ namespace mkfit {
     const SMatrixSym66& errors() const { return state_.errors; }
 
     // Access for packing into Matriplexes
-    const float* posArray() const { return state_.parameters.Array(); } // REMOVE
+    const float* posArray() const { return state_.parameters.Array(); }  // REMOVE
     const float* parArray() const { return state_.parArray(); }
     const float* errArray() const { return state_.errArray(); }
 
@@ -330,7 +330,7 @@ namespace mkfit {
       hitsOnTrk_.clear();
     }
 
-    void swapOutAndResetHits(std::vector<HitOnTrack> &out) {
+    void swapOutAndResetHits(std::vector<HitOnTrack>& out) {
       out.swap(hitsOnTrk_);
       resetHits();
     }
@@ -433,7 +433,7 @@ namespace mkfit {
       }
     }
 
-    template<typename Predicate>
+    template <typename Predicate>
     void filterHits(Predicate pred) {
       int n_removed = std::erase_if(hitsOnTrk_, pred);
       if (n_removed > 0) {

@@ -18,6 +18,6 @@ namespace mkfit {
 
   inline float hipo_sqr(float x, float y) { return x * x + y * y; }
 
-}
+}  // namespace mkfit
 
 #endif

@@ -100,4 +100,4 @@ namespace mkfit {
 
 }  // namespace mkfit
 
-#endif // RecoTracker_MkFitCore_interface_MathInlineFunctions_h
+#endif  // RecoTracker_MkFitCore_interface_MathInlineFunctions_h

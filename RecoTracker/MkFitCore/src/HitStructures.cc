@@ -8,7 +8,6 @@
 
 namespace mkfit {
 
-
   // Half-extent of a hit in phi [rad], from its covariance:
   //     sigma_phi^2 = (y^2 exx - 2 xy exy + x^2 eyy) / r^4
   // See doc/MkFinderV2p2-DesignNotes.md, "Hit extents".
@@ -138,7 +137,7 @@ namespace mkfit {
           qbar = h.z();
         }
         const float phi_half = hit_phi_half_extent_of(h, hl_fac);
-        m_max_q_half_length   = std::max(m_max_q_half_length, half_length);
+        m_max_q_half_length = std::max(m_max_q_half_length, half_length);
         m_max_phi_half_extent = std::max(m_max_phi_half_extent, phi_half);
         const float qbar_half = m_is_barrel ? hit_r_half_extent_of(h, hl_fac) : 0.0f;
         hinfos.emplace_back(HitInfo({phi, q, half_length, qbar, phi_half, qbar_half}));
@@ -213,7 +212,7 @@ namespace mkfit {
         qbar = h.z();
       }
       const float phi_half = hit_phi_half_extent_of(h, hl_fac);
-      m_max_q_half_length   = std::max(m_max_q_half_length, half_length);
+      m_max_q_half_length = std::max(m_max_q_half_length, half_length);
       m_max_phi_half_extent = std::max(m_max_phi_half_extent, phi_half);
       const float qbar_half = m_is_barrel ? hit_r_half_extent_of(h, hl_fac) : 0.0f;
       m_hit_infos.emplace_back(HitInfo({phi, q, half_length, qbar, phi_half, qbar_half}));
