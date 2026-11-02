@@ -20,7 +20,7 @@ namespace mkfit {
 
   //==============================================================================
 
-  void MkBins::prop_to_limits_in_order(const MkRZLimits &ls) {
+  void MkBins::prop_to_limits_in_order(const MkRZLimits& ls) {
     // m_isp is at the previous hit. m_sp1 is the crossing of the near bounding
     // surface of the layer, m_sp2 of the far one; m_isp is re-initialised at
     // m_sp1 on the way. dalpha accumulates, so both are measured from the
@@ -36,7 +36,7 @@ namespace mkfit {
     } else {
       float z1 = ls.m_zmin, z2 = ls.m_zmax;
       bool is_pos = ls.m_layer_info_1->layer_type() == LayerInfo::EndCapPos;
-      if ((is_pos && ! ls.m_is_outward) || ( ! is_pos && ls.m_is_outward))
+      if ((is_pos && !ls.m_is_outward) || (!is_pos && ls.m_is_outward))
         std::swap(z1, z2);
 
       m_isp.propagate_to_z(mp::PA_Exact, z1, m_sp1, true, m_n_proc);
@@ -52,7 +52,7 @@ namespace mkfit {
   // covariance at the layer".
   //----------------------------------------------------------------------------
 
-  void MkBins::transport_position_cov(const MPlexLV &par0, const MPlexLS &err0, MkBinTrackCovExtract &tce) const {
+  void MkBins::transport_position_cov(const MPlexLV& par0, const MPlexLS& err0, MkBinTrackCovExtract& tce) const {
     // All NN lanes; the caller fills unused ones with a valid state.
     using MPF = MPlexQF;
 
@@ -63,7 +63,7 @@ namespace mkfit {
     Matriplex::fast_sincos(par0.ReduceFixedIJ(5, 0), st, ct);
     const MPF cot = ct / st;
 
-    const MPF &a = m_sp2.dalpha;
+    const MPF& a = m_sp2.dalpha;
     const MPF k = 1.0f / m_isp.inv_k;
     const MPF dx = m_sp2.x - par0.ReduceFixedIJ(0, 0);
     const MPF dy = m_sp2.y - par0.ReduceFixedIJ(1, 0);
@@ -139,7 +139,7 @@ namespace mkfit {
 
   //----------------------------------------------------------------------------
 
-  void MkBins::determine_bin_windows(const MkBinTrackCovExtract &cov_ex) {
+  void MkBins::determine_bin_windows(const MkBinTrackCovExtract& cov_ex) {
     // Below made members for debugging
     // MPlexQF phi_c, dphi_min, dphi_max;
     // phi_c = Matriplex::fast_atan2(m_isp.y, m_isp.x);  // calculated below as difference
@@ -203,31 +203,27 @@ namespace mkfit {
 #endif
   }
 
-
-  void MkBins::find_bin_ranges(const LayerOfHits &loh, MkBinLimits &bl) {
+  void MkBins::find_bin_ranges(const LayerOfHits& loh, MkBinLimits& bl) {
     for (int i = 0; i < NN; ++i) {
       if (i < m_n_proc) {
         // Fetch what the cut can accept, using the layer's largest hit extent since
         // the hit is not known yet, then extend by whole bins on the bin index.
         // The half-width is clamped below pi: a larger one wraps to a small arc.
         // See doc/MkFinderV2p2-DesignNotes.md, "Search window".
-        const float phi_hit_term = Window::phi_per_hit
-                                 ? Window::dphi_hit_fac * loh.max_hit_phi_half_extent()
-                                 : Window::dphi_flat_rad;
-        const float cut_dphi = std::min(Window::dphi_trk_fac * m_dphi_track[i] + phi_hit_term,
-                                        kMaxHalfPhiWindow);
+        const float phi_hit_term =
+            Window::phi_per_hit ? Window::dphi_hit_fac * loh.max_hit_phi_half_extent() : Window::dphi_flat_rad;
+        const float cut_dphi = std::min(Window::dphi_trk_fac * m_dphi_track[i] + phi_hit_term, kMaxHalfPhiWindow);
         auto pr = loh.phiRangeBins(m_phi_min[i] - cut_dphi, m_phi_max[i] + cut_dphi);
         bl.p1[i] = loh.phiMaskApply(pr.begin - Window::phi_extra_bins);
-        bl.p2[i] = loh.phiMaskApply(pr.end   + Window::phi_extra_bins);
+        bl.p2[i] = loh.phiMaskApply(pr.end + Window::phi_extra_bins);
 
         // Same for q. The q axis is bounded, so the extension clamps.
         bl.q0[i] = loh.qBinChecked(m_q_center[i]);
-        const float cut_dq = Window::dq_trk_fac * m_dq_track[i] +
-                             Window::dq_hit_fac * loh.max_hit_q_half_length();
+        const float cut_dq = Window::dq_trk_fac * m_dq_track[i] + Window::dq_hit_fac * loh.max_hit_q_half_length();
         auto qr = loh.qRangeBins(m_q_min[i] - cut_dq, m_q_max[i] + cut_dq);
         const int nq = (int)loh.qNBins();
         int qb = (int)qr.begin - Window::q_extra_bins;
-        int qe = (int)qr.end   + Window::q_extra_bins;
+        int qe = (int)qr.end + Window::q_extra_bins;
         bl.q1[i] = (unsigned short)(qb < 0 ? 0 : qb);
         bl.q2[i] = (unsigned short)(qe > nq ? nq : qe);
       }

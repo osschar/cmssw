@@ -2,12 +2,12 @@
 #define RecoTracker_MkFitCore_src_MkRZLimits_h
 
 namespace mkfit {
- 
+
   class LayerInfo;
 
   struct MkRZLimits {
-    const LayerInfo *m_layer_info_1 = nullptr;
-    const LayerInfo *m_layer_info_2 = nullptr;
+    const LayerInfo* m_layer_info_1 = nullptr;
+    const LayerInfo* m_layer_info_2 = nullptr;
     float m_rin = 0, m_rout = 0, m_zmin = 0, m_zmax = 0;
     bool m_is_barrel = true;
     bool m_is_outward = true;
@@ -15,16 +15,16 @@ namespace mkfit {
     bool m_is_initialized = false;
 
     MkRZLimits() = default;
-    MkRZLimits(const LayerInfo &li, bool is_outward);
-    MkRZLimits(const LayerInfo &li1, const LayerInfo &li2, bool is_outward);
+    MkRZLimits(const LayerInfo& li, bool is_outward);
+    MkRZLimits(const LayerInfo& li1, const LayerInfo& li2, bool is_outward);
 
-    void setup(const LayerInfo &li, bool is_outward);
-    void setup(const LayerInfo &li1, const LayerInfo &li2, bool is_outward);
+    void setup(const LayerInfo& li, bool is_outward);
+    void setup(const LayerInfo& li1, const LayerInfo& li2, bool is_outward);
 
     void reset();
 
-    const LayerInfo &layer_info_1() const { return *m_layer_info_1; }
-    const LayerInfo &layer_info_2() const { return *m_layer_info_2; }
+    const LayerInfo& layer_info_1() const { return *m_layer_info_1; }
+    const LayerInfo& layer_info_2() const { return *m_layer_info_2; }
 
     bool is_outward() const { return m_is_outward; }
     bool is_inward() const { return !m_is_outward; }
@@ -47,6 +47,6 @@ namespace mkfit {
     }
   };
 
-}
+}  // namespace mkfit
 
 #endif

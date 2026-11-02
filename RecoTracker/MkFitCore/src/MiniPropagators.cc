@@ -130,41 +130,23 @@ namespace mkfit::mini_propagators {
     return c.fail_flag;
   }
 
-  bool InitialState::propagate_to_plane(PropAlgo_e algo, const SVector3& pos, const SVector3& zdir, State& c, bool update_momentum) const {
+  bool InitialState::propagate_to_plane(
+      PropAlgo_e algo, const SVector3& pos, const SVector3& zdir, State& c, bool update_momentum) const {
     switch (algo) {
       case PA_Line: {
-        // Momentum is never changed ... we simply step along its direction
-        // to hit the plane.
-        // const float k = 1.0f / inv_k;
-
-        // const float curv = 0.5f * inv_k * inv_pt;
-        // const float oo_curv = 1.0f / curv;  // 2 * radius of curvature
-        // const float lambda = pz * inv_pt;
-
-        //X float dist = (x - pos(0)) * zdir(0) +
-        //X              (y - pos(1)) * zdir(1) +
-        //X              (z - pos(2)) * zdir(2);
-
+        // Straight-line step along the momentum onto the plane; the momentum
+        // is not changed.
         // t * p_vec intersects the plane:
-        float t = (pos(0) * zdir(0) + pos(1) * zdir(1) + pos(2) * zdir(2) - x * zdir(0) -
-                   y * zdir(1) - z * zdir(2)) /
+        float t = (pos(0) * zdir(0) + pos(1) * zdir(1) + pos(2) * zdir(2) - x * zdir(0) - y * zdir(1) - z * zdir(2)) /
                   (px * zdir(0) + py * zdir(1) + pz * zdir(2));
-
-        //X printf("  module-center: %.2f,%.2f,%.2f  pos: %.2f,%.2f,%.2f  normal: %.2f,%.2f,%.2f\n",
-        //X        pos(0),pos(1),pos(2), x, y, z, zdir(0),zdir(1),zdir(2));
 
         c = *this;
         c.x += t * c.px;
         c.y += t * c.py;
         c.z += t * c.pz;
 
-        c.dalpha += std::hypot(t * c.px, t * c.py) * inv_k * inv_pt; // correct for curvature?
-
-        //X re-check ditance to plane
-        //X float dist2 = (c.x - pos(0)) * zdir(0) +
-        //X               (c.y - pos(1)) * zdir(1) +
-        //X               (c.z - pos(2)) * zdir(2);
-        //X printf("  dist = %.3f, t = %.4f ..... dist2 = %.4f\n", dist, t, dist2);
+        // Helix turning angle over the same transverse path length.
+        c.dalpha += std::hypot(t * c.px, t * c.py) * inv_k * inv_pt;
         break;
       }
 
@@ -230,39 +212,24 @@ namespace mkfit::mini_propagators {
 
         c = *this;
 
-        // Closed-form intersection of the trajectory circle with the target
-        // cylinder -- no iteration. The transverse projection is a circle of
-        // radius R_c about C = (x - k py, y + k px). Subtracting the equation
-        // of that circle from |P| = R leaves the radical line, LINEAR in P:
-        //     P.C = (R^2 - R_c^2 + d_c^2) / 2
-        // so with Chat = C/d_c,   P = a Chat +/- b Chat_perp,
-        //     a = (R^2 + (d_c^2 - R_c^2)) / (2 d_c),   b = sqrt(R^2 - a^2).
-        //
-        // PRECISION -- the part that bites, and why the naive closed form has a
-        // bad reputation. Written literally as (R^2 - d_c^2 - R_c^2) it
-        // subtracts two nearly equal large numbers: for a stiff track the
-        // centre is far away and d_c ~ R_c ~ 87.8 pT cm, so at 100 GeV both are
-        // ~9e3 cm with squares ~8e7, while their difference carries the impact
-        // parameter, O(0.1 cm). In float that is a total loss of the answer.
-        // The identity below removes the cancellation ALGEBRAICALLY -- expand
-        // d_c^2 = (x - k py)^2 + (y + k px)^2 and use R_c^2 = k^2 pT^2, and the
-        // large terms cancel symbolically instead of numerically:
-        //     d_c^2 - R_c^2 = r0^2 - 2 k (x py - y px)
-        // Both survivors are O(r0^2), so `a` keeps full float accuracy however
-        // stiff the track. Everything after that is well conditioned except
-        // grazing incidence (b -> 0), which is exactly what the clamp below
-        // keeps us away from.
+        // Closed-form intersection of the trajectory circle (centre
+        // C = (x - k py, y + k px), radius R_c) with the cylinder |P| = R.
+        // Subtracting the two circle equations gives the line
+        // P.C = (R^2 + d_c^2 - R_c^2) / 2, so with Chat = C / d_c
+        //     P = a Chat +/- b Chat_perp,
+        //     a = (R^2 + d_c^2 - R_c^2) / (2 d_c),   b = sqrt(R^2 - a^2).
+        // d_c^2 - R_c^2 is computed as r0^2 - 2 k (x py - y px): for a stiff
+        // track d_c ~ R_c ~ 87.8 pT cm, and the direct difference of their
+        // squares loses all float precision.
         const MPF cx = x - k * py;
         const MPF cy = y + k * px;
         const MPF d_c = Matriplex::hypot(cx, cy);
         const MPF R_c = Matriplex::abs(k) * Matriplex::hypot(px, py);
         const MPF dc2_m_Rc2 = x * x + y * y - 2.0f * k * (x * py - y * px);
 
-        // Reachability -- see kReachMargin in the header. |a| <= R is
-        // algebraically the same condition as |d_c - R_c| <= R <= d_c + R_c, so
-        // the guard and the solve share one computation. Clamping R keeps the
-        // returned point ON the trajectory, at its closest approach to the
-        // requested cylinder, instead of nowhere at all.
+        // Reachability, see kReachMargin: |a| <= R is the same condition as
+        // |d_c - R_c| <= R <= d_c + R_c. An unreachable R is clamped to the band
+        // edge, which gives the point of closest approach on the trajectory.
         for (int i = 0; i < N_proc; ++i) {
           float r_lo = std::abs(d_c[i] - R_c[i]) + kReachMargin;
           float r_hi = d_c[i] + R_c[i] - kReachMargin;
@@ -383,42 +350,23 @@ namespace mkfit::mini_propagators {
     return 0;
   }
 
-  int InitialStatePlex::propagate_to_plane(PropAlgo_e algo, const MP3V &pos, const MP3V &zdir, StatePlex& c, bool update_momentum) const {
+  int InitialStatePlex::propagate_to_plane(
+      PropAlgo_e algo, const MP3V& pos, const MP3V& zdir, StatePlex& c, bool update_momentum) const {
     switch (algo) {
       case PA_Line: {
-        // Momentum is never changed ... we simply step along its direction
-        // to hit the plane.
-        // const float k = 1.0f / inv_k;
-
-        // const float curv = 0.5f * inv_k * inv_pt;
-        // const float oo_curv = 1.0f / curv;  // 2 * radius of curvature
-        // const float lambda = pz * inv_pt;
-
-        // MPF dist = (x - pos(0,0)) * zdir(0,0) +
-        //            (y - pos(1,0)) * zdir(1,0) +
-        //            (z - pos(2,0)) * zdir(2,0);
-
+        // Straight-line step along the momentum onto the plane; the momentum
+        // is not changed.
         // t * p_vec intersects the plane:
-        MPF t = ((pos(0,0) - x) * zdir(0,0) + (pos(1,0) - y) * zdir(1,0) + (pos(2,0) - z) * zdir(2,0)) /
-                  (px * zdir(0,0) + py * zdir(1,0) + pz * zdir(2,0));
-
-        //X printf("  module-center: %.2f,%.2f,%.2f  pos: %.2f,%.2f,%.2f  normal: %.2f,%.2f,%.2f\n",
-        //X        pos(0),pos(1),pos(2), x, y, z, zdir(0),zdir(1),zdir(2));
+        MPF t = ((pos(0, 0) - x) * zdir(0, 0) + (pos(1, 0) - y) * zdir(1, 0) + (pos(2, 0) - z) * zdir(2, 0)) /
+                (px * zdir(0, 0) + py * zdir(1, 0) + pz * zdir(2, 0));
 
         c = *this;
         c.x += t * c.px;
         c.y += t * c.py;
         c.z += t * c.pz;
 
-        c.dalpha += Matriplex::hypot(t * c.px, t * c.py) * inv_k * inv_pt; // correct for curvature?
-
-        //X re-check ditance to plane
-        // MPF dist2 = (c.x - pos(0,0)) * zdir(0,0) +
-        //             (c.y - pos(1,0)) * zdir(1,0) +
-        //             (c.z - pos(2,0)) * zdir(2,0);
-        // for (int i=0; i < NN; ++i)
-        //   printf("    i:%d  dist = %.3f, t = %.4f ..... dist2 = %.3f\n", i, dist[i], t[i], dist2[i]);
-
+        // Helix turning angle over the same transverse path length.
+        c.dalpha += Matriplex::hypot(t * c.px, t * c.py) * inv_k * inv_pt;
         break;
       }
 
@@ -438,13 +386,7 @@ namespace mkfit::mini_propagators {
   // Hermite3D interpolation
   //===========================================================================
 
-  // MP4V m_Hx, m_Hy, m_Hz;
-  // MPF  m_Hderfac; // derivative scaling factor
-  // do we need delta-alpha to transition for t -> alpha -> path-length
-
-  void Hermite3D::hermite_1d(const MPF &x1, const MPF &p1, const MPF &x2, const MPF &p2,
-                             const MPF &derfac, MPlex4V &h)
-  {
+  void Hermite3D::hermite_1d(const MPF& x1, const MPF& p1, const MPF& x2, const MPF& p2, const MPF& derfac, MPlex4V& h) {
     MPF P = x2 - x1;
     MPF Q = p1 * derfac;
     MPF R = p2 * derfac - 2.0f * P + Q;
@@ -452,11 +394,9 @@ namespace mkfit::mini_propagators {
     h.aij(1, 0) = Q;
     h.aij(2, 0) = P - Q - R;
     h.aij(3, 0) = R;
-
   }
 
-  void Hermite3D::calculate_coeffs(const StatePlex &sp1, const StatePlex &sp2, const MPF &inv_k)
-  {
+  void Hermite3D::calculate_coeffs(const StatePlex& sp1, const StatePlex& sp2, const MPF& inv_k) {
     // mini_propagators::InitialStatePlex m_isp;
     // mini_propagators::StatePlex m_sp1, m_sp2;
 
@@ -468,11 +408,9 @@ namespace mkfit::mini_propagators {
     hermite_1d(sp1.y, sp1.py, sp2.y, sp2.py, m_Hderfac, m_Hy);
     hermite_1d(sp1.z, sp1.pz, sp2.z, sp2.pz, m_Hderfac, m_Hz);
     m_Hderfac = 1.0f / m_Hderfac;
-
   }
 
-  void Hermite3D::calculate_coeffs(const StatePlex &sp, const MPF &inv_k, const MPF &dalpha)
-  {
+  void Hermite3D::calculate_coeffs(const StatePlex& sp, const MPF& inv_k, const MPF& dalpha) {
     // One-point / extrapolating mode -- see the comment on the declaration.
     //
     // Substituting a = dalpha * t into the Taylor series of the exact helix
@@ -504,77 +442,60 @@ namespace mkfit::mini_propagators {
     m_Hderfac = 1.0f / K;
   }
 
-  void Hermite3D::evaluate(const MPF &t, MPF &x, MPF &y, MPF &z) const
-  {
+  void Hermite3D::evaluate(const MPF& t, MPF& x, MPF& y, MPF& z) const {
     MPF t2 = t * t;
     MPF t3 = t2 * t;
-    x = m_Hx(0,0) + t * m_Hx(1,0) + t2 * m_Hx(2,0) + t3 * m_Hx(3,0);
-    y = m_Hy(0,0) + t * m_Hy(1,0) + t2 * m_Hy(2,0) + t3 * m_Hy(3,0);
-    z = m_Hz(0,0) + t * m_Hz(1,0) + t2 * m_Hz(2,0) + t3 * m_Hz(3,0);
+    x = m_Hx(0, 0) + t * m_Hx(1, 0) + t2 * m_Hx(2, 0) + t3 * m_Hx(3, 0);
+    y = m_Hy(0, 0) + t * m_Hy(1, 0) + t2 * m_Hy(2, 0) + t3 * m_Hy(3, 0);
+    z = m_Hz(0, 0) + t * m_Hz(1, 0) + t2 * m_Hz(2, 0) + t3 * m_Hz(3, 0);
   }
 
-  void Hermite3D::evaluate(const MPF &t, MPF &x, MPF &y, MPF &z, MPF &dx, MPF &dy, MPF &dz) const
-  {
+  void Hermite3D::evaluate(const MPF& t, MPF& x, MPF& y, MPF& z, MPF& dx, MPF& dy, MPF& dz) const {
     MPF t2 = t * t;
     MPF t3 = t2 * t;
-    x = m_Hx(0,0) + t * m_Hx(1,0) + t2 * m_Hx(2,0) + t3 * m_Hx(3,0);
-    y = m_Hy(0,0) + t * m_Hy(1,0) + t2 * m_Hy(2,0) + t3 * m_Hy(3,0);
-    z = m_Hz(0,0) + t * m_Hz(1,0) + t2 * m_Hz(2,0) + t3 * m_Hz(3,0);
-    dx = (m_Hx(1,0) + 2.0f * t * m_Hx(2,0) + 3.0f * t2 * m_Hx(3,0)) * m_Hderfac;
-    dy = (m_Hy(1,0) + 2.0f * t * m_Hy(2,0) + 3.0f * t2 * m_Hy(3,0)) * m_Hderfac;
-    dz = (m_Hz(1,0) + 2.0f * t * m_Hz(2,0) + 3.0f * t2 * m_Hz(3,0)) * m_Hderfac;
+    x = m_Hx(0, 0) + t * m_Hx(1, 0) + t2 * m_Hx(2, 0) + t3 * m_Hx(3, 0);
+    y = m_Hy(0, 0) + t * m_Hy(1, 0) + t2 * m_Hy(2, 0) + t3 * m_Hy(3, 0);
+    z = m_Hz(0, 0) + t * m_Hz(1, 0) + t2 * m_Hz(2, 0) + t3 * m_Hz(3, 0);
+    dx = (m_Hx(1, 0) + 2.0f * t * m_Hx(2, 0) + 3.0f * t2 * m_Hx(3, 0)) * m_Hderfac;
+    dy = (m_Hy(1, 0) + 2.0f * t * m_Hy(2, 0) + 3.0f * t2 * m_Hy(3, 0)) * m_Hderfac;
+    dz = (m_Hz(1, 0) + 2.0f * t * m_Hz(2, 0) + 3.0f * t2 * m_Hz(3, 0)) * m_Hderfac;
   }
 
-  void Hermite3D::evaluate(const MPF &t, StatePlex &sp) const
-  {
-    evaluate(t, sp.x, sp.y, sp.z, sp.px, sp.py, sp.pz);
-  }
+  void Hermite3D::evaluate(const MPF& t, StatePlex& sp) const { evaluate(t, sp.x, sp.y, sp.z, sp.px, sp.py, sp.pz); }
 
   //===========================================================================
   // Hermite3DOnPlane intersection
   //===========================================================================
 
-    void Hermite3DOnPlane::init_coeffs(const Hermite3D &h, const MP3V& pos, const MP3V& zdir)
-    {
-      m_D = 0.0f;
-      m_D.aij(0, 0) = (pos(0,0) - h.m_Hx(0,0)) * zdir(0,0) +
-                      (pos(1,0) - h.m_Hy(0,0)) * zdir(1,0) +
-                      (pos(2,0) - h.m_Hz(0,0)) * zdir(2,0);
-      for (int i = 1; i < 4; ++i) {
-        m_D.aij(i, 0) = (h.m_Hx(i,0) * zdir(0,0) +
-                         h.m_Hy(i,0) * zdir(1,0) +
-                         h.m_Hz(i,0) * zdir(2,0)).negate();
-      }
-      // // QQQQ do i even need this, it's trivial, can multiply in place, each time.
-      // m_dDdt = 0.0f;
-      // for (int i = 1; i < 4; ++i) {
-      //   m_dDdt.aij(i-1, 0) = float(i) * m_D(i, 0);
-      // }
-
-      MPF d0, d1;
-      evaluate(0.0f, d0);
-      evaluate(1.0f, d1);
-      m_T = d0 / (d0 - d1);
+  void Hermite3DOnPlane::init_coeffs(const Hermite3D& h, const MP3V& pos, const MP3V& zdir) {
+    m_D = 0.0f;
+    m_D.aij(0, 0) = (pos(0, 0) - h.m_Hx(0, 0)) * zdir(0, 0) + (pos(1, 0) - h.m_Hy(0, 0)) * zdir(1, 0) +
+                    (pos(2, 0) - h.m_Hz(0, 0)) * zdir(2, 0);
+    for (int i = 1; i < 4; ++i) {
+      m_D.aij(i, 0) = (h.m_Hx(i, 0) * zdir(0, 0) + h.m_Hy(i, 0) * zdir(1, 0) + h.m_Hz(i, 0) * zdir(2, 0)).negate();
     }
 
-    void Hermite3DOnPlane::evaluate(const MPF &t, MPF &d)
-    {
-      MPF t2 = t * t;
-      d = m_D(0,0) + m_D(1,0) * t + m_D(2,0) * t2 + m_D(3,0) * t2 * t;
-    }
+    MPF d0, d1;
+    evaluate(0.0f, d0);
+    evaluate(1.0f, d1);
+    m_T = d0 / (d0 - d1);
+  }
 
-    void Hermite3DOnPlane::evaluate(const MPF &t, MPF &d, MPF &dddt)
-    {
-      MPF t2 = t * t;
-      d = m_D(0,0) + m_D(1,0) * t + m_D(2,0) * t2 + m_D(3,0) * t2 * t;
-      dddt = m_D(1,0) + 2.0f * m_D(2,0) * t + 3.0f * m_D(3,0) * t2;
-    }
+  void Hermite3DOnPlane::evaluate(const MPF& t, MPF& d) {
+    MPF t2 = t * t;
+    d = m_D(0, 0) + m_D(1, 0) * t + m_D(2, 0) * t2 + m_D(3, 0) * t2 * t;
+  }
 
-    void Hermite3DOnPlane::solve()
-    {
-      MPF f, df;
-      evaluate(m_T, f, df);
-      m_T -= f / df;
-    }
+  void Hermite3DOnPlane::evaluate(const MPF& t, MPF& d, MPF& dddt) {
+    MPF t2 = t * t;
+    d = m_D(0, 0) + m_D(1, 0) * t + m_D(2, 0) * t2 + m_D(3, 0) * t2 * t;
+    dddt = m_D(1, 0) + 2.0f * m_D(2, 0) * t + 3.0f * m_D(3, 0) * t2;
+  }
+
+  void Hermite3DOnPlane::solve() {
+    MPF f, df;
+    evaluate(m_T, f, df);
+    m_T -= f / df;
+  }
 
 }  // namespace mkfit::mini_propagators

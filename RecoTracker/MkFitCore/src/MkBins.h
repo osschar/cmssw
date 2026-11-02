@@ -13,15 +13,15 @@ namespace mkfit {
   // Position block of the track covariance at MkBins::m_sp2, filled by
   // MkBins::transport_position_cov().
   struct MkBinTrackCovExtract {
-    MPlexQF m_cov_0_0 = { 0.0f };
-    MPlexQF m_cov_0_1 = { 0.0f };
-    MPlexQF m_cov_1_1 = { 0.0f };
-    MPlexQF m_cov_2_2 = { 0.0f };
+    MPlexQF m_cov_0_0 = {0.0f};
+    MPlexQF m_cov_0_1 = {0.0f};
+    MPlexQF m_cov_1_1 = {0.0f};
+    MPlexQF m_cov_2_2 = {0.0f};
     // Read by the surface references of dq, which act on the whole position block.
-    MPlexQF m_cov_0_2 = { 0.0f };
-    MPlexQF m_cov_1_2 = { 0.0f };
+    MPlexQF m_cov_0_2 = {0.0f};
+    MPlexQF m_cov_1_2 = {0.0f};
 
-    MPlexQF calc_err_xy(const MPlexQF &x, const MPlexQF &y) const {
+    MPlexQF calc_err_xy(const MPlexQF& x, const MPlexQF& y) const {
       return x * x * m_cov_0_0 + y * y * m_cov_1_1 + 2.0f * x * y * m_cov_0_1;
     };
   };
@@ -29,7 +29,7 @@ namespace mkfit {
   //============================================================================
 
   struct MkBinLimits {
-    MPlexQUH q0, q1, q2, p1, p2; // q0 in center, to detect dead regions and set WSR.m_in_gap = true
+    MPlexQUH q0, q1, q2, p1, p2;  // q0 in center, to detect dead regions and set WSR.m_in_gap = true
 
     // would it make sense to store hit ids here (in sth like std::fixed_capacity_vector)?
     // std::vector<int> hits;
@@ -51,33 +51,28 @@ namespace mkfit {
     // MPlexQF q_c, qmin, qmax;
 
     int m_n_proc;
-    bool m_is_barrel; // set in prop_to_*()
+    bool m_is_barrel;  // set in prop_to_*()
 
     MPlexQF q_delta() const { return 0.5f * (m_q_max - m_q_min); }
 
     // -----------------------------------------------------
 
-    MkBins(int n_proc) :
-      m_n_proc(n_proc)
-    {}
+    MkBins(int n_proc) : m_n_proc(n_proc) {}
 
-    MkBins(const MPlexLV &par, const MPlexQI &chg, int n_proc) :
-      m_isp(par, chg), m_n_proc(n_proc)
-    {}
+    MkBins(const MPlexLV& par, const MPlexQI& chg, int n_proc) : m_isp(par, chg), m_n_proc(n_proc) {}
 
-    void prop_to_limits_in_order(const MkRZLimits &ls);
+    void prop_to_limits_in_order(const MkRZLimits& ls);
 
     // Covariance position block at m_sp2 from the previous-hit state (par0, err0).
-    void transport_position_cov(const MPlexLV &par0, const MPlexLS &err0, MkBinTrackCovExtract &tce) const;
+    void transport_position_cov(const MPlexLV& par0, const MPlexLS& err0, MkBinTrackCovExtract& tce) const;
 
-    void determine_bin_windows(const MkBinTrackCovExtract &cov_ex);
+    void determine_bin_windows(const MkBinTrackCovExtract& cov_ex);
 #if defined(MKFIT_STANDALONE)
-    void surface_reference_dq(const MkBinTrackCovExtract &cov_ex);
+    void surface_reference_dq(const MkBinTrackCovExtract& cov_ex);
 #endif
 
     // Fetch derived from the v2p2 cut, Config::V2p2::Window.
-    void find_bin_ranges(const LayerOfHits &loh, MkBinLimits &bl);
-
+    void find_bin_ranges(const LayerOfHits& loh, MkBinLimits& bl);
   };
 
 }  // namespace mkfit
