@@ -11,23 +11,41 @@
 #include "RecoTracker/MkFitCore/interface/IterationConfig.h"
 #include "RecoTracker/MkFitCore/interface/V2p2Params.h"
 
-#include <iterator>
+#include <charconv>
+#include <cstdlib>
+#include <string>
 #include <vector>
 
 namespace {
   // The python PSet "v2p2" and its two score PSets. The defaults are those of
   // mkfit::V2p2Params, so an unset parameter leaves the C++ default.
 
+  // A float default as the double with the same shortest decimal form, so that the
+  // generated cfi shows 9.21 rather than 9.210000038146973; it converts back exactly.
+  double dflt(float f) {
+    char buf[32];
+    const auto res = std::to_chars(buf, buf + sizeof(buf), f);
+    return std::strtod(std::string(buf, res.ptr).c_str(), nullptr);
+  }
+
+  std::vector<double> hitEffGroupDefaults(const mkfit::V2p2ScoreParams &p) {
+    std::vector<double> v;
+    for (float f : p.hit_eff_grp)
+      v.push_back(dflt(f));
+    return v;
+  }
+
   void fillScoreDescription(edm::ParameterSetDescription &d, const mkfit::V2p2ScoreParams &p) {
-    d.add<double>("hitBonus", p.hit_bonus)->setComment("linear score: per hit taken");
-    d.add<double>("overlapBonus", p.overlap_bonus)->setComment("linear score: per hit beyond the first in a layer");
-    d.add<double>("chi2Weight", p.chi2_weight)->setComment("linear score: per unit of chi2");
-    d.add<double>("missPenalty", p.miss_penalty)->setComment("a real hole");
-    d.add<double>("edgePenalty", p.edge_penalty)->setComment("crossing at the layer boundary");
-    d.add<double>("gapPenalty", p.gap_penalty)->setComment("crossing in an inactive region");
-    d.add<double>("stopPenalty", p.stop_penalty)->setComment("out of hole budget");
-    d.add<double>("hitEff", p.hit_eff)->setComment("likelihood score: per-layer hit efficiency");
-    d.add<std::vector<double>>("hitEffByGroup", std::vector<double>(std::begin(p.hit_eff_grp), std::end(p.hit_eff_grp)))
+    d.add<double>("hitBonus", dflt(p.hit_bonus))->setComment("linear score: per hit taken");
+    d.add<double>("overlapBonus", dflt(p.overlap_bonus))
+        ->setComment("linear score: per hit beyond the first in a layer");
+    d.add<double>("chi2Weight", dflt(p.chi2_weight))->setComment("linear score: per unit of chi2");
+    d.add<double>("missPenalty", dflt(p.miss_penalty))->setComment("a real hole");
+    d.add<double>("edgePenalty", dflt(p.edge_penalty))->setComment("crossing at the layer boundary");
+    d.add<double>("gapPenalty", dflt(p.gap_penalty))->setComment("crossing in an inactive region");
+    d.add<double>("stopPenalty", dflt(p.stop_penalty))->setComment("out of hole budget");
+    d.add<double>("hitEff", dflt(p.hit_eff))->setComment("likelihood score: per-layer hit efficiency");
+    d.add<std::vector<double>>("hitEffByGroup", hitEffGroupDefaults(p))
         ->setComment(
             "likelihood score: hit efficiency per layer group (pixel barrel, pixel endcap, strip barrel below layer "
             "10, strip barrel from layer 10, strip endcap); negative takes hitEff");
@@ -115,7 +133,7 @@ void MkFitIterationConfigESProducer::fillDescriptions(edm::ConfigurationDescript
   fillScoreDescription(scoreInward, v2p2Defaults.score_inward);
   v2p2.add<edm::ParameterSetDescription>("scoreOutward", scoreOutward)->setComment("layer-step score, outward search");
   v2p2.add<edm::ParameterSetDescription>("scoreInward", scoreInward)->setComment("layer-step score, inward search");
-  v2p2.add<double>("hitChi2Cut", v2p2Defaults.hit_chi2_cut)
+  v2p2.add<double>("hitChi2Cut", dflt(v2p2Defaults.hit_chi2_cut))
       ->setComment("Kalman hit acceptance: chi2 against the scaled track and the hit covariance");
   v2p2.add<int>("maxPreselHits", v2p2Defaults.max_presel_hits)
       ->setComment("hits kept per candidate and sub-layer after the pre-selection");
