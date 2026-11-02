@@ -39,13 +39,14 @@ namespace mkfit {
     mini_propagators::StatePlex m_sp1, m_sp2;
 
     MPlexQF m_phi_min, m_phi_max, m_phi_center, m_phi_delta;
-    MPlexQF m_q_min, m_q_max, m_q_center;
+    MPlexQF m_q_min, m_q_max;
 
     MPlexQF m_dphi_track, m_dq_track;  // 3 sigma track errors, from the covariance at m_sp2
 
     int m_n_proc;
     bool m_is_barrel;  // set in prop_to_*()
 
+    MPlexQF q_center() const { return 0.5f * (m_q_min + m_q_max); }
     MPlexQF q_delta() const { return 0.5f * (m_q_max - m_q_min); }
 
     // -----------------------------------------------------

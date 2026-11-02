@@ -186,7 +186,6 @@ namespace mkfit {
       Matriplex::min_max(Matriplex::hypot(m_sp1.x, m_sp1.y), Matriplex::hypot(m_sp2.x, m_sp2.y), m_q_min, m_q_max);
       m_dq_track = 3.0f * (r2inv_c * cov_ex.calc_err_xy(m_isp.x, m_isp.y).abs()).sqrt();
     }
-    m_q_center = 0.5f * (m_q_min + m_q_max);
 
 #if defined(MKFIT_STANDALONE)
     if (Diag::mkbins_surface_q)

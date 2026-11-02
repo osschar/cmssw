@@ -647,7 +647,6 @@ namespace mkfit {
 
       ls.phi_center = B.m_phi_center[i];
       ls.phi_delta  = B.m_phi_delta[i];
-      ls.q_center   = B.m_q_center[i];
       ls.q_min      = B.m_q_min[i];
       ls.q_max      = B.m_q_max[i];
       ls.dphi_track = B.m_dphi_track[i];
