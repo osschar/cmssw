@@ -1,7 +1,7 @@
 #!/bin/bash
 # What each term of the log-likelihood score actually does, per region.
 #
-# WHY AN ABLATION AND NOT A COMPARISON AGAINST THE LINEAR SCORE. The two differ
+# WHY FIXED TERMS AND NOT A COMPARISON AGAINST THE LINEAR SCORE. The two differ
 # in eps, in the chi2 weight (0.5 against 1.0) and in ln(det V) all at once, so a
 # regional difference between them names no single term. Worse, rho and eps enter
 # the likelihood IDENTICALLY -- both multiply n_hits -- so replacing log_rho by a

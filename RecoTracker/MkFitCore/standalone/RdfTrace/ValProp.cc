@@ -1648,7 +1648,7 @@ namespace mkfit {
   }
   void val_rho_in_window(bool on) { val_rho_region(on ? 1 : 0); }
 
-  // Ablate one term of the log-likelihood at fixed eps. Passing the term's own
+  // Fix one term of the log-likelihood at a constant, at fixed eps. Passing the term's own
   // MEAN as the constant removes its variation and nothing else -- see the note
   // in V2p2Score.h for why that is the only comparison that can attribute a
   // regional effect to rho rather than to eps.
@@ -1660,8 +1660,8 @@ namespace mkfit {
            use_detv ? "PER HIT" : "FLAT", detv_const);
   }
 
-  // Mean ln(rho) and mean ln(det V) per hit taken, so the ablation constants are
-  // measured. Accumulation is not thread safe; a trace build serialises the
+  // Mean ln(rho) and mean ln(det V) per hit taken, so the constants for
+  // val_score_terms() are measured. Accumulation is not thread safe; a trace build serialises the
   // in-event loops, which is where this is meant to run.
   void val_score_term_stats(bool on) {
     if (on) {

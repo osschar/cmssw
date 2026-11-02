@@ -12,7 +12,7 @@
 // ValProp.cc but the includes and the declarations in ValProp.h.
 //
 // Drivers: test/v2p2-eff-cap.sh (the maxCandsPerSeed scan and the production
-// reference), v2p2-eff-score.sh (the score ablation), v2p2-eff-fwd.sh,
+// reference), v2p2-eff-score.sh (the score-term study), v2p2-eff-fwd.sh,
 // v2p2-eff-chop.sh. Output is <prefix>.root + <prefix>.txt; the deck reads a
 // copy of the .root directly, see ~/mic-dev/inlayer-slides/plots/420-eff.html.
 // ===========================================================================
