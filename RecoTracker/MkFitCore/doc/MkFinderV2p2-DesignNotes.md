@@ -56,8 +56,10 @@ scan a knob without a rebuild.
 **Per iteration** (`interface/V2p2Params.h`, `IterationConfig::m_v2p2`): the
 two score sets (outward and inward search), `hit_chi2_cut`, `max_presel_hits`
 and `max_sec_depth`. In CMSSW, `MkFitIterationConfigESProducer` sets them from
-its python PSet `v2p2` (`scoreOutward`, `scoreInward`, `hitChi2Cut`,
-`maxPreselHits`, `maxSecDepth`); they are not in the JSON. The defaults are
+its python PSet `v2p2` (`scoreOutward` and `scoreInward` with `hitEff` and
+`hitEffByGroup`, `hitChi2Cut`, `maxPreselHits`, `maxSecDepth`); they are not in
+the JSON. The score PSets carry only what the log-likelihood score reads, since
+`Score::mode` is 1 in CMSSW. The defaults are
 those of `V2p2Params`, so an unset parameter keeps them. In the standalone the
 corresponding knobs of `V2p2Config.h` are the source, and `MkFinderV2p2::setup()`
 builds a `V2p2Params` from them (`v2p2_params_from_knobs()`). The other knobs

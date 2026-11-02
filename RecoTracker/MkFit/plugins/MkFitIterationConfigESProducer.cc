@@ -18,11 +18,14 @@
 
 namespace {
   // The python PSet "v2p2" and its two score PSets. The defaults are those of
-  // mkfit::V2p2Params, so an unset parameter leaves the C++ default.
+  // mkfit::V2p2Params, so an unset parameter leaves the C++ default. The score PSets
+  // carry only what the log-likelihood score reads (Config::V2p2::Score::mode is 1 in
+  // CMSSW); the other V2p2ScoreParams fields belong to the linear score and keep their
+  // defaults.
 
   // A float default as the double with the same shortest decimal form, so that the
   // generated cfi shows 9.21 rather than 9.210000038146973; it converts back exactly.
-  double dflt(float f) {
+  double cfiDefault(float f) {
     char buf[32];
     const auto res = std::to_chars(buf, buf + sizeof(buf), f);
     return std::strtod(std::string(buf, res.ptr).c_str(), nullptr);
@@ -31,35 +34,20 @@ namespace {
   std::vector<double> hitEffGroupDefaults(const mkfit::V2p2ScoreParams &p) {
     std::vector<double> v;
     for (float f : p.hit_eff_grp)
-      v.push_back(dflt(f));
+      v.push_back(cfiDefault(f));
     return v;
   }
 
   void fillScoreDescription(edm::ParameterSetDescription &d, const mkfit::V2p2ScoreParams &p) {
-    d.add<double>("hitBonus", dflt(p.hit_bonus))->setComment("linear score: per hit taken");
-    d.add<double>("overlapBonus", dflt(p.overlap_bonus))
-        ->setComment("linear score: per hit beyond the first in a layer");
-    d.add<double>("chi2Weight", dflt(p.chi2_weight))->setComment("linear score: per unit of chi2");
-    d.add<double>("missPenalty", dflt(p.miss_penalty))->setComment("a real hole");
-    d.add<double>("edgePenalty", dflt(p.edge_penalty))->setComment("crossing at the layer boundary");
-    d.add<double>("gapPenalty", dflt(p.gap_penalty))->setComment("crossing in an inactive region");
-    d.add<double>("stopPenalty", dflt(p.stop_penalty))->setComment("out of hole budget");
-    d.add<double>("hitEff", dflt(p.hit_eff))->setComment("likelihood score: per-layer hit efficiency");
+    d.add<double>("hitEff", cfiDefault(p.hit_eff))->setComment("per-layer hit efficiency");
     d.add<std::vector<double>>("hitEffByGroup", hitEffGroupDefaults(p))
         ->setComment(
-            "likelihood score: hit efficiency per layer group (pixel barrel, pixel endcap, strip barrel below layer "
-            "10, strip barrel from layer 10, strip endcap); negative takes hitEff");
+            "hit efficiency per layer group (pixel barrel, pixel endcap, strip barrel below layer 10, strip barrel "
+            "from layer 10, strip endcap); negative takes hitEff");
   }
 
-  mkfit::V2p2ScoreParams readScore(const edm::ParameterSet &ps, const char *name) {
-    mkfit::V2p2ScoreParams p;
-    p.hit_bonus = ps.getParameter<double>("hitBonus");
-    p.overlap_bonus = ps.getParameter<double>("overlapBonus");
-    p.chi2_weight = ps.getParameter<double>("chi2Weight");
-    p.miss_penalty = ps.getParameter<double>("missPenalty");
-    p.edge_penalty = ps.getParameter<double>("edgePenalty");
-    p.gap_penalty = ps.getParameter<double>("gapPenalty");
-    p.stop_penalty = ps.getParameter<double>("stopPenalty");
+  mkfit::V2p2ScoreParams readScore(const edm::ParameterSet &ps, const mkfit::V2p2ScoreParams &base, const char *name) {
+    mkfit::V2p2ScoreParams p = base;
     p.hit_eff = ps.getParameter<double>("hitEff");
     const auto grp = ps.getParameter<std::vector<double>>("hitEffByGroup");
     if (grp.size() != mkfit::V2p2ScoreParams::n_hit_eff_grp)
@@ -72,8 +60,8 @@ namespace {
 
   mkfit::V2p2Params readV2p2(const edm::ParameterSet &ps) {
     mkfit::V2p2Params p;
-    p.score_outward = readScore(ps.getParameter<edm::ParameterSet>("scoreOutward"), "scoreOutward");
-    p.score_inward = readScore(ps.getParameter<edm::ParameterSet>("scoreInward"), "scoreInward");
+    p.score_outward = readScore(ps.getParameter<edm::ParameterSet>("scoreOutward"), p.score_outward, "scoreOutward");
+    p.score_inward = readScore(ps.getParameter<edm::ParameterSet>("scoreInward"), p.score_inward, "scoreInward");
     p.hit_chi2_cut = ps.getParameter<double>("hitChi2Cut");
     p.max_presel_hits = ps.getParameter<int>("maxPreselHits");
     p.max_sec_depth = ps.getParameter<int>("maxSecDepth");
@@ -131,9 +119,11 @@ void MkFitIterationConfigESProducer::fillDescriptions(edm::ConfigurationDescript
   edm::ParameterSetDescription scoreOutward, scoreInward, v2p2;
   fillScoreDescription(scoreOutward, v2p2Defaults.score_outward);
   fillScoreDescription(scoreInward, v2p2Defaults.score_inward);
-  v2p2.add<edm::ParameterSetDescription>("scoreOutward", scoreOutward)->setComment("layer-step score, outward search");
-  v2p2.add<edm::ParameterSetDescription>("scoreInward", scoreInward)->setComment("layer-step score, inward search");
-  v2p2.add<double>("hitChi2Cut", dflt(v2p2Defaults.hit_chi2_cut))
+  v2p2.add<edm::ParameterSetDescription>("scoreOutward", scoreOutward)
+      ->setComment("log-likelihood layer-step score, outward search");
+  v2p2.add<edm::ParameterSetDescription>("scoreInward", scoreInward)
+      ->setComment("log-likelihood layer-step score, inward search");
+  v2p2.add<double>("hitChi2Cut", cfiDefault(v2p2Defaults.hit_chi2_cut))
       ->setComment("Kalman hit acceptance: chi2 against the scaled track and the hit covariance");
   v2p2.add<int>("maxPreselHits", v2p2Defaults.max_presel_hits)
       ->setComment("hits kept per candidate and sub-layer after the pre-selection");
