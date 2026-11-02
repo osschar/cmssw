@@ -53,9 +53,15 @@ on the switches fold away. The standalone build gets a mutable variable,
 defined in `V2p2Config.cc`, so that `mkFit` options and the shell drivers can
 scan a knob without a rebuild.
 
-The knobs are meant to move into `IterationParams`, per iteration and settable
-from the JSON configs. The defaults in `V2p2Config.h` then become the
-`IterationParams` defaults.
+**Per iteration** (`interface/V2p2Params.h`, `IterationConfig::m_v2p2`): the
+two score sets (outward and inward search), `hit_chi2_cut`, `max_presel_hits`
+and `max_sec_depth`. In CMSSW, `MkFitIterationConfigESProducer` sets them from
+its python PSet `v2p2` (`scoreOutward`, `scoreInward`, `hitChi2Cut`,
+`maxPreselHits`, `maxSecDepth`); they are not in the JSON. The defaults are
+those of `V2p2Params`, so an unset parameter keeps them. In the standalone the
+corresponding knobs of `V2p2Config.h` are the source, and `MkFinderV2p2::setup()`
+builds a `V2p2Params` from them (`v2p2_params_from_knobs()`). The other knobs
+stay compile-time in CMSSW.
 
 The policy counters (`V2p2PolicyCounters`, printed with `--quality-val`) exist
 in the standalone build only. The finder increments them through

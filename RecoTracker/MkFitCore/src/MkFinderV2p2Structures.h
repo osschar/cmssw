@@ -150,7 +150,7 @@ namespace mkfit {
       TrackState bState;
       HitOnTrack bHot;
       float bChi2 = 999.999f;
-      float bChi2Acc = 999.999f;  // acceptance chi2 of the bHot, Policy::hit_chi2_cut
+      float bChi2Acc = 999.999f;  // acceptance chi2 of the bHot, V2p2Params::hit_chi2_cut
 #ifdef MKFIT_TRACE
       int b_tr_hitmatch_id = -1;
       // Diag::force_mc: the best-hit choice is made on bKey, normally bChi2. With
@@ -273,7 +273,7 @@ namespace mkfit {
         unsigned int hit_in_layer;   // index WITHIN the LayerOfHits, for hit_q_half_length()
         float chi2;
         float det_v;                 // det of the 2x2 residual covariance, for the score
-        float chi2_acc;              // acceptance chi2, compared with Policy::hit_chi2_cut
+        float chi2_acc;              // acceptance chi2, compared with V2p2Params::hit_chi2_cut
         TrackState state;
 #ifdef MKFIT_TRACE
         int   tr_hitmatch_id;

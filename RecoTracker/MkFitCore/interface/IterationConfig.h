@@ -3,6 +3,7 @@
 
 #include "RecoTracker/MkFitCore/interface/FunctionTypes.h"
 #include "RecoTracker/MkFitCore/interface/SteeringParams.h"
+#include "RecoTracker/MkFitCore/interface/V2p2Params.h"
 
 #include "nlohmann/json_fwd.hpp"
 
@@ -145,6 +146,10 @@ namespace mkfit {
     // backwardSearchPromptMaxD0); in the standalone they stay 0.
     int m_backward_search_min_pixel_layers = 0;
     float m_backward_search_prompt_max_d0 = 0.f;
+
+    // MkFinderV2p2 tunings. No JSON save / load: MkFitIterationConfigESProducer sets them from
+    // its python PSet "v2p2"; the standalone ignores them and uses the knobs of src/V2p2Config.h.
+    V2p2Params m_v2p2;
 
     // seed cleaning params with good defaults (all configurable)
     float sc_ptthr_hpt = 2.0;

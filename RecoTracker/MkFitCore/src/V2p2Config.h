@@ -2,6 +2,7 @@
 #define RecoTracker_MkFitCore_src_V2p2Config_h
 
 #include "RecoTracker/MkFitCore/interface/Config.h"
+#include "RecoTracker/MkFitCore/interface/V2p2Params.h"
 
 //==============================================================================
 // Tunable parameters of MkFinderV2p2 and of the v2p2 window in MkBins.
@@ -10,6 +11,9 @@
 //   - CMSSW build:      constexpr;
 //   - standalone build: a mutable variable, defined in V2p2Config.cc and set by
 //                       mkFit.cc options and the shell drivers.
+// The tunings in interface/V2p2Params.h are set per iteration in CMSSW
+// (IterationConfig::m_v2p2); their knobs here exist in the standalone build only
+// and are its source, see v2p2_params_from_knobs().
 //
 // The rationale for each default is in doc/MkFinderV2p2-DesignNotes.md, in the
 // section named next to each group.
@@ -24,23 +28,6 @@
 #endif
 
 namespace mkfit {
-
-  // Coefficients of the layer-step score (V2p2Score.h), one set per search
-  // direction.
-  struct V2p2ScoreParams {
-    float hit_bonus = 3.0f;      // per hit taken; a hole wins above chi2 11, see the design notes
-    float overlap_bonus = 0.0f;  // per hit beyond the first in a layer
-    float chi2_weight = 1.0f;    // per unit of chi2
-    float miss_penalty = 8.0f;   // a real hole
-    float edge_penalty = 0.0f;   // crossing at the layer boundary
-    float gap_penalty = 0.0f;    // crossing in an inactive region
-    float stop_penalty = 8.0f;   // out of hole budget
-    float hit_eff = 0.90f;       // per-layer hit efficiency, likelihood mode only
-    // Per layer group, likelihood mode only; a negative value takes hit_eff. Groups, see
-    // v2p2_hit_eff_group(): 0 pixel barrel, 1 pixel endcap, 2 strip barrel below layer 10
-    // (phase-2 TBPS), 3 strip barrel from layer 10 (TB2S), 4 strip endcap (TEDD).
-    float hit_eff_grp[5] = {-1.0f, -1.0f, -1.0f, -1.0f, -1.0f};
-  };
 
   namespace Config::V2p2 {
 
@@ -87,10 +74,12 @@ namespace mkfit {
     // "End-of-layer selection".
     namespace InLayer {
       MKFIT_V2P2_KNOB(bool, comb, true);         // off: one best hit per layer
-      MKFIT_V2P2_KNOB(int, max_presel_hits, 6);  // reduction cap per sub-layer
-      constexpr int max_presel_hits_limit = 12;   // inline storage; max_presel_hits must not exceed it
-      MKFIT_V2P2_KNOB(int, max_sec_depth, 4);    // most hits one path may take in a layer
-      constexpr int max_sec_depth_limit = 8;     // array size; max_sec_depth must not exceed it
+#if defined(MKFIT_STANDALONE)
+      MKFIT_V2P2_KNOB(int, max_presel_hits, V2p2Params{}.max_presel_hits);  // V2p2Params::max_presel_hits
+      MKFIT_V2P2_KNOB(int, max_sec_depth, V2p2Params{}.max_sec_depth);      // V2p2Params::max_sec_depth
+#endif
+      constexpr int max_presel_hits_limit = V2p2Params::max_presel_hits_limit;
+      constexpr int max_sec_depth_limit = V2p2Params::max_sec_depth_limit;
       MKFIT_V2P2_KNOB(bool, reserve_hole_slot, false);  // keep one decliner in the beam
       MKFIT_V2P2_KNOB(bool, best_short, false);         // stopped candidates leave the beam (outward)
       // Select a CombCandidate as soon as its last candidate has been through a
@@ -149,7 +138,10 @@ namespace mkfit {
       // the 99 % point of chi2 with 2 dof. The update and the score keep the
       // plain chi2. chi2_trk_fac = 1 is the plain chi2 and costs nothing extra;
       // the plain chi2 < 30 used before is hit_chi2_cut 30, chi2_trk_fac 1.
-      MKFIT_V2P2_KNOB(float, hit_chi2_cut, 9.21f);
+      // hit_chi2_cut is V2p2Params::hit_chi2_cut.
+#if defined(MKFIT_STANDALONE)
+      MKFIT_V2P2_KNOB(float, hit_chi2_cut, V2p2Params{}.hit_chi2_cut);
+#endif
       MKFIT_V2P2_KNOB(float, chi2_trk_fac, 3.0f);
     }  // namespace Policy
 
@@ -157,12 +149,12 @@ namespace mkfit {
     // Layer-step score, design notes "Layer-step score".
     namespace Score {
       MKFIT_V2P2_KNOB(int, mode, 1);  // 0 linear, 1 log-likelihood ratio
-      // Forward: a phase-2 tuning (CMSSW MTV, initialStep with the offline seeds, cleaner and
-      // refit, 2026-10): eps 0.10, TBPS 0.14, TB2S 0.20. It will move with the seeds and the
-      // final fit. The initializer is parenthesised because its commas would split the macro.
-      MKFIT_V2P2_KNOB(V2p2ScoreParams, fwd,
-                      (V2p2ScoreParams{.hit_eff = 0.10f, .hit_eff_grp = {-1.0f, -1.0f, 0.14f, 0.20f, -1.0f}}));
-      MKFIT_V2P2_KNOB(V2p2ScoreParams, bkw, {});
+      // The score sets of the outward and the inward search, V2p2Params::score_outward
+      // and score_inward.
+#if defined(MKFIT_STANDALONE)
+      MKFIT_V2P2_KNOB(V2p2ScoreParams, fwd, V2p2Params{}.score_outward);
+      MKFIT_V2P2_KNOB(V2p2ScoreParams, bkw, V2p2Params{}.score_inward);
+#endif
       // Term switches: replace a likelihood term by a constant, its measured mean, to
       // measure what the term's variation contributes.
       MKFIT_V2P2_KNOB(bool, use_rho, true);
@@ -209,6 +201,9 @@ namespace mkfit {
     // Legacy compound dq setter (--v2p2-extra-dq, val_extra_dq): sets dq_trk_fac
     // to f and dq_hit_fac to 1.2 f, the ratio of the old single EXTRA_DQ factor.
     void set_extra_dq(float f);
+
+    // The V2p2Params of the standalone, built from the knobs at the time of the call.
+    V2p2Params v2p2_params_from_knobs();
 #endif
 
   }  // namespace Config::V2p2

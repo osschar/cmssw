@@ -100,9 +100,9 @@ namespace mkfit {
     return f.n_hits * (c_eps - lrho) - 0.5f * (f.chi2_sum + ldetv);
   }
 
-  inline float v2p2_layer_step_score(const LayerStepFeatures &f) {
+  inline float v2p2_layer_step_score(const LayerStepFeatures &f, const V2p2Params &vp) {
     namespace sc = Config::V2p2::Score;
-    const V2p2ScoreParams &p = f.is_outward ? sc::fwd : sc::bkw;
+    const V2p2ScoreParams &p = vp.score(f.is_outward);
 
     if (sc::mode == 1)
       return v2p2_layer_step_loglh(f, p);

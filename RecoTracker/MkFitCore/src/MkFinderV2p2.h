@@ -251,6 +251,7 @@ namespace mkfit {
     //----------------------------------------------------------------------------
     // Job / batch-of-seeds control variables and globel references
     const MkJob *mp_job = nullptr;
+    V2p2Params m_v2p2;  // the iteration's tunings, copied in setup()
     SteeringParams::iterator *mp_steeringparams_iter = nullptr;
     const Event *mp_event = nullptr;
 
