@@ -140,15 +140,10 @@ namespace mkfit {
   //----------------------------------------------------------------------------
 
   void MkBins::determine_bin_windows(const MkBinTrackCovExtract& cov_ex) {
-    // Below made members for debugging
-    // MPlexQF phi_c, dphi_min, dphi_max;
-    // phi_c = Matriplex::fast_atan2(m_isp.y, m_isp.x);  // calculated below as difference
-
     MPlexQF xp1, xp2;
     xp1 = Matriplex::fast_atan2(m_sp1.y, m_sp1.x);
     xp2 = Matriplex::fast_atan2(m_sp2.y, m_sp2.x);
     Matriplex::min_max(xp1, xp2, m_phi_min, m_phi_max);
-    // Matriplex::min_max(Matriplex::fast_atan2(m_sp1.y, m_sp1.x), Matriplex::fast_atan2(m_sp2.y, m_sp2.x), m_phi_min, m_phi_max);
     m_phi_delta = m_phi_max - m_phi_min;
     m_phi_center = 0.5f * (m_phi_max + m_phi_min);
     for (int ii = 0; ii < NN; ++ii) {
@@ -156,11 +151,9 @@ namespace mkfit {
         if (m_phi_delta[ii] > Const::PI) {
           std::swap(m_phi_max[ii], m_phi_min[ii]);
           m_phi_delta[ii] = Const::TwoPI - m_phi_delta[ii];
-          m_phi_center[ii] = Const::PI - m_phi_center[ii];
+          m_phi_center[ii] = squashPhiMinimal(m_phi_center[ii] + Const::PI);
         }
         m_phi_delta[ii] *= 0.5f;
-        // printf("phi_c: %f  p1: %f  p2: %f   m_phi_min: %f  m_phi_max: %f   dphi: %f\n",
-        //       m_phi_center[ii], xp1[ii], xp2[ii], m_phi_min[ii], m_phi_max[ii], m_phi_delta[ii]);
       }
     }
 
@@ -186,16 +179,14 @@ namespace mkfit {
     MPlexQF dphidy_c = jx * r2inv_j;
     m_dphi_track = 3.0f * cov_ex.calc_err_xy(dphidx_c, dphidy_c).abs().sqrt();
 
-    // MPlexQF qmin, qmax;
     if (m_is_barrel) {
       Matriplex::min_max(m_sp1.z, m_sp2.z, m_q_min, m_q_max);
-      m_q_center = m_isp.z;
       m_dq_track = 3.0f * Matriplex::abs(cov_ex.m_cov_2_2).sqrt();
     } else {
       Matriplex::min_max(Matriplex::hypot(m_sp1.x, m_sp1.y), Matriplex::hypot(m_sp2.x, m_sp2.y), m_q_min, m_q_max);
-      m_q_center = Matriplex::sqrt(r2_c);
       m_dq_track = 3.0f * (r2inv_c * cov_ex.calc_err_xy(m_isp.x, m_isp.y).abs()).sqrt();
     }
+    m_q_center = 0.5f * (m_q_min + m_q_max);
 
 #if defined(MKFIT_STANDALONE)
     if (Diag::mkbins_surface_q)
