@@ -181,6 +181,28 @@ in the trace as `d_plane_h3`.
 `MKFIT_TRACE_PROP_COMPARE` keeps a straight-line step onto the same plane as a
 cross-check.
 
+## Reachability
+
+**Code:** `mini_propagators::propagate_to_r()`, `kReachMargin`, `kReachTolerance`.
+
+In the transverse plane the track is a circle of radius R_c whose centre is at
+distance d_c from the beam line, so it reaches only radii in
+[|d_c - R_c|, d_c + R_c]. At both ends of that band the track grazes the
+cylinder (dr/ds = 0) and the crossing solve degenerates. The target radius is
+therefore kept `kReachMargin` = 0.1 cm inside the band. A target outside it is
+clamped to the band edge, which returns the point of closest approach on the
+trajectory, and the lane gets `fail_flag` = 2. `fail_flag` = 1 means the solve
+landed further than `kReachTolerance` from the target, which only round-off
+should cause.
+
+The margin is provisional. It was chosen on 10 events of the T5 inward search
+on the March 2026 HLT ntuple: 0.1 cm catches 138 of 148 real failures and vetoes
+none of 2087 healthy searches, 0.25 cm vetoes 7 and 1 cm vetoes 47. One length
+for the whole detector is probably the wrong shape. Whether a track reaches a
+layer is a statement about a track with an error, so the band should rather
+scale with the track's expected dq, per layer. A retuning needs outward
+searches, pixel seeds and the full pT range.
+
 ## Within-sensitive-region verdict
 
 **Code:** `MkFinderV2p2::determine_wsr()`, `PrimTCandRep::m_wsr`.

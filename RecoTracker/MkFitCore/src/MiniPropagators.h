@@ -8,27 +8,14 @@ namespace mkfit::mini_propagators {
 
   enum PropAlgo_e { PA_Line, PA_Quadratic, PA_Exact };
 
-  // Guard band, in cm, kept away from the two radii where the trajectory turns
-  // around (dr/ds = 0), where the solve is ill-conditioned (b -> 0).
-  //
-  // PROVISIONAL -- do not read 0.1 cm as tuned. It comes from a single sample in
-  // a single direction (10 events, March HLT ntuple, T5 inward search: catches
-  // 138 of 148 real failures and vetoes none of 2087 healthy searches, while
-  // 0.25 cm already vetoes 7 and 1 cm vetoes 47). That is a plausible starting
-  // value, not a measurement of the right one -- and one global length is very
-  // likely the wrong shape. It is plausibly too SHORT for the strips, where
-  // everything is coarser, so this probably wants to be per layer, or derived
-  // from a per-layer property, rather than a single constant for the whole
-  // detector. What it is really standing in for: "does the track reach this
-  // layer" is a statement about a track that has an error on it, so the band
-  // should scale with the expected dq of the track, 5 to 7 sigma. Fix it only
-  // against a larger sample -- outward searches, pixel seeds, the full pT range.
-  // See the WSR / near-miss item in RecoTracker/CLAUDE.md.
+  // Guard band [cm] kept inside the radii the trajectory can reach, where the
+  // crossing becomes ill-conditioned (dr/ds -> 0). Provisional: chosen on one
+  // 10-event T5 inward sample; should probably scale with the track's dq error
+  // (per layer). See doc/MkFinderV2p2-DesignNotes.md, "Reachability".
   constexpr float kReachMargin = 0.1f;
 
   // How close to the target radius propagate_to_r() must land to count as
-  // converged. Was an inline 0.1f. With the closed form it should only ever trip
-  // on round-off.
+  // converged. With the closed form only round-off should trip it.
   constexpr float kReachTolerance = 0.1f;
 
   struct StatePlex;
