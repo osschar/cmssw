@@ -145,8 +145,8 @@ namespace mkfit::mini_propagators {
         c.y += t * c.py;
         c.z += t * c.pz;
 
-        // Helix turning angle over the same transverse path length.
-        c.dalpha += std::hypot(t * c.px, t * c.py) * inv_k * inv_pt;
+        // Signed helix turning angle over the same transverse path, t pT / (k pT).
+        c.dalpha += t * inv_k;
         break;
       }
 
@@ -365,8 +365,8 @@ namespace mkfit::mini_propagators {
         c.y += t * c.py;
         c.z += t * c.pz;
 
-        // Helix turning angle over the same transverse path length.
-        c.dalpha += Matriplex::hypot(t * c.px, t * c.py) * inv_k * inv_pt;
+        // Signed helix turning angle over the same transverse path, t pT / (k pT).
+        c.dalpha += t * inv_k;
         break;
       }
 
@@ -397,12 +397,6 @@ namespace mkfit::mini_propagators {
   }
 
   void Hermite3D::calculate_coeffs(const StatePlex& sp1, const StatePlex& sp2, const MPF& inv_k) {
-    // mini_propagators::InitialStatePlex m_isp;
-    // mini_propagators::StatePlex m_sp1, m_sp2;
-
-    // // Hermite p(3) for trajectory approimation, could be Matriplex<float, 4, 3, NN>
-    // MPlex3V m_H3, m_H2, m_H1, m_H0; // Hermite p(3) coefficients for x, y, z
-    // MPlex4V m_Hx, m_Hy, m_Hz;
     m_Hderfac = (sp2.dalpha - sp1.dalpha) / inv_k;
     hermite_1d(sp1.x, sp1.px, sp2.x, sp2.px, m_Hderfac, m_Hx);
     hermite_1d(sp1.y, sp1.py, sp2.y, sp2.py, m_Hderfac, m_Hy);
@@ -481,12 +475,12 @@ namespace mkfit::mini_propagators {
     m_T = d0 / (d0 - d1);
   }
 
-  void Hermite3DOnPlane::evaluate(const MPF& t, MPF& d) {
+  void Hermite3DOnPlane::evaluate(const MPF& t, MPF& d) const {
     MPF t2 = t * t;
     d = m_D(0, 0) + m_D(1, 0) * t + m_D(2, 0) * t2 + m_D(3, 0) * t2 * t;
   }
 
-  void Hermite3DOnPlane::evaluate(const MPF& t, MPF& d, MPF& dddt) {
+  void Hermite3DOnPlane::evaluate(const MPF& t, MPF& d, MPF& dddt) const {
     MPF t2 = t * t;
     d = m_D(0, 0) + m_D(1, 0) * t + m_D(2, 0) * t2 + m_D(3, 0) * t2 * t;
     dddt = m_D(1, 0) + 2.0f * m_D(2, 0) * t + 3.0f * m_D(3, 0) * t2;

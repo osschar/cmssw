@@ -246,8 +246,8 @@ namespace mkfit::mini_propagators {
 
     void init_coeffs(const Hermite3D& h, const MP3V& pos, const MP3V& zdir);
 
-    void evaluate(const MPF& t, MPF& d);
-    void evaluate(const MPF& t, MPF& d, MPF& dddt);
+    void evaluate(const MPF& t, MPF& d) const;
+    void evaluate(const MPF& t, MPF& d, MPF& dddt) const;
 
     void solve();
   };
