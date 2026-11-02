@@ -1520,7 +1520,7 @@ namespace mkfit {
            format(ls.prop_exit.pos, 10, 8, ' ').c_str(), ls.prop_exit.dalpha, ls.prop_exit.fail_flag);
     printf("    phi_c=% f phi_d=% f dphi_track=% f | q_c=% f q=[% f,% f] dq_track=% f\n",
            ls.phi_center, ls.phi_delta, ls.dphi_track,
-           ls.q_center, ls.q_min, ls.q_max, ls.dq_track);
+           ls.q_center(), ls.q_min, ls.q_max, ls.dq_track);
     printf("    cov xx=% .4g xy=% .4g yy=% .4g zz=% .4g\n",
            ls.cov_xx, ls.cov_xy, ls.cov_yy, ls.cov_zz);
     printf("    bins p=[%u,%u) q=[%u,%u)", ls.p1, ls.p2, ls.q1, ls.q2);

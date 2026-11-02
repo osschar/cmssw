@@ -229,7 +229,8 @@ struct TrLayerSearch {
   // Stage 1b -- search window from MkBins::determine_bin_windows().
   // phi_delta, dphi_track and dq_track are HALF-widths; q_min/q_max a full range.
   float phi_center = -999.99f, phi_delta = -999.99f;
-  float q_center = -999.99f, q_min = -999.99f, q_max = -999.99f;
+  float q_min = -999.99f, q_max = -999.99f;
+  float q_center() const { return 0.5f * (q_min + q_max); }
   float dphi_track = -999.99f, dq_track = -999.99f; // 3 sigma track errors
 
   // Covariance the window was built from (MkBinTrackCovExtract), i.e. err(0,0),

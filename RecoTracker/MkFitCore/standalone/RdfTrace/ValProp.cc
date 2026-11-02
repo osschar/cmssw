@@ -2498,11 +2498,11 @@ namespace mkfit {
       }
       if (m.sim_label < 0) { g_sm.push_back(m); continue; }
 
-      // Reconstruct the window centre in 3-D. q_center is z (barrel) or r
+      // Reconstruct the window centre in 3-D. q_center() is z (barrel) or r
       // (endcap); the other coordinate is taken at the layer's mid-surface.
       const LayerInfo &li = Config::TrkInfo[lay];
-      const double rc = m.is_barrel ? 0.5*(li.rin() + li.rout()) : ls.q_center;
-      const double zc = m.is_barrel ? ls.q_center : 0.5*(li.zmin() + li.zmax());
+      const double rc = m.is_barrel ? 0.5*(li.rin() + li.rout()) : ls.q_center();
+      const double zc = m.is_barrel ? ls.q_center() : 0.5*(li.zmin() + li.zmax());
       const double cx = rc*std::cos(ls.phi_center), cy = rc*std::sin(ls.phi_center);
 
       const Track &st = ev->simTracks_[m.sim_label];
@@ -2527,7 +2527,7 @@ namespace mkfit {
           m.has_sim_here = true;
           m.sim_dphi = (float) dphi;
           const double q = m.is_barrel ? h.z() : std::hypot(h.x(), h.y());
-          m.sim_dq = (float) (q - ls.q_center);
+          m.sim_dq = (float) (q - ls.q_center());
           m.sim_d3d = (float) d3;
           m.sim_dphi_norm = ls.phi_delta > 0 ? (float)(std::fabs(dphi)/ls.phi_delta) : -999.f;
           const double half = 0.5*(ls.q_max - ls.q_min), mid = 0.5*(ls.q_max + ls.q_min);
