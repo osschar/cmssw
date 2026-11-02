@@ -251,12 +251,6 @@ namespace mkfit {
     });
   }
 
-  void Track::sortHitsByR(const std::vector<HitVec>& globalHitVec) {
-    std::stable_sort(hitsOnTrk_.begin(), hitsOnTrk_.end(), [&](const auto& h1, const auto& h2) {
-      return globalHitVec[h1.layer][h1.index].r_sqr() < globalHitVec[h2.layer][h2.index].r_sqr();
-    });
-  }
-
   //==============================================================================
 
   void print(const TrackState& s) {
