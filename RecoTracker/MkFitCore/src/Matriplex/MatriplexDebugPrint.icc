@@ -5,7 +5,7 @@
 
 namespace {
 
-  std::string matriplex_print_format( "%12.5g " );
+  std::string matriplex_print_format("%12.5g ");
 
   // Print contents of matriplex at matrix-position 0 as most debugging is done on N = 0.
   template <typename MPLEX>
@@ -25,4 +25,4 @@ namespace {
     printf("%s", postfix.data());
   }
 
-}
+}  // namespace

@@ -34,7 +34,7 @@ namespace mkfit {
   }
 
   template <typename Matrix>
-  void dumpMatrix(Matrix m, const char *pfx0= "", const char *pfxN="") {
+  void dumpMatrix(Matrix m, const char* pfx0 = "", const char* pfxN = "") {
     for (int r = 0; r < m.kRows; ++r) {
       std::cout << (r == 0 ? pfx0 : pfxN);
       for (int c = 0; c < m.kCols; ++c) {

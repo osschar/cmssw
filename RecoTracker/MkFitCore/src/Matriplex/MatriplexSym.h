@@ -41,8 +41,10 @@ namespace Matriplex {
     MatriplexSym() {}
 
     // Allow construction from scalar T only, do not support automatic conversions.
-    template<typename R, typename = typename std::enable_if<std::is_same<T, R>::value>::type>
-    MatriplexSym(R v) { setVal(v); }
+    template <typename R, typename = typename std::enable_if<std::is_same<T, R>::value>::type>
+    MatriplexSym(R v) {
+      setVal(v);
+    }
 
     idx_t plexSize() const { return N; }
 
@@ -283,7 +285,6 @@ namespace Matriplex {
     }
     QReduced rij(idx_t i, idx_t j) const { return ReduceFixedIJ(i, j); }
     QReduced operator()(idx_t i, idx_t j) const { return ReduceFixedIJ(i, j); }
-
   };
 
   template <typename T, idx_t D, idx_t N>

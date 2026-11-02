@@ -51,8 +51,10 @@ namespace Matriplex {
     Matriplex() {}
 
     // Allow construction from scalar T only, do not support automatic conversions.
-    template<typename R, typename = typename std::enable_if<std::is_same<T, R>::value>::type>
-    Matriplex(R v) { setVal(v); }
+    template <typename R, typename = typename std::enable_if<std::is_same<T, R>::value>::type>
+    Matriplex(R v) {
+      setVal(v);
+    }
 
     idx_t plexSize() const { return N; }
 
@@ -383,11 +385,10 @@ namespace Matriplex {
 
     //---------------------------------------------------------
 
-    void loadElements(idx_t i, idx_t j, const T *src) {
-      T *pos = Elements(i, j);
-      for (idx_t i = 0; i < N; ++i) {
-        *(pos++) = *(src++);
-      }
+    void loadElements(idx_t i, idx_t j, const T* src) {
+      T* pos = Elements(i, j);
+      for (idx_t n = 0; n < N; ++n)
+        pos[n] = src[n];
     }
 
     void copySlot(idx_t n, const Matriplex& m) {
