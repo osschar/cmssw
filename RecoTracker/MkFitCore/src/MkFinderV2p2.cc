@@ -354,12 +354,8 @@ namespace mkfit {
         }
       }
 
-      // XXXX Should one do rough "layer already passed" pre-check here?
-      // Or in pre-select, where we engage MkBins ... but there I loose a vector slot.
-      // Let's try.
-      //
-      // A failed check skips the layer without recording anything, as WSR_Outside
-      // does, with a coarser test.
+      // "Layer already passed in z" pre-check, before any propagation. A failed
+      // check skips the layer without recording anything, as WSR_Outside does.
 
       if ( ! m_rz_limits.rz_quadrant_check(tcand.z(), tcand.pz())) {
         V2P2_COUNT(n_quadrant_skip);

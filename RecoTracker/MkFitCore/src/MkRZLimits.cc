@@ -1,6 +1,9 @@
 #include "RecoTracker/MkFitCore/src/MkRZLimits.h"
 #include "RecoTracker/MkFitCore/interface/TrackerInfo.h"
 
+#include <algorithm>
+#include <cassert>
+
 namespace mkfit {
 
   MkRZLimits::MkRZLimits(const LayerInfo& li, bool is_outward) { setup(li, is_outward); }
@@ -13,7 +16,6 @@ namespace mkfit {
     m_rin = li.rin();
     m_rout = li.rout();
     m_zmin = li.zmin();
-
     m_zmax = li.zmax();
     m_is_barrel = li.is_barrel();
     m_is_outward = is_outward;
