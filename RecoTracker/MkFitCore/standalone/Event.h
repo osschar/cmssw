@@ -41,7 +41,7 @@ namespace mkfit {
   // which is the case for a rec hit whose sim link was not established. Test it
   // with is_valid() rather than by reading mcTrackID, because the two are not
   // equivalent: bestTkIdx() can clear the track link while the sim hit itself is
-  // perfectly well defined (see the arbitration defect in RecoTracker/CLAUDE.md).
+  // perfectly well defined (see bestTkIdx() in WriteMemoryFile.cc).
   struct SimHitState {
     SVector3 pos;
     SVector3 mom;

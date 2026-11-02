@@ -696,7 +696,7 @@ namespace mkfit {
       if (hots[0].layer != 0) continue;
       Track seed(st.state(), 0.0f, is, 0, nullptr);
       // The sim track's own covariance is a PLACEHOLDER -- err(i,i) = value^2,
-      // i.e. a 100 % relative error, and singular at the origin (CLAUDE.md).
+      // i.e. a 100 % relative error, and singular at the origin.
       // Left as is it gives sigma_q ~ 4.5 cm at layer 1 and the first two
       // layers measure nothing but the placeholder washing out. Replace it with
       // a small, non-degenerate, deliberately TIGHT covariance: the state is

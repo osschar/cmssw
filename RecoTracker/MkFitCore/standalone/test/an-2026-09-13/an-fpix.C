@@ -1,6 +1,6 @@
 #include "RecoTracker/MkFitCore/standalone/DataFormats/ValStructs.h"
 static double qq(std::vector<double>u,double p){ if(u.empty())return 0; std::sort(u.begin(),u.end()); return u[(size_t)(p/100.*(u.size()-1))]; }
-// Phase-2 layer map (CLAUDE.md): 0-3 PixB, 4-9 TOB PS, 10-15 TOB 2S,
+// Phase-2 layer map: 0-3 PixB, 4-9 TOB PS, 10-15 TOB 2S,
 // 16-27 FPix+, 28-37 TEC+, 38-49 FPix-, 50-59 TEC-.
 static const char* grp(int l){
   if(l>=16&&l<24) return "TFPX  16-23";

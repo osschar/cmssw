@@ -399,8 +399,9 @@ struct ValSearchMiss {
 //   endcap  q = r    -> sigma_q^2 = (x^2 exx + 2xy exy + y^2 eyy) / r^2
 //   phi (position)   -> sigma_phi^2 = (y^2 exx - 2xy exy + x^2 eyy) / r^4
 // The endcap q form is the true marginal; note LayerOfHits uses the TRACE
-// (exx+eyy) for the HIT extent, which is a different, looser quantity -- see
-// CLAUDE.md. Do not compare the two without saying which is which.
+// (exx+eyy) for the HIT extent, which is a different, looser quantity (see
+// doc/MkFinderV2p2-DesignNotes.md, "Hit extents"). Do not compare the two
+// without saying which is which.
 struct ValCovStep {
   int   event = -1;
   int   layer = -1;

@@ -614,8 +614,7 @@ int main(int argc, char* argv[]) {
     // That is NOT redundant with the return value: the arbitration below can
     // clear ibest (the sim TRACK) while the sim hit itself stays perfectly well
     // defined, so a caller wanting the truth STATE at this rec hit needs the hit
-    // index, not the track index. See the split-cluster arbitration defect in
-    // RecoTracker/CLAUDE.md.
+    // index, not the track index.
     auto bestTkIdx = [&](std::vector<int> const& shs, std::vector<float> const* shfs, int rhIdx, HitType rhType,
                          int* sh_out = nullptr) {
       //assume that all simhits are associated
