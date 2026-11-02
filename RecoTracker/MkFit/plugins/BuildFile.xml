@@ -18,7 +18,6 @@
   <use name="DataFormats/TrajectorySeed"/>
   <use name="FWCore/Framework"/>
   <use name="FWCore/ParameterSet"/>
-  <use name="FWCore/Utilities"/>
   <use name="Geometry/CommonTopologies"/>
   <use name="Geometry/Records"/>
   <use name="Geometry/TrackerGeometryBuilder"/>
