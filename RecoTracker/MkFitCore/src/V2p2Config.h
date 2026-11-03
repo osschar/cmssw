@@ -48,11 +48,11 @@ namespace mkfit {
       MKFIT_V2P2_KNOB(bool, surface_q, true);    // reference dq_track to the hit's module plane
       MKFIT_V2P2_KNOB(int, q_extra_bins, 1);     // spare q bins in the fetch
 
-      MKFIT_V2P2_KNOB(float, dphi_trk_fac, 2.0f);  // on dphi_track
-      MKFIT_V2P2_KNOB(bool, phi_per_hit, true);    // hit term from the hit's own phi extent
-      MKFIT_V2P2_KNOB(float, dphi_hit_fac, 3.0f);  // on hit_phi_half_extent
+      MKFIT_V2P2_KNOB(float, dphi_trk_fac, 2.0f);             // on dphi_track
+      MKFIT_V2P2_KNOB(bool, phi_per_hit, true);               // hit term from the hit's own phi extent
+      MKFIT_V2P2_KNOB(float, dphi_hit_fac, 3.0f);             // on hit_phi_half_extent
       MKFIT_V2P2_KNOB(float, dphi_flat_rad, 2.0f * 0.0123f);  // flat hit term [rad] when phi_per_hit is off
-      MKFIT_V2P2_KNOB(int, phi_extra_bins, 0);     // spare phi bins in the fetch
+      MKFIT_V2P2_KNOB(int, phi_extra_bins, 0);                // spare phi bins in the fetch
     }  // namespace Window
 
     //--------------------------------------------------------------------------
@@ -72,7 +72,7 @@ namespace mkfit {
     // "Reduction and hit ordering", "In-layer combinatorial search" and
     // "End-of-layer selection".
     namespace InLayer {
-      MKFIT_V2P2_KNOB(bool, comb, true);         // off: one best hit per layer
+      MKFIT_V2P2_KNOB(bool, comb, true);  // off: one best hit per layer
       constexpr int max_presel_hits_limit = V2p2Params::max_presel_hits_limit;
       constexpr int max_sec_depth_limit = V2p2Params::max_sec_depth_limit;
       MKFIT_V2P2_KNOB(bool, reserve_hole_slot, false);  // keep one decliner in the beam
@@ -111,7 +111,7 @@ namespace mkfit {
     // "Within-sensitive-region verdict" and "Candidate pickup and stopping cuts".
     namespace Policy {
       MKFIT_V2P2_KNOB(bool, use_wsr, true);
-      MKFIT_V2P2_KNOB(float, wsr_n_sigma, 5.0f);  // WSR edge fuzz, in sigma of the track's q error
+      MKFIT_V2P2_KNOB(float, wsr_n_sigma, 5.0f);     // WSR edge fuzz, in sigma of the track's q error
       MKFIT_V2P2_KNOB(bool, use_hole_limits, true);  // maxHolesPerCand / maxConsecHoles
       MKFIT_V2P2_KNOB(bool, use_stop_cuts, true);    // minPtCut and the looper stop
       // The track scorer "v2p2:llh", for the final pick of each seed at the end of the
@@ -146,7 +146,7 @@ namespace mkfit {
       // Term switches: replace a likelihood term by a constant, its measured mean, to
       // measure what the term's variation contributes.
       MKFIT_V2P2_KNOB(bool, use_rho, true);
-      MKFIT_V2P2_KNOB(float, rho_const, 0.0f);   // ln(hits/cm^2), used when use_rho is false
+      MKFIT_V2P2_KNOB(float, rho_const, 0.0f);  // ln(hits/cm^2), used when use_rho is false
       MKFIT_V2P2_KNOB(bool, use_detv, true);
       MKFIT_V2P2_KNOB(float, detv_const, 0.0f);  // ln(det V) per hit, used when use_detv is false
       // The region rho counts hits over and divides by. 0: every hit of the fetched bins over
