@@ -562,7 +562,7 @@ namespace mkfit {
             ch = hn.m_prev_idx;
           }
         }
-        const auto &fp = Config::V2p2::Score::fwd;
+        const auto &fp = Config::ItrInfo[0].m_v2p2.score_outward;
         float le[5];
         for (int g = 0; g < 5; ++g)
           le[g] = fpr_logit(fp.hit_eff_grp[g] >= 0.f ? fp.hit_eff_grp[g] : fp.hit_eff);

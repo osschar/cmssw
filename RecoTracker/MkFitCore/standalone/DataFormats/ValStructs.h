@@ -364,7 +364,7 @@ struct ValSearchMiss {
   //   5 reached the Kalman, failed the acceptance cut
   //   6 passed the cut, but on no candidate that survived the layer
   //   7 on a candidate that survived the layer
-  // The cut is TrKalmanUpdate::chi2_acc < Policy::hit_chi2_cut (chi2 < 30 before
+  // The cut is TrKalmanUpdate::chi2_acc < V2p2Params::hit_chi2_cut (chi2 < 30 before
   // 2026-09-26); "survived" is TrKalmanUpdate::accepted. Before 2026-09-30,
   // 6 and 7 were "outranked by a lower chi2" and "lowest chi2", with chi2 < 30.
   int   verdict = -1;

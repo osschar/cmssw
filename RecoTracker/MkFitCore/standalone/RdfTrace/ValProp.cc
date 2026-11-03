@@ -1505,6 +1505,15 @@ namespace mkfit {
     }
   }
 
+  // The V2p2Params setters below change every iteration config, as val_max_cands()
+  // does for maxCandsPerSeed: the next run reads them through MkJob::v2p2().
+  template <typename F>
+  void for_each_v2p2_params(F &&set) {
+    const int ni = Config::ItrInfo.size();
+    for (int i = 0; i < ni; ++i)
+      set(Config::ItrInfo[i].m_v2p2);
+  }
+
   // Phi pre-selection. The fetch range is DERIVED from the cut, so there is no
   // way to ask for a cut wider than the fetch -- the failure mode that made the
   // first version of this scan flatline for a non-physics reason.
@@ -1513,7 +1522,7 @@ namespace mkfit {
   //              used only with the per-hit extent off, see val_phi_per_hit()
   //   extra_bins fetch safety margin beyond the cut, in WHOLE bins
   void val_hit_chi2(float cut, float trk_fac) {
-    V2p2::Policy::hit_chi2_cut = cut;
+    for_each_v2p2_params([cut](V2p2Params &p) { p.hit_chi2_cut = cut; });
     V2p2::Policy::chi2_trk_fac = trk_fac;
     printf("val_hit_chi2: cut %g, trk_fac %g\n", cut, trk_fac);
   }
@@ -1613,17 +1622,21 @@ namespace mkfit {
   void val_dupclean_report() { v2p2_dupclean_diag_report(); }
 
   void val_hit_eff(float fwd, float bkw) {
-    V2p2::Score::fwd.hit_eff = fwd;
-    V2p2::Score::bkw.hit_eff = bkw;
+    for_each_v2p2_params([fwd, bkw](V2p2Params &p) {
+      p.score_outward.hit_eff = fwd;
+      p.score_inward.hit_eff = bkw;
+    });
     printf("val_hit_eff: hit_eff fwd %g, bkw %g\n", fwd, bkw);
   }
 
   void val_hit_eff_grp(float pix_brl, float pix_ec, float strip_brl_ps, float strip_brl_2s, float strip_ec) {
     const float g[5] = {pix_brl, pix_ec, strip_brl_ps, strip_brl_2s, strip_ec};
-    for (int i = 0; i < 5; ++i)
-      V2p2::Score::fwd.hit_eff_grp[i] = g[i];
+    for_each_v2p2_params([&g](V2p2Params &p) {
+      for (int i = 0; i < 5; ++i)
+        p.score_outward.hit_eff_grp[i] = g[i];
+    });
     printf("val_hit_eff_grp: fwd hit_eff pixB %g pixE %g TBPS %g TB2S %g TEDD %g (negative = hit_eff %g)\n",
-           g[0], g[1], g[2], g[3], g[4], V2p2::Score::fwd.hit_eff);
+           g[0], g[1], g[2], g[3], g[4], Config::ItrInfo[0].m_v2p2.score_outward.hit_eff);
   }
 
   // Final pick by "v2p2:llh" (on) or by the search scorer (off), with its two penalties.
@@ -1681,7 +1694,7 @@ namespace mkfit {
 
   void val_score_mode(int mode, float hit_eff) {
     V2p2::Score::mode = mode;
-    V2p2::Score::fwd.hit_eff = V2p2::Score::bkw.hit_eff = hit_eff;
+    for_each_v2p2_params([hit_eff](V2p2Params &p) { p.score_outward.hit_eff = p.score_inward.hit_eff = hit_eff; });
     printf("val_score_mode: V2p2::Score::mode = %d (0 linear, 1 loglh), hit_eff = %g\n",
            mode, hit_eff);
   }
@@ -1695,10 +1708,12 @@ namespace mkfit {
   // at large radius and cheap, inward it is at small radius and is the most
   // expensive hole there is.
   void val_score(float hit_bonus, float chi2_weight, float miss_fwd, float miss_bkw) {
-    V2p2::Score::fwd.hit_bonus = V2p2::Score::bkw.hit_bonus = hit_bonus;
-    V2p2::Score::fwd.chi2_weight = V2p2::Score::bkw.chi2_weight = chi2_weight;
-    V2p2::Score::fwd.miss_penalty = miss_fwd;
-    V2p2::Score::bkw.miss_penalty = miss_bkw;
+    for_each_v2p2_params([=](V2p2Params &p) {
+      p.score_outward.hit_bonus = p.score_inward.hit_bonus = hit_bonus;
+      p.score_outward.chi2_weight = p.score_inward.chi2_weight = chi2_weight;
+      p.score_outward.miss_penalty = miss_fwd;
+      p.score_inward.miss_penalty = miss_bkw;
+    });
     printf("val_score: hit_bonus=%.2f chi2_weight=%.2f miss_fwd=%.2f miss_bkw=%.2f "
            "(hole beats a hit above chi2 = %.1f inward)\n",
            hit_bonus, chi2_weight, miss_fwd, miss_bkw,
@@ -2436,7 +2451,7 @@ namespace mkfit {
     for (const TrKalmanUpdate &ku : ev->trKalmanUpdates_) {
       if (ku.hit_match_id < 0 || ku.hit_match_id >= (int) ku_best.size()) continue;
       KuBest &kb = ku_best[ku.hit_match_id];
-      const bool pass = ku.chi2_acc > -900.f ? ku.chi2_acc < Config::V2p2::Policy::hit_chi2_cut : ku.chi2 < 30.f;
+      const bool pass = ku.chi2_acc > -900.f ? ku.chi2_acc < Config::ItrInfo[0].m_v2p2.hit_chi2_cut : ku.chi2 < 30.f;
       kb.pass |= pass;
       kb.kept |= ku.accepted;
       if (ku.chi2 < kb.c2) { kb.c2 = ku.chi2; kb.c2a = ku.chi2_acc; }

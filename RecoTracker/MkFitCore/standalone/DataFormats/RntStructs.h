@@ -249,7 +249,7 @@ struct TrLayerSearch {
   unsigned short p1_sec = 0, p2_sec = 0, q1_sec = 0, q2_sec = 0; // secondary sub-layer
 
   // Stage 2 tallies over the hit loop. n_hits_pqueue is capped at
-  // Config::V2p2::InLayer::max_presel_hits per sub-layer and equals the number of
+  // V2p2Params::max_presel_hits per sub-layer and equals the number of
   // TrHitMatch with passed_pqueue.
   int n_hits_scanned = 0;  // hits visited inside the bin ranges
   int n_hits_masked = 0;   // of those, rejected by the iteration hit mask
@@ -418,7 +418,7 @@ struct TrKalmanUpdate {
   float   chi2 = -999.99f;
   float   chi2_trk = -999.99f;
   // The acceptance chi2 (Policy::chi2_trk_fac on the track covariance), which the
-  // cut Policy::hit_chi2_cut is applied to. v2p2 only.
+  // cut V2p2Params::hit_chi2_cut is applied to. v2p2 only.
   float   chi2_acc = -999.99f;
   // This hit advanced the state. In the in-layer combinatorial search, that is:
   // the node is on a TrackCand that survived the end-of-layer selection, so a

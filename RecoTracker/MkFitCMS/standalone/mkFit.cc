@@ -38,6 +38,7 @@
 #endif
 
 #include <cstdlib>
+#include <functional>
 #include <limits>
 #include <list>
 #include <sstream>
@@ -52,6 +53,11 @@ namespace V2p2 = mkfit::Config::V2p2;
 // Applied at the END of initGeom(), because that is where Config::ItrInfo comes
 // into existence -- option parsing runs before it.
 static int g_max_cands_per_seed = -1;
+
+// The options that set V2p2Params (IterationConfig::m_v2p2). Collected while
+// parsing and applied to every iteration config at the end of initGeom(), like
+// --max-cands-per-seed.
+static std::vector<std::function<void(V2p2Params &)>> g_v2p2_setters;
 
 //==============================================================================
 
@@ -134,6 +140,15 @@ void initGeom() {
     }
     printf("mkFit.cc/%s--max-cands-per-seed = %d (fwd and bkw) for %d iteration configs\n",
            __func__, g_max_cands_per_seed, ni);
+  }
+
+  if (!g_v2p2_setters.empty()) {
+    const int ni = Config::ItrInfo.size();
+    for (int i = 0; i < ni; ++i)
+      for (const auto &set : g_v2p2_setters)
+        set(Config::ItrInfo[i].m_v2p2);
+    printf("mkFit.cc/%s %d v2p2 option(s) applied to %d iteration configs\n",
+           __func__, (int)g_v2p2_setters.size(), ni);
   }
 
   // Test functions for ConfigJsonPatcher
@@ -529,6 +544,7 @@ int main(int argc, const char* argv[]) {
     lStr_i start = i;
 
     if (*i == "-h" || *i == "-help" || *i == "--help") {
+      const V2p2Params v2p2d;  // the defaults the help text shows
       printf(
           "\n"
           "Usage: %s [options]\n"
@@ -827,12 +843,12 @@ int main(int argc, const char* argv[]) {
           int(V2p2::Policy::use_wsr),
           int(V2p2::Policy::use_hole_limits),
           int(V2p2::Policy::use_stop_cuts),
-          V2p2::Policy::hit_chi2_cut,
+          v2p2d.hit_chi2_cut,
           V2p2::Policy::chi2_trk_fac,
           int(V2p2::InLayer::comb),
           V2p2::Score::mode,
-          V2p2::Score::fwd.hit_eff,
-          V2p2::Score::bkw.hit_eff,
+          v2p2d.score_outward.hit_eff,
+          v2p2d.score_inward.hit_eff,
           int(V2p2::InLayer::best_short),
           int(V2p2::InLayer::reserve_hole_slot),
           int(V2p2::InLayer::early_select),
@@ -842,13 +858,13 @@ int main(int argc, const char* argv[]) {
           V2p2::InLayer::late_max_cands_step_cm,
           int(V2p2::InLayer::sister_hole_drop),
           V2p2::InLayer::sister_hole_chi2,
-          V2p2::InLayer::max_sec_depth,
-          V2p2::InLayer::max_presel_hits,
-          V2p2::Score::fwd.hit_bonus,
-          V2p2::Score::fwd.overlap_bonus,
-          V2p2::Score::fwd.chi2_weight,
-          V2p2::Score::fwd.miss_penalty,
-          V2p2::Score::bkw.miss_penalty,
+          v2p2d.max_sec_depth,
+          v2p2d.max_presel_hits,
+          v2p2d.score_outward.hit_bonus,
+          v2p2d.score_outward.overlap_bonus,
+          v2p2d.score_outward.chi2_weight,
+          v2p2d.score_outward.miss_penalty,
+          v2p2d.score_inward.miss_penalty,
 
           b2a(Config::quality_val),
           b2a(Config::dumpForPlots),
@@ -1081,7 +1097,8 @@ int main(int argc, const char* argv[]) {
       V2p2::Policy::use_stop_cuts = (bool)atoi(i->c_str());
     } else if (*i == "--v2p2-hit-chi2-cut") {
       next_arg_or_die(mArgs, i);
-      V2p2::Policy::hit_chi2_cut = atof(i->c_str());
+      const float v = atof(i->c_str());
+      g_v2p2_setters.push_back([v](V2p2Params &p) { p.hit_chi2_cut = v; });
     } else if (*i == "--v2p2-chi2-trk-fac") {
       next_arg_or_die(mArgs, i);
       V2p2::Policy::chi2_trk_fac = atof(i->c_str());
@@ -1093,9 +1110,12 @@ int main(int argc, const char* argv[]) {
       V2p2::Score::mode = atoi(i->c_str());
     } else if (*i == "--v2p2-hit-eff") {
       next_arg_or_die(mArgs, i);
-      V2p2::Score::fwd.hit_eff = V2p2::Score::bkw.hit_eff = atof(i->c_str());
-      for (float &e : V2p2::Score::fwd.hit_eff_grp)
-        e = -1.0f;
+      const float v = atof(i->c_str());
+      g_v2p2_setters.push_back([v](V2p2Params &p) {
+        p.score_outward.hit_eff = p.score_inward.hit_eff = v;
+        for (float &e : p.score_outward.hit_eff_grp)
+          e = -1.0f;
+      });
     } else if (*i == "--v2p2-best-short") {
       next_arg_or_die(mArgs, i);
       V2p2::InLayer::best_short = (bool)atoi(i->c_str());
@@ -1125,33 +1145,43 @@ int main(int argc, const char* argv[]) {
       V2p2::InLayer::sister_hole_chi2 = atof(i->c_str());
     } else if (*i == "--v2p2-max-sec-depth") {
       next_arg_or_die(mArgs, i);
-      V2p2::InLayer::max_sec_depth = atoi(i->c_str());
-    } else if (*i == "--v2p2-max-presel-hits") {
-      next_arg_or_die(mArgs, i);
-      V2p2::InLayer::max_presel_hits = atoi(i->c_str());
-      if (V2p2::InLayer::max_presel_hits < 1 ||
-          V2p2::InLayer::max_presel_hits > V2p2::InLayer::max_presel_hits_limit) {
-        fprintf(stderr, "--v2p2-max-presel-hits must be in [1, %d]\n", V2p2::InLayer::max_presel_hits_limit);
+      const int v = atoi(i->c_str());
+      if (v < 1 || v > V2p2Params::max_sec_depth_limit) {
+        fprintf(stderr, "--v2p2-max-sec-depth must be in [1, %d]\n", V2p2Params::max_sec_depth_limit);
         exit(1);
       }
+      g_v2p2_setters.push_back([v](V2p2Params &p) { p.max_sec_depth = v; });
+    } else if (*i == "--v2p2-max-presel-hits") {
+      next_arg_or_die(mArgs, i);
+      const int v = atoi(i->c_str());
+      if (v < 1 || v > V2p2Params::max_presel_hits_limit) {
+        fprintf(stderr, "--v2p2-max-presel-hits must be in [1, %d]\n", V2p2Params::max_presel_hits_limit);
+        exit(1);
+      }
+      g_v2p2_setters.push_back([v](V2p2Params &p) { p.max_presel_hits = v; });
     } else if (*i == "--v2p2-hit-bonus") {
       next_arg_or_die(mArgs, i);
-      V2p2::Score::fwd.hit_bonus = V2p2::Score::bkw.hit_bonus = atof(i->c_str());
+      const float v = atof(i->c_str());
+      g_v2p2_setters.push_back([v](V2p2Params &p) { p.score_outward.hit_bonus = p.score_inward.hit_bonus = v; });
     } else if (*i == "--v2p2-overlap-bonus") {
       next_arg_or_die(mArgs, i);
-      V2p2::Score::fwd.overlap_bonus = V2p2::Score::bkw.overlap_bonus = atof(i->c_str());
+      const float v = atof(i->c_str());
+      g_v2p2_setters.push_back([v](V2p2Params &p) { p.score_outward.overlap_bonus = p.score_inward.overlap_bonus = v; });
     } else if (*i == "--v2p2-chi2-weight") {
       next_arg_or_die(mArgs, i);
-      V2p2::Score::fwd.chi2_weight = V2p2::Score::bkw.chi2_weight = atof(i->c_str());
+      const float v = atof(i->c_str());
+      g_v2p2_setters.push_back([v](V2p2Params &p) { p.score_outward.chi2_weight = p.score_inward.chi2_weight = v; });
     } else if (*i == "--v2p2-miss-penalty") {
       next_arg_or_die(mArgs, i);
-      V2p2::Score::fwd.miss_penalty = V2p2::Score::bkw.miss_penalty = atof(i->c_str());
+      const float v = atof(i->c_str());
+      g_v2p2_setters.push_back([v](V2p2Params &p) { p.score_outward.miss_penalty = p.score_inward.miss_penalty = v; });
     } else if (*i == "--v2p2-miss-penalty-bkw") {
       // The head/body asymmetry on its own: outward, a trailing hole is at large
       // radius and cheap; inward, it is at small radius and is the most
       // expensive hole there is.
       next_arg_or_die(mArgs, i);
-      V2p2::Score::bkw.miss_penalty = atof(i->c_str());
+      const float v = atof(i->c_str());
+      g_v2p2_setters.push_back([v](V2p2Params &p) { p.score_inward.miss_penalty = v; });
     } else if (*i == "--quality-val") {
       Config::quality_val = true;
     } else if (*i == "--dump-for-plots") {
