@@ -11,9 +11,8 @@
 //   - CMSSW build:      constexpr;
 //   - standalone build: a mutable variable, defined in V2p2Config.cc and set by
 //                       mkFit.cc options and the shell drivers.
-// The tunings in interface/V2p2Params.h are set per iteration in CMSSW
-// (IterationConfig::m_v2p2); their knobs here exist in the standalone build only
-// and are its source, see v2p2_params_from_knobs().
+// The tunings in interface/V2p2Params.h are not knobs: they are set per
+// iteration in IterationConfig::m_v2p2, read through MkJob::v2p2().
 //
 // The rationale for each default is in doc/MkFinderV2p2-DesignNotes.md, in the
 // section named next to each group.
@@ -74,10 +73,6 @@ namespace mkfit {
     // "End-of-layer selection".
     namespace InLayer {
       MKFIT_V2P2_KNOB(bool, comb, true);         // off: one best hit per layer
-#if defined(MKFIT_STANDALONE)
-      MKFIT_V2P2_KNOB(int, max_presel_hits, V2p2Params{}.max_presel_hits);  // V2p2Params::max_presel_hits
-      MKFIT_V2P2_KNOB(int, max_sec_depth, V2p2Params{}.max_sec_depth);      // V2p2Params::max_sec_depth
-#endif
       constexpr int max_presel_hits_limit = V2p2Params::max_presel_hits_limit;
       constexpr int max_sec_depth_limit = V2p2Params::max_sec_depth_limit;
       MKFIT_V2P2_KNOB(bool, reserve_hole_slot, false);  // keep one decliner in the beam
@@ -139,9 +134,6 @@ namespace mkfit {
       // plain chi2. chi2_trk_fac = 1 is the plain chi2 and costs nothing extra;
       // the plain chi2 < 30 used before is hit_chi2_cut 30, chi2_trk_fac 1.
       // hit_chi2_cut is V2p2Params::hit_chi2_cut.
-#if defined(MKFIT_STANDALONE)
-      MKFIT_V2P2_KNOB(float, hit_chi2_cut, V2p2Params{}.hit_chi2_cut);
-#endif
       MKFIT_V2P2_KNOB(float, chi2_trk_fac, 3.0f);
     }  // namespace Policy
 
@@ -149,12 +141,8 @@ namespace mkfit {
     // Layer-step score, design notes "Layer-step score".
     namespace Score {
       MKFIT_V2P2_KNOB(int, mode, 1);  // 0 linear, 1 log-likelihood ratio
-      // The score sets of the outward and the inward search, V2p2Params::score_outward
+      // The score sets of the outward and the inward search are V2p2Params::score_outward
       // and score_inward.
-#if defined(MKFIT_STANDALONE)
-      MKFIT_V2P2_KNOB(V2p2ScoreParams, fwd, V2p2Params{}.score_outward);
-      MKFIT_V2P2_KNOB(V2p2ScoreParams, bkw, V2p2Params{}.score_inward);
-#endif
       // Term switches: replace a likelihood term by a constant, its measured mean, to
       // measure what the term's variation contributes.
       MKFIT_V2P2_KNOB(bool, use_rho, true);
@@ -201,9 +189,6 @@ namespace mkfit {
     // Legacy compound dq setter (--v2p2-extra-dq, val_extra_dq): sets dq_trk_fac
     // to f and dq_hit_fac to 1.2 f, the ratio of the old single EXTRA_DQ factor.
     void set_extra_dq(float f);
-
-    // The V2p2Params of the standalone, built from the knobs at the time of the call.
-    V2p2Params v2p2_params_from_knobs();
 #endif
 
   }  // namespace Config::V2p2

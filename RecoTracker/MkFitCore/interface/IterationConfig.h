@@ -147,8 +147,9 @@ namespace mkfit {
     int m_backward_search_min_pixel_layers = 0;
     float m_backward_search_prompt_max_d0 = 0.f;
 
-    // MkFinderV2p2 tunings. No JSON save / load: MkFitIterationConfigESProducer sets them from
-    // its python PSet "v2p2"; the standalone ignores them and uses the knobs of src/V2p2Config.h.
+    // MkFinderV2p2 tunings, read through MkJob::v2p2(). No JSON save / load: in CMSSW
+    // MkFitIterationConfigESProducer sets them from its python PSet "v2p2"; in the standalone
+    // they start at the defaults and the mkFit options and shell setters change them.
     V2p2Params m_v2p2;
 
     // seed cleaning params with good defaults (all configurable)

@@ -14,16 +14,6 @@ namespace mkfit::Config::V2p2 {
     Window::dq_hit_fac = f * 1.2f;  // the old EXTRA_DQ ratio
   }
 
-  V2p2Params v2p2_params_from_knobs() {
-    V2p2Params p;
-    p.score_outward = Score::fwd;
-    p.score_inward = Score::bkw;
-    p.hit_chi2_cut = Policy::hit_chi2_cut;
-    p.max_presel_hits = InLayer::max_presel_hits;
-    p.max_sec_depth = InLayer::max_sec_depth;
-    return p;
-  }
-
 }  // namespace mkfit::Config::V2p2
 
 #endif

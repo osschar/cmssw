@@ -25,8 +25,8 @@ namespace mkfit {
   // IterationConfig::m_v2p2, set by MkFitIterationConfigESProducer from its python
   // PSet "v2p2" and not saved to or loaded from JSON; of the score sets the PSet
   // carries hit_eff and hit_eff_grp, the fields the log-likelihood score reads. In
-  // the standalone the knobs of src/V2p2Config.h are the source. The values below
-  // are the defaults of both.
+  // the standalone the mkFit options and the shell setters change them in
+  // Config::ItrInfo. The values below are the defaults of both.
   struct V2p2Params {
     // Outward: a phase-2 tuning (CMSSW MTV, initialStep with the offline seeds, cleaner and
     // refit, 2026-10): eps 0.10, TBPS 0.14, TB2S 0.20. It will move with the seeds and the

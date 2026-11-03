@@ -32,11 +32,6 @@ namespace mkfit {
     mp_job = job;
     mp_steeringparams_iter = &sp_it;
     mp_event = ev;
-#if defined(MKFIT_STANDALONE)
-    m_v2p2 = Config::V2p2::v2p2_params_from_knobs();
-#else
-    m_v2p2 = job->m_iter_config.m_v2p2;
-#endif
 
     m_batch_mgr.setup(eoccs, seed_begin, seed_end);
 
@@ -1217,7 +1212,7 @@ namespace mkfit {
 #endif
         };
 
-        if (ptc.m_pqueue_size[sl] < m_v2p2.max_presel_hits) {
+        if (ptc.m_pqueue_size[sl] < mp_job->v2p2().max_presel_hits) {
           do_pqueue_push();
           ++ptc.m_pqueue_size[sl];
         } else if (ddphi < ptc.pq_top(sl).score) {
@@ -1375,9 +1370,9 @@ namespace mkfit {
       }
 
 #ifdef MKFIT_TRACE
-      if (ptc.bChi2Acc < m_v2p2.hit_chi2_cut || (Diag::force_mc && ptc.bIsMc)) {
+      if (ptc.bChi2Acc < mp_job->v2p2().hit_chi2_cut || (Diag::force_mc && ptc.bIsMc)) {
 #else
-      if (ptc.bChi2Acc < m_v2p2.hit_chi2_cut) {
+      if (ptc.bChi2Acc < mp_job->v2p2().hit_chi2_cut) {
 #endif
         // XXXX Extra missed layer -- to check stuff / maxgrowth / scores etc
         // This is somewhat impure :)
@@ -1466,7 +1461,7 @@ namespace mkfit {
   void MkFinderV2p2::harvest_sec_nodes() {
     m_sec_harvested.clear();
     for (const auto &o : m_sec_out) {
-      if ( ! (o.chi2_acc < m_v2p2.hit_chi2_cut))   // also rejects NaN
+      if ( ! (o.chi2_acc < mp_job->v2p2().hit_chi2_cut))   // also rejects NaN
         continue;
       SecTCandRep n;
       n.m_ptc        = o.ptc;
@@ -1588,7 +1583,7 @@ namespace mkfit {
     harvest_sec_nodes();
     for (const int ni : m_sec_harvested) {
       const SecTCandRep &n = m_sec_arena[ni];
-      if (n.m_feat.n_hits < m_v2p2.max_sec_depth) {
+      if (n.m_feat.n_hits < mp_job->v2p2().max_sec_depth) {
         m_deep_queue.push_back(ni);
         ++n.m_ptc->mp_ccrep->m_n_inflight;
       }
@@ -1750,7 +1745,7 @@ namespace mkfit {
 
     // Depths 1 and up. The starting state is now a node's UPDATED state, for
     // which no crossing has been solved, so propagate-to-plane solves it.
-    for (int depth = 1; depth < m_v2p2.max_sec_depth && ! frontier.empty(); ++depth) {
+    for (int depth = 1; depth < mp_job->v2p2().max_sec_depth && ! frontier.empty(); ++depth) {
       koa.m_solve_plane = true;
       for (const int ni : frontier) {
         // By index, not by reference: the arena grows under us only at harvest,
@@ -1842,14 +1837,14 @@ namespace mkfit {
         fill_step_geometry(f, ptc, 0.0f);
         f.hole_kind = v2p2_hole_kind(fake);
         m_sel.push_back({ptc.m_origin_tcand_index, -1, fake, true,
-                         tc.score() + v2p2_layer_step_score(f, m_v2p2)});
+                         tc.score() + v2p2_layer_step_score(f, mp_job->v2p2())});
       }
     }
 
     for (const int ni : ccrep.m_sec_nodes) {
       const SecTCandRep &n = m_sec_arena[ni];
       m_sel.push_back({n.m_ptc->m_origin_tcand_index, ni, 0, false,
-                       n.m_ptc->tcand().score() + v2p2_layer_step_score(n.m_feat, m_v2p2)});
+                       n.m_ptc->tcand().score() + v2p2_layer_step_score(n.m_feat, mp_job->v2p2())});
     }
 
     // Stopped or pull-in-skipped TrackCands, unchanged, at their own score. With

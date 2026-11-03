@@ -59,11 +59,10 @@ and `max_sec_depth`. In CMSSW, `MkFitIterationConfigESProducer` sets them from
 its python PSet `v2p2` (`scoreOutward` and `scoreInward` with `hitEff` and
 `hitEffByGroup`, `hitChi2Cut`, `maxPreselHits`, `maxSecDepth`); they are not in
 the JSON. The score PSets carry only what the log-likelihood score reads, since
-`Score::mode` is 1 in CMSSW. The defaults are
-those of `V2p2Params`, so an unset parameter keeps them. In the standalone the
-corresponding knobs of `V2p2Config.h` are the source, and `MkFinderV2p2::setup()`
-builds a `V2p2Params` from them (`v2p2_params_from_knobs()`). The other knobs
-stay compile-time in CMSSW.
+`Score::mode` is 1 in CMSSW. The defaults are those of `V2p2Params`, so an unset
+parameter keeps them. In the standalone the `mkFit` options and the shell setters
+change them in `Config::ItrInfo`. The finder reads them through `MkJob::v2p2()`.
+The other knobs stay compile-time in CMSSW.
 
 The policy counters (`V2p2PolicyCounters`, printed with `--quality-val`) exist
 in the standalone build only. The finder increments them through
@@ -517,7 +516,7 @@ pass the real cut.
 `prepare_kalman_workload()`.
 
 **Reduction.** Hits that pass the cut go into a bounded priority queue keyed on
-ddphi, one queue per sub-layer, capped at `InLayer::max_presel_hits`. One queue
+ddphi, one queue per sub-layer, capped at `V2p2Params::max_presel_hits`. One queue
 per sub-layer gives each sensor of a pair its own budget, so a busy sensor
 cannot crowd out the other. The cap sits upstream of the in-layer search and
 bounds what it can see. The queues and `m_layer_hits` use inline storage
@@ -578,7 +577,7 @@ A second hit from the same module as an earlier hit of the path is not taken.
 That is a split cluster or another track's hit, and a split cluster is one
 measurement: taking it twice shrinks the covariance without adding information.
 
-`InLayer::max_sec_depth` (4) caps the hits per path. Forward, 10 events of
+`V2p2Params::max_sec_depth` (4) caps the hits per path. Forward, 10 events of
 `ttbar-PU200-D121-C22-100ev.bin`, found tracks stop changing at depth 3. Inward
 on 20 events of chopped pT5, fully recovered tracks go from 82.4 % at depth 2
 to 90.8 % at depth 4.
@@ -615,7 +614,7 @@ search on was 60.79 s at cap 3 and 76.45 s at cap 4.
 
 **Code:** `plane::chi2_scaled()` in `KalmanOpArgs::do_kalman_stuff()`,
 `KalmanOpArgs::tsChi2Acc`, `harvest_sec_nodes()`, `process_kalman_results()`,
-`Policy::hit_chi2_cut`, `Policy::chi2_trk_fac`.
+`V2p2Params::hit_chi2_cut`, `Policy::chi2_trk_fac`.
 
 **The cut.** A hit is accepted if
 
@@ -766,9 +765,10 @@ and for the final output. It differs in three ways.
    Scoring each step when it happens has no such question. What the tail
    penalty approximated depends on direction: outward, trailing holes are at
    large radius where a track may leave the detector; inward, they are at small
-   radius, where the track must have come from. The score has separate forward
-   and backward parameter sets (`Score::fwd`, `Score::bkw`) for this; they carry
-   the same numbers today.
+   radius, where the track must have come from. The score has separate outward
+   and inward parameter sets (`V2p2Params::score_outward`, `score_inward`) for
+   this; today they differ in the hit efficiency (0.10 with the TBPS / TB2S
+   groups outward, 0.90 inward).
 3. **A feature struct.** `LayerStepFeatures` carries what a layer step did: hits
    taken, chi2, the best hit's `q_half_length`, ln det V of the residual
    covariance, local hit density, hole kind, the layers stepped between, and the
