@@ -42,8 +42,8 @@ namespace {
     d.add<double>("hitEff", cfiDefault(p.hit_eff))->setComment("per-layer hit efficiency");
     d.add<std::vector<double>>("hitEffByGroup", hitEffGroupDefaults(p))
         ->setComment(
-            "hit efficiency per layer group (pixel barrel, pixel endcap, strip barrel below layer 10, strip barrel "
-            "from layer 10, strip endcap); negative takes hitEff");
+            "hit efficiency per layer group, phase-2 layers (pixel barrel, pixel endcap, strip barrel below layer 10 "
+            "= TBPS, strip barrel from layer 10 = TB2S, strip endcap); negative takes hitEff");
   }
 
   mkfit::V2p2ScoreParams readScore(const edm::ParameterSet &ps, const mkfit::V2p2ScoreParams &base, const char *name) {
@@ -124,7 +124,9 @@ void MkFitIterationConfigESProducer::fillDescriptions(edm::ConfigurationDescript
   v2p2.add<edm::ParameterSetDescription>("scoreInward", scoreInward)
       ->setComment("log-likelihood layer-step score, inward search");
   v2p2.add<double>("hitChi2Cut", cfiDefault(v2p2Defaults.hit_chi2_cut))
-      ->setComment("Kalman hit acceptance: chi2 against the scaled track and the hit covariance");
+      ->setComment(
+          "Kalman hit acceptance: chi2 against the scaled track and the hit covariance; v2p2 uses this, not the "
+          "JSON's chi2Cut_min");
   v2p2.add<int>("maxPreselHits", v2p2Defaults.max_presel_hits)
       ->setComment("hits kept per candidate and sub-layer after the pre-selection");
   v2p2.add<int>("maxSecDepth", v2p2Defaults.max_sec_depth)->setComment("most hits one path may take in a layer");

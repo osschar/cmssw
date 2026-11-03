@@ -34,7 +34,8 @@ namespace mkfit {
     V2p2ScoreParams score_outward{.hit_eff = 0.10f, .hit_eff_grp = {-1.0f, -1.0f, 0.14f, 0.20f, -1.0f}};
     V2p2ScoreParams score_inward{};
 
-    // Kalman hit acceptance, chi2_acc < hit_chi2_cut, see Config::V2p2::Policy.
+    // Kalman hit acceptance, chi2_acc < hit_chi2_cut, see Config::V2p2::Policy. v2p2 does
+    // not use IterationParams::chi2Cut_min.
     float hit_chi2_cut = 9.21f;
 
     int max_presel_hits = 6;  // reduction cap per sub-layer
