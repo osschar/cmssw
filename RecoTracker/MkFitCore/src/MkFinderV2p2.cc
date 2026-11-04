@@ -402,9 +402,9 @@ namespace mkfit {
     // once there is nothing left to pull in.
     assert(cand_queue_size() == 0 && "pre-select queue not drained by process_layer()");
 
-    // The running Kalman batches hold partial work across layer batches; empty
+    // The in-layer Kalman batches hold partial work across layer batches; empty
     // them before end_layer() selects whatever is left.
-    if (InLayer::comb && InLayer::running_kalman)
+    if (InLayer::comb)
       rk_drain();
   }
 
@@ -428,10 +428,7 @@ namespace mkfit {
     if (InLayer::comb) {
       // No materialisation here: the paths are left in the arena and everything
       // competes at end of layer, in select_and_materialise().
-      if (InLayer::running_kalman)
-        expand_in_layer_running(b);
-      else
-        expand_in_layer(b);       // stage 3: grow the SecTCandRep tree over the ordered hits
+      expand_in_layer(b);         // stage 3: grow the SecTCandRep tree over the ordered hits
       if (InLayer::early_select)
         select_completed_ccreps(b);
     } else {
@@ -1330,9 +1327,9 @@ namespace mkfit {
   }
 
   //----------------------------------------------------------------------------
-  // In-layer combinatorial search: grow the tree of paths through the layer,
-  // breadth-first by depth, over the path-ordered m_layer_hits. Nodes live in
-  // m_sec_arena until end of layer. See doc/MkFinderV2p2-DesignNotes.md,
+  // In-layer combinatorial search: grow the tree of paths through the layer
+  // over the path-ordered m_layer_hits. Nodes live in m_sec_arena until end of
+  // layer. See doc/MkFinderV2p2-DesignNotes.md,
   // "In-layer combinatorial search".
   //----------------------------------------------------------------------------
 
@@ -1360,7 +1357,7 @@ namespace mkfit {
       n.m_chi2       = o.chi2;
 
       // Features accumulate parent -> child. The parent is always already in the
-      // arena: harvest runs once per depth, after the whole depth has flushed.
+      // arena: a node's children are queued only after it has been harvested.
       const LayerStepFeatures *pf =
         (o.parent_idx >= 0) ? &m_sec_arena[o.parent_idx].m_feat : nullptr;
       LayerStepFeatures &f = n.m_feat;
@@ -1414,11 +1411,10 @@ namespace mkfit {
   }
 
   //----------------------------------------------------------------------------
-  // Running Kalman batches (InLayer::running_kalman). Same work as
-  // expand_in_layer(), same nodes and the same per-node arithmetic, since every
-  // Matriplex lane is independent; only which items share a batch changes.
-  // Each CombCandidate counts its Kalman items in flight and its nodes still to
-  // be expanded, so it can be selected as soon as both reach zero.
+  // The Kalman batches of the in-layer search stay open across layer batches
+  // and fire only when full. Each CombCandidate counts its Kalman items in
+  // flight and its nodes still to be expanded, so it can be selected as soon as
+  // both reach zero.
   //----------------------------------------------------------------------------
 
   void MkFinderV2p2::load_hit_module(KalmanOpArgs &koa, const PrimTCandRep::PQE &pqe) const {
@@ -1490,6 +1486,9 @@ namespace mkfit {
     const int nlh = (int) ptc.m_layer_hits.size();
     for (int lh = m_sec_arena[ni].m_hit_pos + 1; lh < nlh; ++lh) {
       const PrimTCandRep::PQE &pqe = ptc.m_layer_hits[lh];
+      // A second hit from a module already on this path is a split cluster or
+      // another track's hit, not an overlap: skip it. The walk back is at most
+      // V2p2Params::max_sec_depth long.
       bool same_module = false;
       for (int ci = ni; ci >= 0 && !same_module; ci = m_sec_arena[ci].m_parent_idx) {
         const SecTCandRep &an = m_sec_arena[ci];
@@ -1517,7 +1516,7 @@ namespace mkfit {
     }
   }
 
-  void MkFinderV2p2::expand_in_layer_running(LayerBatch &b) {
+  void MkFinderV2p2::expand_in_layer(LayerBatch &b) {
     rk_setup(m_koa_d0, false);
     rk_setup(m_koa_deep, true);
     m_sec_out.clear();
@@ -1565,115 +1564,6 @@ namespace mkfit {
     f.n_found_so_far = (short) tc.nFoundHits();
     f.n_holes_so_far = (short) tc.nAllMinusOneHits();
     f.log_rho = log_rho;
-  }
-
-  void MkFinderV2p2::expand_in_layer(LayerBatch &b) {
-    const int N_proc = b.N_proc;
-    PrimTCandRep **prim_tcand_ptrs = b.ptc;
-
-    // NB: the arena is NOT rewound here. It has to live until end of layer, when
-    // the whole CombCandidate's alternatives are selected between; end_layer()
-    // rewinds it once for all of them.
-    m_sec_out.clear();
-
-    KalmanOpArgs koa;
-    koa.prop_config = & mp_job->m_trk_info.prop_config();
-    koa.mp_out = & m_sec_out;
-#ifdef MKFIT_TRACE
-    koa.mp_event = mp_event;
-#endif
-
-    auto load_module = [&](const PrimTCandRep::PQE &pqe) {
-      const auto &L = mp_job->m_event_of_hits[ pqe.layer ];
-      const Hit &hit = L.refHit( pqe.hit_orig_index );
-      koa.load_hit_module(hit, L.layer_info().module_info(hit.detIDinLayer()));
-    };
-    auto flush = [&]() {
-      if (koa.N_filled == 0)
-        return;
-      // Lane occupancy, split by depth: depth 0 is the batch shape the best-hit
-      // path always had, deeper ones are new and are the ones that could run
-      // ragged. Breadth-first BY DEPTH exists so they do not.
-      V2P2_COUNT(n_kalman_calls);
-      V2P2_COUNT_ADD(n_kalman_lanes, koa.N_filled);
-      if ( ! koa.m_solve_plane) {
-        V2P2_COUNT(n_kalman_calls_d0);
-        V2P2_COUNT_ADD(n_kalman_lanes_d0, koa.N_filled);
-        koa.compute_pars();   // propPar is an INPUT on the sPerp path, an output on the solve path
-      }
-      koa.do_kalman_stuff();
-      koa.reset();
-    };
-
-    // Depth 0. The Hermite has already solved the crossing for every
-    // pre-selected hit, so this is the cheap sPerp path and is exactly what the
-    // best-hit code does -- it just keeps every outcome instead of the winner.
-    koa.m_solve_plane = false;
-    for (int i = 0; i < N_proc; ++i) {
-      PrimTCandRep &ptc = * prim_tcand_ptrs[i];
-      if (Policy::use_wsr && ptc.m_wsr.m_wsr == WSR_Outside)
-        continue;
-      const int nlh = (int) ptc.m_layer_hits.size();
-      for (int lh = 0; lh < nlh; ++lh) {
-        const PrimTCandRep::PQE &pqe = ptc.m_layer_hits[lh];
-        koa.item_begin(&ptc, { (int) pqe.hit_orig_index, pqe.layer }, -1, lh, pqe.hit_index);
-        koa.load_state_err_chg(pqe.mixed_state, ptc.tcand().state());
-#ifdef MKFIT_TRACE
-        koa.set_tr_hitmatch_id(pqe.tr_hitmatch_id);
-#endif
-        load_module(pqe);
-        if (koa.item_finished())
-          flush();
-      }
-    }
-    flush();
-    harvest_sec_nodes();
-    std::vector<int> &frontier = m_sec_frontier;
-    frontier.swap(m_sec_harvested);
-
-    // Depths 1 and up. The starting state is now a node's UPDATED state, for
-    // which no crossing has been solved, so propagate-to-plane solves it.
-    for (int depth = 1; depth < mp_job->v2p2().max_sec_depth && ! frontier.empty(); ++depth) {
-      koa.m_solve_plane = true;
-      for (const int ni : frontier) {
-        // By index, not by reference: the arena grows under us only at harvest,
-        // but the discipline is what keeps the indices the handles.
-        PrimTCandRep &ptc = * m_sec_arena[ni].m_ptc;
-        const int nlh = (int) ptc.m_layer_hits.size();
-        for (int lh = m_sec_arena[ni].m_hit_pos + 1; lh < nlh; ++lh) {
-          const PrimTCandRep::PQE &pqe = ptc.m_layer_hits[lh];
-
-          // A second hit from a module already on this path is a split cluster or
-          // another track's hit, not an overlap: skip it. The walk back is at most
-          // V2p2Params::max_sec_depth long.
-          bool same_module = false;
-          for (int ci = ni; ci >= 0 && !same_module; ci = m_sec_arena[ci].m_parent_idx) {
-            const SecTCandRep &an = m_sec_arena[ci];
-            if (an.m_hot.layer != pqe.layer)
-              continue;
-            const auto &La = mp_job->m_event_of_hits[an.m_hot.layer];
-            same_module = La.refHit(an.m_hot.index).detIDinLayer() ==
-                          La.refHit(pqe.hit_orig_index).detIDinLayer();
-          }
-          if (same_module) {
-            V2P2_COUNT(n_same_module_vetoed);
-            continue;
-          }
-
-          koa.item_begin(&ptc, { (int) pqe.hit_orig_index, pqe.layer }, ni, lh, pqe.hit_index);
-          koa.load_state_err_chg(m_sec_arena[ni].m_state);
-#ifdef MKFIT_TRACE
-          koa.set_tr_hitmatch_id(pqe.tr_hitmatch_id);
-#endif
-          load_module(pqe);
-          if (koa.item_finished())
-            flush();
-        }
-      }
-      flush();
-      harvest_sec_nodes();
-      frontier.swap(m_sec_harvested);
-    }
   }
 
   //----------------------------------------------------------------------------

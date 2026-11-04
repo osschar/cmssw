@@ -178,7 +178,7 @@ namespace mkfit {
 
     // The in-layer combinatorial search, replacing the two phases above when
     // Config::V2p2::InLayer::comb is on. expand_in_layer() grows the SecTCandRep
-    // tree breadth-first by depth; select_and_materialise() runs the end-of-layer
+    // tree; select_and_materialise() runs the end-of-layer
     // selection and registers the survivors into the CombCandidate.
     void expand_in_layer(LayerBatch &b);
     void select_and_materialise(CCandRep &ccrep);
@@ -200,11 +200,10 @@ namespace mkfit {
     // candidate left in the queue, and free its nodes.
     void select_completed_ccreps(const LayerBatch &b);
 
-    // The running variant of expand_in_layer(), InLayer::running_kalman. Depth 0
-    // (the Hermite crossing is known, sPerp path) and deeper steps (the plane is
-    // solved) need different propagation, so there are two batches. Each fires
-    // only when full; rk_drain() empties both at end of layer.
-    void expand_in_layer_running(LayerBatch &b);
+    // The Kalman batches of expand_in_layer(). Depth 0 (the Hermite crossing is
+    // known, sPerp path) and deeper steps (the plane is solved) need different
+    // propagation, so there are two batches. Each fires only when full;
+    // rk_drain() empties both at end of layer.
     void rk_setup(KalmanOpArgs &koa, bool solve_plane);
     void rk_flush(KalmanOpArgs &koa);
     void rk_add_item(KalmanOpArgs &koa, PrimTCandRep &ptc, const PrimTCandRep::PQE &pqe, int parent_idx,
@@ -246,9 +245,8 @@ namespace mkfit {
     // arena grows. A node is freed only with its whole CombCandidate, so no live
     // node can have a freed parent.
     std::vector<int> m_sec_free;
-    // Arena indices appended by the last harvest_sec_nodes(): the next frontier.
+    // Arena indices appended by the last harvest_sec_nodes().
     std::vector<int> m_sec_harvested;
-    std::vector<int> m_sec_frontier;   // the depth being expanded
     // Running Kalman batches, and the nodes whose children are not yet queued.
     KalmanOpArgs m_koa_d0, m_koa_deep;
     std::vector<int> m_deep_queue;
@@ -256,7 +254,7 @@ namespace mkfit {
     // batch, checked by select_completed_ccreps().
     std::vector<CCandRep*> m_ccrep_ready;
     std::vector<CCandRep*> m_ccrep_touched;
-    // Kalman outcomes of the depth currently being expanded, drained into the
+    // Kalman outcomes of the last flush, drained into the
     // arena by harvest_sec_nodes().
     std::vector<KalmanOpArgs::ItemOut> m_sec_out;
 

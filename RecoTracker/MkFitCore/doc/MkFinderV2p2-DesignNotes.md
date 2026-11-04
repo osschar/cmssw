@@ -107,18 +107,20 @@ tree nodes go back to the arena's free list. `end_layer()` selects whatever is
 left. On its own this changes nothing measurable: the arena's high water per
 layer drops from 50 to 12 nodes on average, at 184 bytes a node.
 
-**Running Kalman batches** (`InLayer::running_kalman`,
-`expand_in_layer_running()`). The in-layer Kalman batches stay open across layer
-batches and fire only when full; `rk_drain()` empties them at the end of the
-layer. There are two, because depth 0 is handed the path length from the
-Hermite while deeper steps solve the plane. A harvested node that may still be
-extended goes to `m_deep_queue` and is expanded when popped.
+**Running Kalman batches** (`expand_in_layer()`, the `rk_*` helpers). The
+in-layer Kalman batches stay open across layer batches and fire only when full;
+`rk_drain()` empties them at the end of the layer. There are two, because
+depth 0 is handed the path length from the Hermite while deeper steps solve the
+plane. A harvested node that may still be extended goes to `m_deep_queue` and
+is expanded when popped.
 `CCandRep::m_n_inflight` counts a CombCandidate's Kalman items and queued nodes,
 and an item is retired only after its children are queued, so the count cannot
 pass through zero while work remains. Every Matriplex lane is computed
-independently, so the nodes are the same as with the per-depth flush; the
-results differ only in rounding, where a lane goes through vector rather than
-scalar code. The per-depth path, `expand_in_layer()`, is kept for comparison.
+independently, so the nodes are the same as with a flush at every depth
+boundary of every layer batch, the first implementation; the results differ
+only in rounding, where a lane goes through vector rather than scalar code. The
+first implementation was removed, and the reference definition of the search
+is in "In-layer combinatorial search".
 
 Measured on phi3, T100: lanes filled at depth 0 go from 6.19 to 7.70 of 8 and
 deeper from 4.38 to 6.99 of 8, and the forward search takes 5.3 % less time at
@@ -560,13 +562,26 @@ crossings carry three or more hits, because an overlapping module is itself a
 stack.
 
 **What it does.** A path through the layer is an increasing sequence of
-positions in `m_layer_hits`. The expansion grows all paths of depth d before any
-of depth d+1. Depth 0 starts from the candidate's state, and the Hermite has
-already solved each crossing, so the propagation is handed the path length.
-Deeper nodes start from an updated state, for which no crossing is known, and
-propagate-to-plane solves it. The one-point Hermite
-(`Hermite3D::calculate_coeffs(sp, inv_k, dalpha)`) would be cheaper there and
-is not yet used.
+positions in `m_layer_hits`. Per candidate, the search is
+
+```
+frontier = { kalman(state, h) : h in m_layer_hits }               # depth 0
+for depth = 1 .. max_sec_depth - 1, while frontier is not empty:
+  next = { kalman(n.state, h) : n in frontier,
+           h after n's hit in m_layer_hits, h not on a module of n's path }
+  frontier = next
+```
+
+where `kalman()` keeps an outcome only if its acceptance chi2 passes
+`hit_chi2_cut`. Every node of every depth enters the end-of-layer selection.
+The code computes the same nodes in a different order, to keep the Matriplex
+lanes full (see "Running Kalman batches" in "Layer processing").
+
+Depth 0 starts from the candidate's state, and the Hermite has already solved
+each crossing, so the propagation is handed the path length. Deeper nodes start
+from an updated state, for which no crossing is known, and propagate-to-plane
+solves it. The one-point Hermite (`Hermite3D::calculate_coeffs(sp, inv_k,
+dalpha)`) would be cheaper there and is not yet used.
 
 Forward-only traversal of an ordered list reaches every subset of the hits
 exactly once. Taking both hits of an overlap therefore needs no special case,

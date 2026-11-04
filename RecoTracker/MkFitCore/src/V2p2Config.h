@@ -81,10 +81,6 @@ namespace mkfit {
       // layer batch, and return its tree nodes to the arena's free list, instead
       // of holding every node until end of layer.
       MKFIT_V2P2_KNOB(bool, early_select, true);
-      // Keep the in-layer Kalman batches open across layer batches and fire them
-      // only when full (or at end of layer), instead of flushing at every depth
-      // boundary of every layer batch.
-      MKFIT_V2P2_KNOB(bool, running_kalman, true);
       // Beam width per seed, decided when its CombCandidate is activated in a
       // layer: the CombCandidate keeps late_max_cands candidates instead of its
       // capacity (maxCandsPerSeed), and the surplus is dropped at activation,
