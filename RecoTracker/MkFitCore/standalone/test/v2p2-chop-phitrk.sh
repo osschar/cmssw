@@ -32,7 +32,6 @@ CMD=(./mkFit --geom CMS-phase2 --seed-input cmssw --input-file "$SAMPLE"
      --shell-command 'gROOT->SetBatch(kTRUE)'
      --shell-command "gROOT->ProcessLine(\".L $T/val-prop.C\")"
      --shell-command 'val_seeds(0, true)'
-     --shell-command 'val_in_layer_comb(1)'
      --shell-command 'val_reserve_hole_slot(0)'
      --shell-command 'val_score_mode(0, 0.99)')
 

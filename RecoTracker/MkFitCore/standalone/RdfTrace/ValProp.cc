@@ -1300,16 +1300,6 @@ namespace mkfit {
     }
   }
 
-  // Toggle material on the SEARCH's inter-layer propagation, the Kalman step to
-  // the hit's module plane.
-  // Oracle: force the MC-matched hit to win its layer and bypass the chi2 cut.
-  // Separates "the true hit was never available" from "ranking / pruning threw
-  // it away". Never a production path.
-  void val_force_mc(bool on) {
-    V2p2::Diag::force_mc = on;
-    printf("val_force_mc: V2p2::Diag::force_mc = %d\n", (int) on);
-  }
-
   // Both parameter sets, not just the forward one: the beam width a candidate
   // actually gets is CombCandidate::capacity(), reserved from
   // MkJob::max_max_cands() = max(params(), params_bks()), so setting the forward
@@ -1425,6 +1415,8 @@ namespace mkfit {
     printf("val_bkw_pickups: %d %d %d %d %d\n", r0, r1, r2, r3, r4);
   }
 
+  // Toggle material on the SEARCH's inter-layer propagation, the Kalman step to
+  // the hit's module plane.
   void val_search_material(bool on) {
     auto &pc = const_cast<PropagationConfig&>(Config::TrkInfo.prop_config());
     pc.finding_inter_layer_pflags.apply_material = on;
@@ -1699,9 +1691,15 @@ namespace mkfit {
            mode, hit_eff);
   }
 
-  void val_in_layer_comb(bool on) {
-    V2p2::InLayer::comb = on;
-    printf("val_in_layer_comb: V2p2::InLayer::comb = %d\n", (int) on);
+  // Most hits one path may take in a layer. 1 with val_max_cands(1) is a single
+  // greedy path, the closest the search gets to one best hit per layer.
+  void val_max_sec_depth(int n) {
+    if (n < 1 || n > V2p2Params::max_sec_depth_limit) {
+      printf("val_max_sec_depth: %d out of range [1, %d], ignored\n", n, V2p2Params::max_sec_depth_limit);
+      return;
+    }
+    for_each_v2p2_params([n](V2p2Params &p) { p.max_sec_depth = n; });
+    printf("val_max_sec_depth: %d\n", n);
   }
 
   // miss_fwd / miss_bkw are the head-body asymmetry: outward a trailing hole is
@@ -2099,8 +2097,8 @@ namespace mkfit {
                   // so counting them in the denominator understates the rate.
                   long n_trk_with_pix = 0;
                   // Distinct LAYERS with a sim hit, against the hit count. The
-                  // search adds at most one hit per layer (the best-hit hack),
-                  // so layers/hits is a hard ceiling on the efficiency above --
+                  // search took at most one hit per layer before the in-layer
+                  // search, so layers/hits was a hard ceiling on the efficiency above --
                   // and phase-2 disks carry module overlaps, so it is well below 1.
                   long sim_pix_lay = 0, sim_dsk_lay = 0; };
     TEff g_te[2];   // [0] barrel-only sim track, [1] touches the disks
@@ -2209,8 +2207,8 @@ namespace mkfit {
            "w/ pixB","any pixB*");
     printf("  (* fraction of tracks that HAVE a pixel-barrel hit and got at least one)\n");
     printf("  CEILING = distinct layers / hits. It was a hard ceiling while the search\n");
-    printf("  added at most ONE hit per layer (the best-hit hack); with the in-layer\n");
-    printf("  combinatorial (V2p2::InLayer::comb) it is a soft one -- a path may take\n");
+    printf("  added at most ONE hit per layer (the best-hit path); with the in-layer\n");
+    printf("  combinatorial search it is a soft one -- a path may take\n");
     printf("  several hits in a layer, so read these as a FRACTION OF CEILING, not against\n");
     printf("  100%%. Overlaps are what put the ceiling well below 100%% in the first place.\n");
     const char *nm[2] = {"barrel-only", "touches disks"};

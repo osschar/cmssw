@@ -24,7 +24,6 @@ CMD=(./mkFit --geom CMS-phase2 --seed-input cmssw --input-file "$SAMPLE"
      --num-events "$N" --num-thr 1 --build-mimi --build-mimi-v2p2 --shell
      --shell-command 'gROOT->SetBatch(kTRUE)'
      --shell-command "gROOT->ProcessLine(\".L $T/val-prop.C\")"
-     --shell-command 'val_in_layer_comb(1)'
      --shell-command 'val_max_cands(6)'
      --shell-command 'val_search_lite(1)'
      --shell-command 'val_sr_reset()')

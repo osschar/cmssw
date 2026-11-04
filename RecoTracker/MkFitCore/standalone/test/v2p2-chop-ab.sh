@@ -27,16 +27,16 @@ CMD=(./mkFit --geom CMS-phase2 --seed-input cmssw --input-file "$SAMPLE"
      --shell-command "gROOT->ProcessLine(\".L $T/val-prop.C\")"
      --shell-command 'val_seeds(0, true)')
 
-#     comb slot mode eps    label
-CFG=("0    0    0    0.99   BASE__best_hit"
-     "1    0    0    0.99   COMB__linear"
-     "1    1    0    0.99   COMB__linear__hole_slot"
-     "1    0    1    0.9999 COMB__loglh"
-     "1    1    1    0.9999 COMB__loglh__hole_slot")
+#     depth slot mode eps    label
+CFG=("1    0    0    0.99   BASE__depth1"
+     "4    0    0    0.99   COMB__linear"
+     "4    1    0    0.99   COMB__linear__hole_slot"
+     "4    0    1    0.9999 COMB__loglh"
+     "4    1    1    0.9999 COMB__loglh__hole_slot")
 
 for c in "${CFG[@]}"; do
   set -- $c
-  CMD+=(--shell-command "val_in_layer_comb($1)"
+  CMD+=(--shell-command "val_max_sec_depth($1)"
         --shell-command "val_reserve_hole_slot($2)"
         --shell-command "val_score_mode($3, $4)"
         --shell-command 'val_te_reset()')

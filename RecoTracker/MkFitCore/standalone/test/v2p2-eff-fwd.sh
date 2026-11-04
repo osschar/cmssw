@@ -27,19 +27,19 @@ CMD=(./mkFit --geom CMS-phase2 --seed-input cmssw --input-file "$SAMPLE"
      --shell-command 'gROOT->SetBatch(kTRUE)'
      --shell-command "gROOT->ProcessLine(\".L $T/val-prop.C\")"
      --shell-command 'val_eff_reset()'
-     --shell-command 'val_eff_ref("base_c6")')
+     --shell-command 'val_eff_ref("depth1_c6")')
 
-#     comb cap mode eps     label
-CFG=("0    6   0    0.99    base_c6"
-     "0    3   0    0.99    base_c3"
-     "1    6   0    0.99    comb_c6"
-     "1    3   0    0.99    comb_c3"
-     "1    3   1    0.99    LL99_c3"
-     "1    3   1    0.9999  LL9999_c3")
+#     depth cap mode eps    label
+CFG=("1    6   0    0.99    depth1_c6"
+     "1    3   0    0.99    depth1_c3"
+     "4    6   0    0.99    comb_c6"
+     "4    3   0    0.99    comb_c3"
+     "4    3   1    0.99    LL99_c3"
+     "4    3   1    0.9999  LL9999_c3")
 
 for c in "${CFG[@]}"; do
   set -- $c
-  CMD+=(--shell-command "val_in_layer_comb($1)"
+  CMD+=(--shell-command "val_max_sec_depth($1)"
         --shell-command "val_max_cands($2)"
         --shell-command "val_score_mode($3, $4)")
   for ((i=1;i<=N;i++)); do

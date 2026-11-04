@@ -34,7 +34,6 @@ void val_seedcmp(const mkfit::Event *ev) { mkfit::val_seed_vs_cmssw(ev); }
 void val_seedcov(const mkfit::Event *ev, int kind = 1) { mkfit::val_seed_cov(ev, kind); }
 
 void val_covx(const char *f = "val-covxport.root", int n = 10000) { mkfit::val_cov_transport(f, n); }
-void val_force_mc(bool on) { mkfit::val_force_mc(on); }
 void val_max_cands(int n) { mkfit::val_max_cands(n); }
 void val_sr_mat(bool on) { mkfit::val_search_material(on); }
 void val_surf_q(bool on) { mkfit::val_mkbins_surface_q(on); }
@@ -71,7 +70,7 @@ void val_sister_hole(bool on, float chi2 = 0) { mkfit::val_sister_hole(on, chi2)
 void val_max_cands_fb(int n_fwd, int n_bkw) { mkfit::val_max_cands_fb(n_fwd, n_bkw); }
 void val_bkfit_outliers(float chi2, int max_outliers, float min_pt) { mkfit::val_bkfit_outliers(chi2, max_outliers, min_pt); }
 void val_dup_drth(float central, float obarrel, float forward) { mkfit::val_dup_drth(central, obarrel, forward); }
-void val_in_layer_comb(bool on) { mkfit::val_in_layer_comb(on); }
+void val_max_sec_depth(int n) { mkfit::val_max_sec_depth(n); }
 void val_layer_policy(bool w, bool h, bool s) { mkfit::val_layer_policy(w, h, s); }
 void val_reserve_hole_slot(bool on) { mkfit::val_reserve_hole_slot(on); }
 void val_rho_in_window(bool on) { mkfit::val_rho_in_window(on); }

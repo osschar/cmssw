@@ -26,7 +26,7 @@ fi
 
 BASE=(--geom CMS-phase2 --seed-input cmssw --input-file "$SAMPLE"
       --num-events "$N" --num-thr 1 --num-thr-ev 1 --num-iters-cmssw 1 --silent
-      --build-mimi --build-mimi-v2p2 --v2p2-in-layer-comb 1 --max-cands-per-seed 3
+      --build-mimi --build-mimi-v2p2 --max-cands-per-seed 3
       --v2p2-phi-per-hit 0 --v2p2-dphi-trk 1.0)  # the phi window it was recorded with
 
 mkdir -p "$OUT"

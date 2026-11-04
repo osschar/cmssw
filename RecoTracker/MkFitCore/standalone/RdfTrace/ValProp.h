@@ -98,7 +98,6 @@ namespace mkfit {
 
   void val_cov_transport(const char *out_file, int n_samp = 10000, unsigned seed = 20260913);
 
-  void val_force_mc(bool on);
   void val_max_cands(int n);
   void val_search_material(bool on);
   void val_mkbins_surface_q(bool on);
@@ -123,7 +122,7 @@ namespace mkfit {
   void val_surf_q_hit(bool on);
   // MkFinderV2p2 in-layer combinatorial search and its score, so a scan costs one
   // build and every configuration sees identical events and seeds in one process.
-  void val_in_layer_comb(bool on);
+  void val_max_sec_depth(int n);
   void val_layer_policy(bool wsr, bool hole_limits, bool stop_cuts);
   void val_late_max_cands(int max_cands, int hits, float step_cm = 0.0f);
   void val_sister_hole(bool on, float chi2 = 0.0f);

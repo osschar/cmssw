@@ -651,8 +651,6 @@ int main(int argc, const char* argv[]) {
           "  --v2p2-hit-chi2-cut <f>  MkFinderV2p2: Kalman hit acceptance cut on the acceptance chi2 (def: %g)\n"
           "  --v2p2-chi2-trk-fac <f>  MkFinderV2p2: scale on the track sigma in the acceptance chi2, the hit\n"
           "                           covariance is taken as it is (def: %g)\n"
-          "  --v2p2-in-layer-comb <0|1>  MkFinderV2p2: in-layer combinatorial search -- take a step-ordered\n"
-          "                           SEQUENCE of hits per layer instead of the single best one (def: %d)\n"
           "  --v2p2-score-mode <0|1>  MkFinderV2p2 score: 0 linear, 1 log-likelihood ratio (def: %d)\n"
           "  --v2p2-hit-eff <f>       MkFinderV2p2 score, likelihood mode: per-layer hit efficiency,\n"
           "                           for both directions and every layer group, which clears the\n"
@@ -843,7 +841,6 @@ int main(int argc, const char* argv[]) {
           int(V2p2::Policy::use_stop_cuts),
           v2p2d.hit_chi2_cut,
           V2p2::Policy::chi2_trk_fac,
-          int(V2p2::InLayer::comb),
           V2p2::Score::mode,
           v2p2d.score_outward.hit_eff,
           v2p2d.score_inward.hit_eff,
@@ -1099,9 +1096,6 @@ int main(int argc, const char* argv[]) {
     } else if (*i == "--v2p2-chi2-trk-fac") {
       next_arg_or_die(mArgs, i);
       V2p2::Policy::chi2_trk_fac = atof(i->c_str());
-    } else if (*i == "--v2p2-in-layer-comb") {
-      next_arg_or_die(mArgs, i);
-      V2p2::InLayer::comb = (bool)atoi(i->c_str());
     } else if (*i == "--v2p2-score-mode") {
       next_arg_or_die(mArgs, i);
       V2p2::Score::mode = atoi(i->c_str());

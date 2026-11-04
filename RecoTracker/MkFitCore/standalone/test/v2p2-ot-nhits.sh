@@ -18,14 +18,13 @@ CMD=(./mkFit --geom CMS-phase2 --seed-input cmssw --read-cmssw-tracks --input-fi
      --shell-command 'gROOT->SetBatch(kTRUE)'
      --shell-command "gROOT->ProcessLine(\".L $T/val-prop.C\")"
      --shell-command "gROOT->ProcessLine(\".L $T/an-ot-nhits.C\")"
-     --shell-command 'val_in_layer_comb(1)'
      --shell-command 'val_max_cands(3)'
      --shell-command 'ot_nh_reset()')
 for ((i=1;i<=N;i++)); do
   CMD+=(--shell-command "s.GoToEvent($i)" --shell-command 's.ProcessEventStd()' --shell-command 'ot_nh_ev(s.event(), 0)')
 done
-# second pass: one best hit per layer, same cap
-CMD+=(--shell-command 'val_in_layer_comb(0)')
+# second pass: one hit per layer (max_sec_depth 1), same cap
+CMD+=(--shell-command 'val_max_sec_depth(1)')
 for ((i=1;i<=N;i++)); do
   CMD+=(--shell-command "s.GoToEvent($i)" --shell-command 's.ProcessEventStd()' --shell-command 'ot_nh_ev(s.event(), 1)')
 done
