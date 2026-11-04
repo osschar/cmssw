@@ -20,9 +20,6 @@ namespace mkfit {
 
   using namespace Config::V2p2;
 
-  //------------------------------------------------------------------------------
-  // Setup variables for full processing of a batch of CombCandidates
-
   void MkFinderV2p2::setup(const MkJob* job,
                            EventOfCombCandidates& eoccs,
                            int seed_begin,
@@ -62,9 +59,6 @@ namespace mkfit {
     m_cand_queue_head = 0;
   }
 
-  //------------------------------------------------------------------------------
-  // Helpers.
-
   int MkFinderV2p2::awaken_candidates() {
     // Awaken dormant ccands with hits on current layer for processing on the next layer.
     int count = 0;
@@ -95,62 +89,6 @@ namespace mkfit {
 
     return count;
   }
-
-  //------------------------------------------------------------------------------
-  // stop_cuts_at_pickup() -- minPtCut and the looper stop, which need only the
-  // candidate's own state. The looper test covers both wrap images of
-  // |posPhi - momPhi|. See doc/MkFinderV2p2-DesignNotes.md,
-  // "Candidate pickup and stopping cuts".
-  //----------------------------------------------------------------------------
-
-  TrackCand::StopReason_e MkFinderV2p2::stop_cuts_at_pickup(const TrackCand& tc) const {
-    const SteeringParams::iterator& spi = *mp_steeringparams_iter;
-    const auto& iter_params = (spi.type() == SteeringParams::IT_BkwSearch) ? mp_job->params_bks() : mp_job->params();
-
-    if (tc.pT() < iter_params.minPtCut)
-      return TrackCand::SR_MinPt;
-
-    // Forward search only: going inward the track is leaving the turning region,
-    // so a large angle there is not evidence that it is about to curl up.
-    if (spi.type() == SteeringParams::IT_FwdSearch && tc.pT() < Policy::looper_max_pt &&
-        tc.posRsq() > Policy::looper_min_r * Policy::looper_min_r) {
-      const float max_ang = Policy::looper_max_angle;
-      const float dphi = std::abs(tc.posPhi() - tc.momPhi());
-      if (dphi > max_ang && dphi < Const::TwoPI - max_ang)
-        return TrackCand::SR_Looper;
-    }
-
-    return TrackCand::SR_NotStopped;
-  }
-
-  //----------------------------------------------------------------------------
-  // fake_hit_index() -- the fake HoT for a candidate that took no hit: the hole
-  // limits choose miss or stop, then the WSR overrides with edge or gap, in
-  // V1's order.
-  //----------------------------------------------------------------------------
-
-  int MkFinderV2p2::fake_hit_index(const TrackCand& tc, const WSR_Result& wsr) const {
-    const SteeringParams::iterator& spi = *mp_steeringparams_iter;
-    const auto& iter_params = (spi.type() == SteeringParams::IT_BkwSearch) ? mp_job->params_bks() : mp_job->params();
-
-    int fake_hit_idx = Hit::kHitMissIdx;
-
-    if (Policy::use_hole_limits &&
-        (tc.nAllMinusOneHits() >= iter_params.maxHolesPerCand || tc.nTailMinusOneHits() >= iter_params.maxConsecHoles))
-      fake_hit_idx = Hit::kHitStopIdx;
-
-    if (Policy::use_wsr) {
-      if (wsr.m_wsr == WSR_Edge)
-        fake_hit_idx = Hit::kHitEdgeIdx;
-      else if (wsr.m_in_gap)
-        fake_hit_idx = Hit::kHitInGapIdx;
-    }
-
-    return fake_hit_idx;
-  }
-
-  //------------------------------------------------------------------------------
-  // Per layer initialization / cleanup tasks.
 
   void MkFinderV2p2::begin_layer() {
     dprintf("MkFinderV2p2::begin_layer Expecting %d active ccands\n", (int)m_active_ccreps.size());
@@ -183,76 +121,93 @@ namespace mkfit {
     }
   }
 
-  // InLayer::sister_hole_drop: remove from m_sel the holes that a path of the same
-  // TrackCand dominates by taking the sister sensor of its last hit. A sister pair
-  // is two adjacent layers, the lower one stereo and the upper one not, and the
-  // upper sensor's detid is the lower one's + 1; either may be crossed first.
-  void MkFinderV2p2::drop_sister_dominated_holes(const CombCandidate& ccand) {
-    const int lay = m_rz_limits.layer_info_1().layer_id();
-    const TrackerInfo& ti = mp_job->m_trk_info;
-    auto detid_of = [this](int layer, int idx) {
-      const LayerOfHits& L = mp_job->m_event_of_hits[layer];
-      return L.layer_info().module_info(L.refHit(idx).detIDinLayer()).detid;
-    };
-    int w = 0;
-    for (int k = 0; k < (int)m_sel.size(); ++k) {
-      const SelEntry e = m_sel[k];
-      bool drop = false;
-      if (e.node_idx < 0 && e.add_fake) {
-        const TrackCand& tc = ccand[e.tcand_idx];
-        const int pl = tc.getLastHitLyr(), pi = tc.getLastHitIdx();
-        const int lo = std::min(pl, lay), hi = std::max(pl, lay);
-        if (pi >= 0 && hi == lo + 1 && ti.layer(lo).is_stereo() && !ti.layer(hi).is_stereo()) {
-          const unsigned int d_prev = detid_of(pl, pi);
-          for (const SelEntry& f : m_sel) {
-            if (f.node_idx < 0 || f.tcand_idx != e.tcand_idx)
-              continue;
-            int root = f.node_idx;
-            while (m_sec_arena[root].m_parent_idx >= 0)
-              root = m_sec_arena[root].m_parent_idx;
-            const SecTCandRep& r = m_sec_arena[root];
-            if (InLayer::sister_hole_chi2 > 0.0f && !(r.m_chi2 < InLayer::sister_hole_chi2))
-              continue;
-            const unsigned int d_this = detid_of(r.m_hot.layer, r.m_hot.index);
-            if (pl < lay ? d_this == d_prev + 1 : d_prev == d_this + 1) {
-              drop = true;
-              break;
-            }
-          }
-        }
+  void MkFinderV2p2::process_layer() {
+    // Pull CombCandidates into the layer until NN candidates are queued, then
+    // drain the queue NN at a time. See doc/MkFinderV2p2-DesignNotes.md,
+    // "Layer processing".
+    while (any_Ccreps_to_begin()) {
+      while (!enough_work_for_batch() && any_Ccreps_to_begin()) {
+        begin_next_Ccrep_in_layer();
       }
-      if (drop)
-        V2P2_COUNT(n_sister_hole_dropped);
-      else
-        m_sel[w++] = e;
+      while (enough_work_for_batch() || (!any_Ccreps_to_begin() && any_work_for_batch())) {
+        process_layer_batch();
+      }
     }
-    m_sel.resize(w);
+
+    // Drained by construction: the inner loop's second clause runs until empty
+    // once there is nothing left to pull in.
+    assert(cand_queue_size() == 0 && "pre-select queue not drained by process_layer()");
+
+    // The in-layer Kalman batches hold partial work across layer batches; empty
+    // them before end_layer() selects whatever is left.
+    rk_drain();
   }
 
-  // Straight-line path length from the candidate's state (its last hit) to the
-  // layer's near surface, against InLayer::late_max_cands_step_cm. Barrel: radial gap
-  // times p / pT; endcap: z gap times p / |pz|. Curvature is ignored, so the
-  // barrel path is underestimated for strongly bending tracks.
-  bool MkFinderV2p2::long_step_to_layer(const TrackCand& tc) const {
-    if (InLayer::late_max_cands_step_cm <= 0.0f)
-      return false;
-    const LayerInfo& li = m_rz_limits.layer_info_1();
-    float s;
-    if (li.is_barrel()) {
-      const float r = tc.posR();
-      const float dr = std::max({li.rin() - r, r - li.rout(), 0.0f});
-      s = dr * tc.p() / std::max(1e-3f, tc.pT());
-    } else {
-      const float z = tc.z();
-      const float dz = std::max({li.zmin() - z, z - li.zmax(), 0.0f});
-      s = dz * tc.p() / std::max(1e-3f, std::abs(tc.pz()));
+  void MkFinderV2p2::end_layer() {
+    int count = 0;
+    auto ai = m_active_ccreps.begin();
+    while (ai != m_active_ccreps.end()) {
+      if (!ai->m_selected)
+        select_and_materialise(*ai);
+
+      ai->m_primTCs.clear();
+      ai->m_sec_nodes.clear();
+
+      // A CombCandidate is finished once every TrackCand under it has stopped.
+      bool is_finished = false;
+      if (Policy::use_stop_cuts || Policy::use_hole_limits) {
+        CombCandidate& cc = ai->m_ccand;
+        is_finished = true;
+        for (int ic = 0; ic < (int)cc.size(); ++ic) {
+          if (cc[ic].getLastHitIdx() != Hit::kHitStopIdx) {
+            is_finished = false;
+            break;
+          }
+        }
+        if (is_finished) {
+          cc.setState(CombCandidate::Finished);
+          V2P2_COUNT(n_ccand_retired);
+        }
+      }
+      if (is_finished) {
+        auto bi = ai++;
+        m_active_ccreps.erase(bi);
+        ++count;
+        continue;
+      }
+      ++ai;
     }
-    if (s > InLayer::late_max_cands_step_cm) {
-      V2P2_COUNT(n_late_max_cands_long);
-      return true;
+    m_batch_mgr.m_n_finding -= count;
+
+    // One rewind for the whole layer, keeping capacity: after a few layers the
+    // arena is at high water and stops allocating. Its size here is this layer's
+    // high water, since slots are reused but the vector never shrinks.
+#if defined(MKFIT_STANDALONE)
+    {
+      const long hw = (long)m_sec_arena.size();
+      V2P2_COUNT(n_arena_layers);
+      V2P2_COUNT_ADD(n_arena_hw_sum, hw);
+      long mx = g_v2p2_policy_counters.n_arena_hw_max.load();
+      while (hw > mx && !g_v2p2_policy_counters.n_arena_hw_max.compare_exchange_weak(mx, hw)) {
+      }
     }
-    return false;
+#endif
+    m_sec_arena.clear();
+    m_sec_free.clear();
+
+    m_rz_limits.reset();
+
+    dprintf("MkFinderV2p2::end_layer %d cands finished\n", count);
+
+    if (m_batch_mgr.has_dormant_ccands())
+      awaken_candidates();
   }
+
+  //----------------------------------------------------------------------------
+  // Layer control: pull CombCandidates into the layer, queue their TrackCands,
+  // and run the queue through process_layer_batch(); the candidate-stopping cuts
+  // and the fake HoT of a candidate that takes no hit.
+  //----------------------------------------------------------------------------
 
   void MkFinderV2p2::begin_next_Ccrep_in_layer() {
     CCandRep& ccrep = *m_active_ccreps_pos;
@@ -316,97 +271,6 @@ namespace mkfit {
     ++m_active_ccreps_pos;
   }
 
-  // void MkFinderV2p2::process_layer_batch() -- below in the "complex stuff" section
-
-  void MkFinderV2p2::end_layer() {
-    int count = 0;
-    auto ai = m_active_ccreps.begin();
-    while (ai != m_active_ccreps.end()) {
-      if (!ai->m_selected)
-        select_and_materialise(*ai);
-
-      ai->m_primTCs.clear();
-      ai->m_sec_nodes.clear();
-
-      // A CombCandidate is finished once every TrackCand under it has stopped.
-      bool is_finished = false;
-      if (Policy::use_stop_cuts || Policy::use_hole_limits) {
-        CombCandidate& cc = ai->m_ccand;
-        is_finished = true;
-        for (int ic = 0; ic < (int)cc.size(); ++ic) {
-          if (cc[ic].getLastHitIdx() != Hit::kHitStopIdx) {
-            is_finished = false;
-            break;
-          }
-        }
-        if (is_finished) {
-          cc.setState(CombCandidate::Finished);
-          V2P2_COUNT(n_ccand_retired);
-        }
-      }
-      if (is_finished) {
-        auto bi = ai++;
-        m_active_ccreps.erase(bi);
-        ++count;
-        continue;
-      }
-      ++ai;
-    }
-    m_batch_mgr.m_n_finding -= count;
-
-    // One rewind for the whole layer, keeping capacity: after a few layers the
-    // arena is at high water and stops allocating. Its size here is this layer's
-    // high water, since slots are reused but the vector never shrinks.
-#if defined(MKFIT_STANDALONE)
-    {
-      const long hw = (long)m_sec_arena.size();
-      V2P2_COUNT(n_arena_layers);
-      V2P2_COUNT_ADD(n_arena_hw_sum, hw);
-      long mx = g_v2p2_policy_counters.n_arena_hw_max.load();
-      while (hw > mx && !g_v2p2_policy_counters.n_arena_hw_max.compare_exchange_weak(mx, hw)) {
-      }
-    }
-#endif
-    m_sec_arena.clear();
-    m_sec_free.clear();
-
-    m_rz_limits.reset();
-
-    dprintf("MkFinderV2p2::end_layer %d cands finished\n", count);
-
-    if (m_batch_mgr.has_dormant_ccands())
-      awaken_candidates();
-  }
-
-  //------------------------------------------------------------------------------
-  // The main processing function -- process_layer()
-
-  void MkFinderV2p2::process_layer() {
-    // Pull CombCandidates into the layer until NN candidates are queued, then
-    // drain the queue NN at a time. See doc/MkFinderV2p2-DesignNotes.md,
-    // "Layer processing".
-    while (any_Ccreps_to_begin()) {
-      while (!enough_work_for_batch() && any_Ccreps_to_begin()) {
-        begin_next_Ccrep_in_layer();
-      }
-      while (enough_work_for_batch() || (!any_Ccreps_to_begin() && any_work_for_batch())) {
-        process_layer_batch();
-      }
-    }
-
-    // Drained by construction: the inner loop's second clause runs until empty
-    // once there is nothing left to pull in.
-    assert(cand_queue_size() == 0 && "pre-select queue not drained by process_layer()");
-
-    // The in-layer Kalman batches hold partial work across layer batches; empty
-    // them before end_layer() selects whatever is left.
-    rk_drain();
-  }
-
-  //============================================================================
-  // More complex functions -- to separate them from the main "logic" flow
-  //============================================================================
-
   //----------------------------------------------------------------------------
   // process_layer_batch() -- one batch of up to NN candidates through the layer.
   // LayerBatch is NN candidates wide, HitBatch is NN (candidate, hit) pairs wide.
@@ -426,6 +290,84 @@ namespace mkfit {
     expand_in_layer(b);  // grow the SecTCandRep tree over the ordered hits
     if (InLayer::early_select)
       select_completed_ccreps(b);
+  }
+
+  //------------------------------------------------------------------------------
+  // stop_cuts_at_pickup() -- minPtCut and the looper stop, which need only the
+  // candidate's own state. The looper test covers both wrap images of
+  // |posPhi - momPhi|. See doc/MkFinderV2p2-DesignNotes.md,
+  // "Candidate pickup and stopping cuts".
+  //----------------------------------------------------------------------------
+
+  TrackCand::StopReason_e MkFinderV2p2::stop_cuts_at_pickup(const TrackCand& tc) const {
+    const SteeringParams::iterator& spi = *mp_steeringparams_iter;
+    const auto& iter_params = (spi.type() == SteeringParams::IT_BkwSearch) ? mp_job->params_bks() : mp_job->params();
+
+    if (tc.pT() < iter_params.minPtCut)
+      return TrackCand::SR_MinPt;
+
+    // Forward search only: going inward the track is leaving the turning region,
+    // so a large angle there is not evidence that it is about to curl up.
+    if (spi.type() == SteeringParams::IT_FwdSearch && tc.pT() < Policy::looper_max_pt &&
+        tc.posRsq() > Policy::looper_min_r * Policy::looper_min_r) {
+      const float max_ang = Policy::looper_max_angle;
+      const float dphi = std::abs(tc.posPhi() - tc.momPhi());
+      if (dphi > max_ang && dphi < Const::TwoPI - max_ang)
+        return TrackCand::SR_Looper;
+    }
+
+    return TrackCand::SR_NotStopped;
+  }
+
+  // Straight-line path length from the candidate's state (its last hit) to the
+  // layer's near surface, against InLayer::late_max_cands_step_cm. Barrel: radial gap
+  // times p / pT; endcap: z gap times p / |pz|. Curvature is ignored, so the
+  // barrel path is underestimated for strongly bending tracks.
+  bool MkFinderV2p2::long_step_to_layer(const TrackCand& tc) const {
+    if (InLayer::late_max_cands_step_cm <= 0.0f)
+      return false;
+    const LayerInfo& li = m_rz_limits.layer_info_1();
+    float s;
+    if (li.is_barrel()) {
+      const float r = tc.posR();
+      const float dr = std::max({li.rin() - r, r - li.rout(), 0.0f});
+      s = dr * tc.p() / std::max(1e-3f, tc.pT());
+    } else {
+      const float z = tc.z();
+      const float dz = std::max({li.zmin() - z, z - li.zmax(), 0.0f});
+      s = dz * tc.p() / std::max(1e-3f, std::abs(tc.pz()));
+    }
+    if (s > InLayer::late_max_cands_step_cm) {
+      V2P2_COUNT(n_late_max_cands_long);
+      return true;
+    }
+    return false;
+  }
+
+  //----------------------------------------------------------------------------
+  // fake_hit_index() -- the fake HoT for a candidate that took no hit: the hole
+  // limits choose miss or stop, then the WSR overrides with edge or gap, in
+  // V1's order.
+  //----------------------------------------------------------------------------
+
+  int MkFinderV2p2::fake_hit_index(const TrackCand& tc, const WSR_Result& wsr) const {
+    const SteeringParams::iterator& spi = *mp_steeringparams_iter;
+    const auto& iter_params = (spi.type() == SteeringParams::IT_BkwSearch) ? mp_job->params_bks() : mp_job->params();
+
+    int fake_hit_idx = Hit::kHitMissIdx;
+
+    if (Policy::use_hole_limits &&
+        (tc.nAllMinusOneHits() >= iter_params.maxHolesPerCand || tc.nTailMinusOneHits() >= iter_params.maxConsecHoles))
+      fake_hit_idx = Hit::kHitStopIdx;
+
+    if (Policy::use_wsr) {
+      if (wsr.m_wsr == WSR_Edge)
+        fake_hit_idx = Hit::kHitEdgeIdx;
+      else if (wsr.m_in_gap)
+        fake_hit_idx = Hit::kHitInGapIdx;
+    }
+
+    return fake_hit_idx;
   }
 
   //----------------------------------------------------------------------------
@@ -1237,73 +1179,19 @@ namespace mkfit {
   // "In-layer combinatorial search".
   //----------------------------------------------------------------------------
 
-  int MkFinderV2p2::sec_node_slot() {
-    if (m_sec_free.empty()) {
-      m_sec_arena.emplace_back();
-      return (int)m_sec_arena.size() - 1;
-    }
-    const int slot = m_sec_free.back();
-    m_sec_free.pop_back();
-    return slot;
-  }
-
-  void MkFinderV2p2::harvest_sec_nodes() {
-    m_sec_harvested.clear();
-    for (const auto& o : m_sec_out) {
-      if (!(o.chi2_acc < mp_job->v2p2().hit_chi2_cut))  // also rejects NaN
-        continue;
-      SecTCandRep n;
-      n.m_ptc = o.ptc;
-      n.m_parent_idx = o.parent_idx;
-      n.m_hit_pos = o.hit_pos;
-      n.m_hot = o.hot;
-      n.m_state = o.state;
-      n.m_chi2 = o.chi2;
-
-      // Features accumulate parent -> child. The parent is always already in the
-      // arena: a node's children are queued only after it has been harvested.
-      const LayerStepFeatures* pf = (o.parent_idx >= 0) ? &m_sec_arena[o.parent_idx].m_feat : nullptr;
-      LayerStepFeatures& f = n.m_feat;
-      if (pf)
-        f = *pf;
-      else
-        fill_step_geometry(f, o.ptc->m_log_rho);
-      if (pf)
-        V2P2_COUNT(n_sec_deep);
-      f.n_hits = (pf ? pf->n_hits : 0) + 1;
-      f.n_overlap = f.n_hits - 1;
-      f.hole_kind = V2P2_NoHole;
-      f.chi2_sum = (pf ? pf->chi2_sum : 0.0f) + o.chi2;
-      f.log_det_v_sum = (pf ? pf->log_det_v_sum : 0.0f) + std::log(std::max(1e-30f, o.det_v));
-#ifdef MKFIT_TRACE
-      n.m_tr_hitmatch_id = o.tr_hitmatch_id;
-#endif
-      const int slot = sec_node_slot();  // may grow the arena: pf is dead by now
-      m_sec_arena[slot] = n;             // a reused slot is overwritten whole
-      o.ptc->mp_ccrep->m_sec_nodes.push_back(slot);
-      m_sec_harvested.push_back(slot);
-    }
+  void MkFinderV2p2::expand_in_layer(LayerBatch& b) {
+    rk_setup(m_koa_d0, false);
+    rk_setup(m_koa_deep, true);
     m_sec_out.clear();
-    V2P2_COUNT_ADD(n_sec_nodes, (long)m_sec_harvested.size());
-  }
-
-  void MkFinderV2p2::select_completed_ccreps(const LayerBatch& b) {
-    // The batch's PrimTCandReps stay alive: end_layer() clears m_primTCs.
-    auto try_select = [this](CCandRep& ccrep) {
-      if (ccrep.m_n_queued > 0 || ccrep.m_n_inflight > 0 || ccrep.m_selected)
-        return;
-      select_and_materialise(ccrep);
-      ccrep.m_selected = true;
-      V2P2_COUNT(n_early_selections);
-      for (const int ni : ccrep.m_sec_nodes)
-        m_sec_free.push_back(ni);
-      ccrep.m_sec_nodes.clear();
-    };
-    for (int i = 0; i < b.N_proc; ++i)
-      try_select(*b.ptc[i]->mp_ccrep);
-    for (CCandRep* c : m_ccrep_ready)
-      try_select(*c);
-    m_ccrep_ready.clear();
+    for (int i = 0; i < b.N_proc; ++i) {
+      PrimTCandRep& ptc = *b.ptc[i];
+      if (Policy::use_wsr && ptc.m_wsr.m_wsr == WSR_Outside)
+        continue;
+      const int nlh = (int)ptc.m_layer_hits.size();
+      for (int lh = 0; lh < nlh; ++lh)
+        rk_add_item(m_koa_d0, ptc, ptc.m_layer_hits[lh], -1, lh);
+      rk_pump();
+    }
   }
 
   //----------------------------------------------------------------------------
@@ -1312,12 +1200,6 @@ namespace mkfit {
   // flight and its nodes still to be expanded, so it can be selected as soon as
   // both reach zero.
   //----------------------------------------------------------------------------
-
-  void MkFinderV2p2::load_hit_module(KalmanOpArgs& koa, const PrimTCandRep::PQE& pqe) const {
-    const auto& L = mp_job->m_event_of_hits[pqe.layer];
-    const Hit& hit = L.refHit(pqe.hit_orig_index);
-    koa.load_hit_module(hit, L.layer_info().module_info(hit.detIDinLayer()));
-  }
 
   void MkFinderV2p2::rk_setup(KalmanOpArgs& koa, bool solve_plane) {
     koa.prop_config = &mp_job->m_trk_info.prop_config();
@@ -1412,21 +1294,6 @@ namespace mkfit {
     }
   }
 
-  void MkFinderV2p2::expand_in_layer(LayerBatch& b) {
-    rk_setup(m_koa_d0, false);
-    rk_setup(m_koa_deep, true);
-    m_sec_out.clear();
-    for (int i = 0; i < b.N_proc; ++i) {
-      PrimTCandRep& ptc = *b.ptc[i];
-      if (Policy::use_wsr && ptc.m_wsr.m_wsr == WSR_Outside)
-        continue;
-      const int nlh = (int)ptc.m_layer_hits.size();
-      for (int lh = 0; lh < nlh; ++lh)
-        rk_add_item(m_koa_d0, ptc, ptc.m_layer_hits[lh], -1, lh);
-      rk_pump();
-    }
-  }
-
   void MkFinderV2p2::rk_drain() {
     rk_setup(m_koa_d0, false);
     rk_setup(m_koa_deep, true);
@@ -1437,6 +1304,62 @@ namespace mkfit {
       rk_pump();
     }
     m_ccrep_ready.clear();  // end_layer() selects everything not yet selected
+  }
+
+  void MkFinderV2p2::load_hit_module(KalmanOpArgs& koa, const PrimTCandRep::PQE& pqe) const {
+    const auto& L = mp_job->m_event_of_hits[pqe.layer];
+    const Hit& hit = L.refHit(pqe.hit_orig_index);
+    koa.load_hit_module(hit, L.layer_info().module_info(hit.detIDinLayer()));
+  }
+
+  void MkFinderV2p2::harvest_sec_nodes() {
+    m_sec_harvested.clear();
+    for (const auto& o : m_sec_out) {
+      if (!(o.chi2_acc < mp_job->v2p2().hit_chi2_cut))  // also rejects NaN
+        continue;
+      SecTCandRep n;
+      n.m_ptc = o.ptc;
+      n.m_parent_idx = o.parent_idx;
+      n.m_hit_pos = o.hit_pos;
+      n.m_hot = o.hot;
+      n.m_state = o.state;
+      n.m_chi2 = o.chi2;
+
+      // Features accumulate parent -> child. The parent is always already in the
+      // arena: a node's children are queued only after it has been harvested.
+      const LayerStepFeatures* pf = (o.parent_idx >= 0) ? &m_sec_arena[o.parent_idx].m_feat : nullptr;
+      LayerStepFeatures& f = n.m_feat;
+      if (pf)
+        f = *pf;
+      else
+        fill_step_geometry(f, o.ptc->m_log_rho);
+      if (pf)
+        V2P2_COUNT(n_sec_deep);
+      f.n_hits = (pf ? pf->n_hits : 0) + 1;
+      f.n_overlap = f.n_hits - 1;
+      f.hole_kind = V2P2_NoHole;
+      f.chi2_sum = (pf ? pf->chi2_sum : 0.0f) + o.chi2;
+      f.log_det_v_sum = (pf ? pf->log_det_v_sum : 0.0f) + std::log(std::max(1e-30f, o.det_v));
+#ifdef MKFIT_TRACE
+      n.m_tr_hitmatch_id = o.tr_hitmatch_id;
+#endif
+      const int slot = sec_node_slot();  // may grow the arena: pf is dead by now
+      m_sec_arena[slot] = n;             // a reused slot is overwritten whole
+      o.ptc->mp_ccrep->m_sec_nodes.push_back(slot);
+      m_sec_harvested.push_back(slot);
+    }
+    m_sec_out.clear();
+    V2P2_COUNT_ADD(n_sec_nodes, (long)m_sec_harvested.size());
+  }
+
+  int MkFinderV2p2::sec_node_slot() {
+    if (m_sec_free.empty()) {
+      m_sec_arena.emplace_back();
+      return (int)m_sec_arena.size() - 1;
+    }
+    const int slot = m_sec_free.back();
+    m_sec_free.pop_back();
+    return slot;
   }
 
   // The parts of a layer step that do not depend on which hits were taken: where
@@ -1459,15 +1382,23 @@ namespace mkfit {
   // See doc/MkFinderV2p2-DesignNotes.md, "End-of-layer selection".
   //----------------------------------------------------------------------------
 
-  // Keep the best-scoring stopped candidate of this CombCandidate. The score is
-  // the in-flight accumulator, which is on one scale within a seed -- the only
-  // comparison made here.
-  void MkFinderV2p2::offer_best_short(CombCandidate& ccand, const TrackCand& tc) const {
-    V2P2_COUNT(n_best_short_offered);
-    if (ccand.refBestShortCand().combCandidate() == nullptr || tc.score() > ccand.refBestShortCand().score()) {
-      ccand.setBestShortCand(tc);
-      V2P2_COUNT(n_best_short_taken);
-    }
+  void MkFinderV2p2::select_completed_ccreps(const LayerBatch& b) {
+    // The batch's PrimTCandReps stay alive: end_layer() clears m_primTCs.
+    auto try_select = [this](CCandRep& ccrep) {
+      if (ccrep.m_n_queued > 0 || ccrep.m_n_inflight > 0 || ccrep.m_selected)
+        return;
+      select_and_materialise(ccrep);
+      ccrep.m_selected = true;
+      V2P2_COUNT(n_early_selections);
+      for (const int ni : ccrep.m_sec_nodes)
+        m_sec_free.push_back(ni);
+      ccrep.m_sec_nodes.clear();
+    };
+    for (int i = 0; i < b.N_proc; ++i)
+      try_select(*b.ptc[i]->mp_ccrep);
+    for (CCandRep* c : m_ccrep_ready)
+      try_select(*c);
+    m_ccrep_ready.clear();
   }
 
   void MkFinderV2p2::select_and_materialise(CCandRep& ccrep) {
@@ -1652,6 +1583,63 @@ namespace mkfit {
     V2P2_COUNT(n_selections);
     V2P2_COUNT_ADD(n_sel_entries, (long)m_sel.size());
     V2P2_COUNT_ADD(n_sel_kept, n_keep);
+  }
+
+  // InLayer::sister_hole_drop: remove from m_sel the holes that a path of the same
+  // TrackCand dominates by taking the sister sensor of its last hit. A sister pair
+  // is two adjacent layers, the lower one stereo and the upper one not, and the
+  // upper sensor's detid is the lower one's + 1; either may be crossed first.
+  void MkFinderV2p2::drop_sister_dominated_holes(const CombCandidate& ccand) {
+    const int lay = m_rz_limits.layer_info_1().layer_id();
+    const TrackerInfo& ti = mp_job->m_trk_info;
+    auto detid_of = [this](int layer, int idx) {
+      const LayerOfHits& L = mp_job->m_event_of_hits[layer];
+      return L.layer_info().module_info(L.refHit(idx).detIDinLayer()).detid;
+    };
+    int w = 0;
+    for (int k = 0; k < (int)m_sel.size(); ++k) {
+      const SelEntry e = m_sel[k];
+      bool drop = false;
+      if (e.node_idx < 0 && e.add_fake) {
+        const TrackCand& tc = ccand[e.tcand_idx];
+        const int pl = tc.getLastHitLyr(), pi = tc.getLastHitIdx();
+        const int lo = std::min(pl, lay), hi = std::max(pl, lay);
+        if (pi >= 0 && hi == lo + 1 && ti.layer(lo).is_stereo() && !ti.layer(hi).is_stereo()) {
+          const unsigned int d_prev = detid_of(pl, pi);
+          for (const SelEntry& f : m_sel) {
+            if (f.node_idx < 0 || f.tcand_idx != e.tcand_idx)
+              continue;
+            int root = f.node_idx;
+            while (m_sec_arena[root].m_parent_idx >= 0)
+              root = m_sec_arena[root].m_parent_idx;
+            const SecTCandRep& r = m_sec_arena[root];
+            if (InLayer::sister_hole_chi2 > 0.0f && !(r.m_chi2 < InLayer::sister_hole_chi2))
+              continue;
+            const unsigned int d_this = detid_of(r.m_hot.layer, r.m_hot.index);
+            if (pl < lay ? d_this == d_prev + 1 : d_prev == d_this + 1) {
+              drop = true;
+              break;
+            }
+          }
+        }
+      }
+      if (drop)
+        V2P2_COUNT(n_sister_hole_dropped);
+      else
+        m_sel[w++] = e;
+    }
+    m_sel.resize(w);
+  }
+
+  // Keep the best-scoring stopped candidate of this CombCandidate. The score is
+  // the in-flight accumulator, which is on one scale within a seed -- the only
+  // comparison made here.
+  void MkFinderV2p2::offer_best_short(CombCandidate& ccand, const TrackCand& tc) const {
+    V2P2_COUNT(n_best_short_offered);
+    if (ccand.refBestShortCand().combCandidate() == nullptr || tc.score() > ccand.refBestShortCand().score()) {
+      ccand.setBestShortCand(tc);
+      V2P2_COUNT(n_best_short_taken);
+    }
   }
 
 }  // namespace mkfit

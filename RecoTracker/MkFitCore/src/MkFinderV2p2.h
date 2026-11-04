@@ -191,8 +191,8 @@ namespace mkfit {
     // batches. Each fires only when full; rk_drain() empties both at end of layer.
     void expand_in_layer(LayerBatch& b);
     void rk_setup(KalmanOpArgs& koa, bool solve_plane);
-    void rk_flush(KalmanOpArgs& koa);
     void rk_add_item(KalmanOpArgs& koa, PrimTCandRep& ptc, const PrimTCandRep::PQE& pqe, int parent_idx, int hit_pos);
+    void rk_flush(KalmanOpArgs& koa);
     void rk_expand_node(int ni);
     void rk_pump();
     void rk_drain();
