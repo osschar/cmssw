@@ -156,6 +156,7 @@ struct TrCandMeta {
   int fwd_rank_max = 0;
   int fwd_rank_max_layer = -1;
   int fwd_rank_over_layer = -1;
+  int fwd_stop_reason = 0;  // its TrackCand::StopReason_e, 0 = not stopped
   unsigned long long fwd_hits_hash = 0;  // FNV-1a over its (layer, index) HoTs
 };
 
