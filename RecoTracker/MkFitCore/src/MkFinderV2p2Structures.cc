@@ -94,35 +94,7 @@ namespace mkfit {
     to_global(U, L, pl, tsChg, bFld, tsPar, tsErr);
     kalmanCheckChargeFlip(tsPar, tsChg, N_filled);
 
-    // Update prim candidate state for best hit -- to be generalized
-    dprintf("Kalman post-update check:\n");
     for (int i = 0; i < N_filled; ++i) {
-#ifdef MKFIT_TRACE
-      bool is_mc = false;
-      if (tr_hitmatch_ids[i] >= 0)
-        is_mc = mp_event->tr_hitmatch(tr_hitmatch_ids[i]).mc_match;
-      // Keyed selection: normally the chi2 itself. With forcing, an MC-matched
-      // hit is shifted below every non-matched one but still ordered against
-      // other MC-matched hits by its own chi2, so "the best chi2 one" wins.
-      const float key = (Config::V2p2::Diag::force_mc && is_mc) ? (tsChi2[i] - 1.0e6f) : tsChi2[i];
-      if (key < ptcp[i]->bKey) {
-        ptcp[i]->bKey = key;
-        ptcp[i]->bIsMc = is_mc;
-#else
-      if (tsChi2[i] < ptcp[i]->bChi2) {
-#endif
-        dprintf("  Updating for i=%d, old-chi2 %f, new %f\n", i, ptcp[i]->bChi2, tsChi2[i]);
-        tsPar.copyOut(i, ptcp[i]->bState.parArray_nc());
-        tsErr.copyOut(i, ptcp[i]->bState.errArray_nc());
-        ptcp[i]->bState.charge = tsChg[i];
-        ptcp[i]->bHot = hot[i];
-        ptcp[i]->bChi2 = tsChi2[i];
-        ptcp[i]->bChi2Acc = tsChi2Acc[i];
-#ifdef MKFIT_TRACE
-        ptcp[i]->b_tr_hitmatch_id = tr_hitmatch_ids[i];
-#endif
-      }
-
 #ifdef MKFIT_TRACE
       // Create TrKalmanUpdate for EVERY hit that went through Kalman
       int hm_id = tr_hitmatch_ids[i];

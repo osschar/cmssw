@@ -173,13 +173,10 @@ namespace mkfit {
     int fake_hit_index(const TrackCand &tc, const WSR_Result &wsr) const;
 
     void prepare_kalman_workload(LayerBatch &b);
-    void kalman_update(LayerBatch &b);
-    void process_kalman_results(LayerBatch &b);
 
-    // The in-layer combinatorial search, replacing the two phases above when
-    // Config::V2p2::InLayer::comb is on. expand_in_layer() grows the SecTCandRep
-    // tree; select_and_materialise() runs the end-of-layer
-    // selection and registers the survivors into the CombCandidate.
+    // The in-layer combinatorial search. expand_in_layer() grows the SecTCandRep
+    // tree; select_and_materialise() runs the end-of-layer selection and
+    // registers the survivors into the CombCandidate.
     void expand_in_layer(LayerBatch &b);
     void select_and_materialise(CCandRep &ccrep);
     void drop_sister_dominated_holes(const CombCandidate &ccand);

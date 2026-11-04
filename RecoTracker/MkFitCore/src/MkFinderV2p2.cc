@@ -76,9 +76,8 @@ namespace mkfit {
         // common to every candidate of this seed and so cancels in the per-seed
         // selection; the cross-seed comparison is done at the end, on the
         // official score.
-        if (InLayer::comb)
-          for (int ic = 0; ic < (int) ccand.size(); ++ic)
-            ccand[ic].setScore(0.0f);
+        for (int ic = 0; ic < (int) ccand.size(); ++ic)
+          ccand[ic].setScore(0.0f);
         m_active_ccreps.emplace_back(ccand);
         dprintf("MkFinderV2p2::awaken_candidates N_TrackCands=%d\n",
                (int) ccand.size());
@@ -324,7 +323,7 @@ namespace mkfit {
     auto ai = m_active_ccreps.begin();
     while (ai != m_active_ccreps.end()) {
 
-      if (InLayer::comb && ! ai->m_selected)
+      if (! ai->m_selected)
         select_and_materialise(*ai);
 
       ai->m_primTCs.clear();
@@ -361,7 +360,7 @@ namespace mkfit {
     // arena is at high water and stops allocating. Its size here is this layer's
     // high water, since slots are reused but the vector never shrinks.
 #if defined(MKFIT_STANDALONE)
-    if (InLayer::comb) {
+    {
       const long hw = (long) m_sec_arena.size();
       V2P2_COUNT(n_arena_layers);
       V2P2_COUNT_ADD(n_arena_hw_sum, hw);
@@ -404,8 +403,7 @@ namespace mkfit {
 
     // The in-layer Kalman batches hold partial work across layer batches; empty
     // them before end_layer() selects whatever is left.
-    if (InLayer::comb)
-      rk_drain();
+    rk_drain();
   }
 
   //============================================================================
@@ -425,16 +423,11 @@ namespace mkfit {
     determine_search_windows(b);  // covariance -> dphi/dq windows -> bin ranges
     select_hits(b);               // stage 2: walk the bins, pre-select, reduce in a pqueue
     prepare_kalman_workload(b);   // pqueue -> m_layer_hits, step-ordered
-    if (InLayer::comb) {
-      // No materialisation here: the paths are left in the arena and everything
-      // competes at end of layer, in select_and_materialise().
-      expand_in_layer(b);         // stage 3: grow the SecTCandRep tree over the ordered hits
-      if (InLayer::early_select)
-        select_completed_ccreps(b);
-    } else {
-      kalman_update(b);           // stage 3: propagate to each module plane + update
-      process_kalman_results(b);  // best-hit acceptance into the TrackCand
-    }
+    // No materialisation here: the paths are left in the arena and everything
+    // competes at end of layer, in select_and_materialise().
+    expand_in_layer(b);           // stage 3: grow the SecTCandRep tree over the ordered hits
+    if (InLayer::early_select)
+      select_completed_ccreps(b);
   }
 
   //----------------------------------------------------------------------------
@@ -1181,149 +1174,6 @@ namespace mkfit {
       }
     }
 #endif
-  }
-
-  //----------------------------------------------------------------------------
-  // Phase 5 -- propagate to each hit's module plane and run the Kalman update.
-  //----------------------------------------------------------------------------
-
-  void MkFinderV2p2::kalman_update(LayerBatch &b) {
-    const int N_proc = b.N_proc;
-    PrimTCandRep **prim_tcand_ptrs = b.ptc;
-
-    auto do_kalman = [&](KalmanOpArgs& K) {
-      K.compute_pars(); // Needed for conversion from mini_prop/bi-vec to std representation.
-      K.do_kalman_stuff();
-      K.reset();
-    }; // end lambda do_kalman
-
-    KalmanOpArgs koa;
-    koa.prop_config = & mp_job->m_trk_info.prop_config();
-#ifdef MKFIT_TRACE
-    koa.mp_event = mp_event;
-#endif
-
-    for (int i = 0; i < N_proc; ++i) {
-      PrimTCandRep &ptc = * prim_tcand_ptrs[i];
-      int nlh = ptc.m_layer_hits.size();
-      for (int lh = 0; lh < nlh; ++ lh) {
-        const PrimTCandRep::PQE &pqe = ptc.m_layer_hits[lh];
-        dprintf("scheduling %d %d %d %f\n", i, pqe.hit_index, pqe.hit_orig_index, pqe.mixed_state.dalpha);
-
-        TrackCand &tc = ptc.tcand();
-        koa.item_begin(&ptc, { (int) pqe.hit_orig_index, pqe.layer });
-        koa.load_state_err_chg(pqe.mixed_state, tc.state());
-#ifdef MKFIT_TRACE
-        koa.set_tr_hitmatch_id(pqe.tr_hitmatch_id);
-#endif
-        const auto &L = mp_job->m_event_of_hits[ pqe.layer ];
-        const Hit &hit = L.refHit( pqe.hit_orig_index );
-        unsigned int mid = hit.detIDinLayer();
-        const ModuleInfo &mi = L.layer_info().module_info(mid);
-        koa.load_hit_module(hit, mi);
-
-        if (koa.item_finished()) {
-          do_kalman(koa);
-        }
-      }
-      ptc.m_layer_hits.clear();
-    }
-    if (koa.N_filled > 0) {
-      do_kalman(koa);
-    }
-  }
-
-  //----------------------------------------------------------------------------
-  // Phase 6 -- best-hit acceptance, used with InLayer::comb off: take the
-  // lowest-chi2 hit if it passes V2p2Params::hit_chi2_cut, otherwise record the
-  // fake HoT from fake_hit_index().
-  //----------------------------------------------------------------------------
-
-  void MkFinderV2p2::process_kalman_results(LayerBatch &b) {
-    const int N_proc = b.N_proc;
-    PrimTCandRep **prim_tcand_ptrs = b.ptc;
-
-    // This, esp. the combinatorial part, should be done once prim-tcand is finished.
-    // And, merging results, when ccand is finished.
-
-    for (int i = 0; i < N_proc; ++i) {
-      PrimTCandRep &ptc = * prim_tcand_ptrs[i];
-      TrackCand &tc = ptc.tcand();
-
-      // The track does not reach this layer: no HoT of any kind.
-      if (Policy::use_wsr && ptc.m_wsr.m_wsr == WSR_Outside) {
-        dprintf("Outside to tcand %d, layer skipped\n", i);
-        V2P2_COUNT(n_layer_skipped);
-        continue;
-      }
-
-#ifdef MKFIT_TRACE
-      if (ptc.bChi2Acc < mp_job->v2p2().hit_chi2_cut || (Diag::force_mc && ptc.bIsMc)) {
-#else
-      if (ptc.bChi2Acc < mp_job->v2p2().hit_chi2_cut) {
-#endif
-        // XXXX Extra missed layer -- to check stuff / maxgrowth / scores etc
-        // This is somewhat impure :)
-        // Add a copy of the held-back candidate before adding the hit.
-        if (ptc.bChi2 > 5.0f && ! ptc.mp_ccrep->m_ccand.is_full()) {
-          dprintf("ExtraMissed to tcand %d\n", i);
-          ptc.mp_ccrep->m_ccand.push_back(tc).addHitIdx(
-              fake_hit_index(tc, ptc.m_wsr), m_rz_limits.layer_info_1().layer_id(), 0.0f);
-
-#ifdef MKFIT_TRACE
-          // QQQQQ the parent extraction will be different
-          int pid = ptc.tcand().m_trace_state_id;
-          int id = mp_event->trace_new_cand_state(pid, (*mp_steeringparams_iter)->m_layer, track2bivec3(ptc.tcand()), ptc.tcand().state());
-          ptc.mp_ccrep->m_ccand.back().m_trace_state_id = id;
-#endif
-        }
-
-        dprintf("Output to tcand %d, idx=%d, layer=%d, chi2=%f\n", i, ptc.bHot.index, ptc.bHot.layer, ptc.bChi2);
-        tc.addHitIdx(ptc.bHot.index, ptc.bHot.layer, ptc.bChi2);
-        tc.setState(ptc.bState);
-
-#ifdef MKFIT_TRACE
-        // QQQQQ the parent extraction will be different; also fix: step, proper state (what is it)
-
-        // This is also best-hit hack
-        int pid = ptc.tcand().m_trace_state_id;
-        int id = mp_event->trace_new_cand_state(pid, (*mp_steeringparams_iter)->m_layer, track2bivec3(ptc.tcand()), ptc.tcand().state());
-
-        auto &ku = mp_event->tr_kalmanupdate( mp_event->tr_hitmatch(ptc.b_tr_hitmatch_id).kalman_id );
-        ku.accepted = true;
-        ku.state_id_out = id;
-        // At this point could also set chi2_trk ... but this might get tricky with multiple hits added per (multi-)layer.
-        // local / (multi-)layer score might be more relevant.
-
-        ptc.tcand().m_trace_state_id = id;
-#endif
-      } else {
-        // XXXX Here, we need to handle double layers correctly.
-        // For now we have singles.
-        //
-        // No hit taken: the fake HoT comes from fake_hit_index().
-        const int fake_hit_idx = fake_hit_index(tc, ptc.m_wsr);
-        dprintf("Missed to tcand %d, fake_hit_idx=%d\n", i, fake_hit_idx);
-        switch (fake_hit_idx) {
-          case Hit::kHitMissIdx:  V2P2_COUNT(n_hole);      break;
-          case Hit::kHitEdgeIdx:  V2P2_COUNT(n_hot_edge);  break;
-          case Hit::kHitInGapIdx: V2P2_COUNT(n_hot_gap);   break;
-          case Hit::kHitStopIdx:  V2P2_COUNT(n_stop_holes); break;
-          default: break;
-        }
-        if (fake_hit_idx == Hit::kHitStopIdx)
-          tc.setStopReason(TrackCand::SR_TooManyHoles);
-        tc.addHitIdx(fake_hit_idx, m_rz_limits.layer_info_1().layer_id(), 0.0f);
-
-#ifdef MKFIT_TRACE
-        // QQQQQ the parent extraction will be different; also fix: step, proper state (what is it)
-        int pid = ptc.tcand().m_trace_state_id;
-        int id = mp_event->trace_new_cand_state(pid, (*mp_steeringparams_iter)->m_layer, track2bivec3(ptc.tcand()), ptc.tcand().state());
-        ptc.tcand().m_trace_state_id = id;
-#endif
-      }
-    }
-
   }
 
   //----------------------------------------------------------------------------

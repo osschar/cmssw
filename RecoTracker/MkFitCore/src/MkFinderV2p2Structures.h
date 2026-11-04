@@ -138,20 +138,6 @@ namespace mkfit {
       CombCandidate& ccand();
       TrackCand& tcand();
       const TrackCand& tcand() const;
-
-      // Hack for best hit
-      TrackState bState;
-      HitOnTrack bHot;
-      float bChi2 = 999.999f;
-      float bChi2Acc = 999.999f;  // acceptance chi2 of the bHot, V2p2Params::hit_chi2_cut
-#ifdef MKFIT_TRACE
-      int b_tr_hitmatch_id = -1;
-      // Diag::force_mc: the best-hit choice is made on bKey, normally bChi2. With
-      // forcing on, an MC-matched hit gets a key below every other hit and bIsMc
-      // lets it bypass the chi2 cut; bChi2 keeps the real chi2.
-      float bKey = 999.999f;
-      bool  bIsMc = false;
-#endif
     }; // end struct PrimTCandRep
 
     //----------------------------------------------------------------------------
@@ -221,7 +207,7 @@ namespace mkfit {
       HitOnTrack    hot[NN];
       // Provenance of each lane, for the in-layer expansion: which arena node this
       // extension grew from (-1 = the PrimTCandRep's own incoming state) and which
-      // entry of m_layer_hits it takes. Unused by the best-hit path.
+      // entry of m_layer_hits it takes.
       int           parent_idx[NN];
       int           hit_pos[NN];
       unsigned int  hit_in_layer[NN];  // index within the LayerOfHits
@@ -242,8 +228,7 @@ namespace mkfit {
       const Event *mp_event = nullptr;
 #endif
 
-      // One result per lane, appended when mp_out is set: the in-layer search keeps
-      // every outcome, the best-hit path only the winner (PrimTCandRep::b*).
+      // One result per lane, appended to *mp_out.
       struct ItemOut {
         PrimTCandRep *ptc;
         int   parent_idx;

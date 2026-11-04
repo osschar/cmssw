@@ -72,7 +72,6 @@ namespace mkfit {
     // "Reduction and hit ordering", "In-layer combinatorial search" and
     // "End-of-layer selection".
     namespace InLayer {
-      MKFIT_V2P2_KNOB(bool, comb, true);  // off: one best hit per layer
       constexpr int max_presel_hits_limit = V2p2Params::max_presel_hits_limit;
       constexpr int max_sec_depth_limit = V2p2Params::max_sec_depth_limit;
       MKFIT_V2P2_KNOB(bool, reserve_hole_slot, false);  // keep one decliner in the beam
@@ -157,9 +156,6 @@ namespace mkfit {
     //--------------------------------------------------------------------------
     // Diagnostic instruments, off by default.
     namespace Diag {
-      // The MC-matched hit wins its layer and bypasses the chi2 cut. Best-hit
-      // path, MKFIT_TRACE builds only. See PrimTCandRep::bKey.
-      MKFIT_V2P2_KNOB(bool, force_mc, false);
       // Surface reference of dq_track with the layer's cylinder or disc normal,
       // in MkBins, so that the corrected value reaches the trace.
       MKFIT_V2P2_KNOB(bool, mkbins_surface_q, false);

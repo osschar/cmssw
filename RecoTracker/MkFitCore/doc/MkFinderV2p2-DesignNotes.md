@@ -88,8 +88,7 @@ in stops once the queue holds NN entries, so the Matriplex batches run full.
    module plane and applies the dq/dphi cut.
 4. `prepare_kalman_workload()`: drain the per-candidate priority queues into one
    step-ordered list.
-5. Either `expand_in_layer()` (the in-layer combinatorial search) or
-   `kalman_update()` plus `process_kalman_results()` (one best hit per layer).
+5. `expand_in_layer()`: the in-layer combinatorial search.
 
 Two batch widths are in play. `LayerBatch` is NN candidates wide and indexed by
 `i`. `HitBatch` is NN (candidate, hit) pairs wide and indexed by `h`, with
@@ -552,11 +551,12 @@ The trace records `sub_rank` (rank by ddphi within the sub-layer) and
 ## In-layer combinatorial search
 
 **Code:** `expand_in_layer()`, `harvest_sec_nodes()`, `SecTCandRep`,
-`MkFinderV2p2::m_sec_arena`, `InLayer::comb`.
+`MkFinderV2p2::m_sec_arena`.
 
-**What it replaces.** The best-hit path runs one Kalman update per pre-selected
-hit, all from the candidate's incoming state, and keeps the lowest chi2. That
-takes at most one hit per layer. On H50 a track crossing a TBPS, TB2S or TEDD
+**What it replaced.** The first version of v2p2 ran one Kalman update per
+pre-selected hit, all from the candidate's incoming state, and kept the lowest
+chi2. That takes at most one hit per layer. The best-hit path was removed once
+the search replaced it. On H50 a track crossing a TBPS, TB2S or TEDD
 layer pair leaves both sensors' hits in 91-94 % of crossings, and 26-28 % of
 crossings carry three or more hits, because an overlapping module is itself a
 stack.
@@ -615,9 +615,10 @@ A `SecTCandRep` carries a full `TrackState` and lives for one layer. A
 `HoTNode` in `CombCandidate::m_hots` is 12 bytes and lives for the event. That
 difference is why the two are separate.
 
-**Effect.** F30, cap 3, against the best-hit path: found tracks 18455 to 18846,
-fakes 3217 to 2765. Truth-matched hits per found track go from 10.78 / 11.55 /
-11.32 to 12.70 / 14.32 / 14.29 in barrel / transition / endcap. Inward on 20
+**Effect.** F30, cap 3, against the best-hit path before its removal: found
+tracks 18455 to 18846, fakes 3217 to 2765. Truth-matched hits per found track go
+from 10.78 / 11.55 / 11.32 to 12.70 / 14.32 / 14.29 in barrel / transition /
+endcap. Inward on 20
 events of chopped pT5, at depth 2: chopped hits recovered 75.7 % to 92.2 %,
 fully recovered tracks 52.8 % to 82.4 %.
 
@@ -628,7 +629,7 @@ search on was 60.79 s at cap 3 and 76.45 s at cap 4.
 ## Kalman hit acceptance
 
 **Code:** `plane::chi2_scaled()` in `KalmanOpArgs::do_kalman_stuff()`,
-`KalmanOpArgs::tsChi2Acc`, `harvest_sec_nodes()`, `process_kalman_results()`,
+`KalmanOpArgs::tsChi2Acc`, `harvest_sec_nodes()`,
 `V2p2Params::hit_chi2_cut`, `Policy::chi2_trk_fac`.
 
 **The cut.** A hit is accepted if
