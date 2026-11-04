@@ -12,9 +12,11 @@
 #include "MkBins.h"
 
 #include <list>
-#include <utility>
 #include <vector>
 
+// Per-layer policy counters, standalone only: see standalone/V2p2Diag.h. The
+// finder increments them through V2P2_COUNT() and V2P2_COUNT_ADD(), which expand
+// to nothing in the CMSSW build.
 #if defined(MKFIT_STANDALONE)
 #include "RecoTracker/MkFitCore/standalone/V2p2Diag.h"
 #else
@@ -27,18 +29,35 @@ namespace mkfit {
   // Switches are in V2p2Config.h, namespace Config::V2p2; the per-iteration
   // tunings are V2p2Params (interface/V2p2Params.h), read through MkJob::v2p2().
 
-  // Per-layer policy counters, standalone only: see standalone/V2p2Diag.h. The
-  // finder increments them through V2P2_COUNT() and V2P2_COUNT_ADD(), which expand
-  // to nothing in the CMSSW build.
-
   class Event;
 
+  // The v2p2 track finder: runs a block of seeds through the layer plan, one
+  // layer at a time. MkBuilder::findTracksStandardv2p2() drives it: setup(),
+  // awaken_candidates(), then begin_layer() / process_layer() / end_layer() per
+  // plan entry, and release(). See doc/MkFinderV2p2-DesignNotes.md.
   class MkFinderV2p2 {
-    friend class MkBuilder;
+  public:
+    MkFinderV2p2() = default;
 
-    //-------------------------------------------------------------------------
+    void setup(const MkJob* job,
+               EventOfCombCandidates& eoccs,
+               int seed_begin,
+               int seed_end,
+               SteeringParams::iterator& sp_it,
+               const Event* ev);
+    void release();
+
+    int awaken_candidates();
+
+    void begin_layer();
+    void process_layer();
+    void end_layer();
+
+  private:
+    //--------------------------------------------------------------------------
+    // The block of seeds: their CombCandidates in the EventOfCombCandidates, and
+    // how many are dormant (not yet picked up) and finding.
     class BatchManager {
-      //-------------------------------------------------------------------------
       friend class MkFinderV2p2;
 
       EventOfCombCandidates* mp_eoccs = nullptr;
@@ -65,7 +84,7 @@ namespace mkfit {
       int n_finding() const { return m_n_finding; }
       bool has_dormant_ccands() const { return n_dormant() > 0; }
 
-      // Iteration over all CombCandidates for top-level administrative tasks.
+      // Iteration over all CombCandidates of the block.
       class iterator {
         CombCandidate* m_ccand;
 
@@ -81,46 +100,14 @@ namespace mkfit {
 
       iterator begin() const { return iterator(ccand_ptr(m_begin)); }
       iterator end() const { return iterator(ccand_ptr(m_end - 1) + 1); }
-      //-------------------------------------------------------------------------
-    };  // end class BatchManager
-    //-------------------------------------------------------------------------
+    };
 
   public:
-    MkFinderV2p2() = default;
-
-    //----------------------------------------------------------------------------
-
-    void setup(const MkJob* job,
-               EventOfCombCandidates& eoccs,
-               int seed_begin,
-               int seed_end,
-               SteeringParams::iterator& sp_it,
-               const Event* ev);
-    void release();
-
-    int awaken_candidates();
-
-    void begin_layer();
-
-    bool any_Ccreps_to_begin() const { return m_active_ccreps_pos != m_active_ccreps.end(); }
-    void begin_next_Ccrep_in_layer();
-
-    int cand_queue_size() const { return (int)m_cand_queue.size() - m_cand_queue_head; }
-    bool enough_work_for_batch() const { return cand_queue_size() >= NN; }
-    bool any_work_for_batch() const { return cand_queue_size() > 0; }
-    void process_layer_batch();
-
-    void end_layer();
-
-    void process_layer();
-
-    // Mostly for debug printouts in MkBuilder steering code.
+    // For debug printouts in MkBuilder.
     const BatchManager& batch_mgr() const { return m_batch_mgr; }
 
-    //----------------------------------------------------------------------------
-
   private:
-    //----------------------------------------------------------------------------
+    //--------------------------------------------------------------------------
     // Per-pass state of process_layer_batch(). LayerBatch is NN candidates wide
     // and indexed by i; HitBatch is NN (candidate, hit) pairs wide and indexed by
     // h, with prim_idcs[h] naming the candidate.
@@ -152,6 +139,36 @@ namespace mkfit {
 #endif
     };
 
+    // One competitor in the end-of-layer selection.
+    struct SelEntry {
+      int tcand_idx;  // the TrackCand of the CombCandidate it continues
+      int node_idx;   // arena index of its in-layer path; -1 = it took no hit here
+      int fake_hit;   // with add_fake, the fake HoT to record: miss, edge, gap or stop
+      bool add_fake;  // false: nothing recorded (layer out of reach, or already stopped)
+      float score;    // its score after this layer
+    };
+
+    //--------------------------------------------------------------------------
+    // Layer control: pull CombCandidates into the layer and run the queue
+    // through process_layer_batch(), NN candidates at a time.
+    bool any_Ccreps_to_begin() const { return m_active_ccreps_pos != m_active_ccreps.end(); }
+    void begin_next_Ccrep_in_layer();
+
+    int cand_queue_size() const { return (int)m_cand_queue.size() - m_cand_queue_head; }
+    bool enough_work_for_batch() const { return cand_queue_size() >= NN; }
+    bool any_work_for_batch() const { return cand_queue_size() > 0; }
+    void process_layer_batch();
+
+    // Candidate-stopping cuts applied at pull-in, where only the candidate's own
+    // state is needed. Returns the reason, or SR_NotStopped to keep going.
+    TrackCand::StopReason_e stop_cuts_at_pickup(const TrackCand& tc) const;
+    bool long_step_to_layer(const TrackCand& tc) const;
+    // Which fake HoT a candidate that took no hit in this layer gets: the hole
+    // limits, the WSR override, and the gap case, in V1's order.
+    int fake_hit_index(const TrackCand& tc, const WSR_Result& wsr) const;
+
+    //--------------------------------------------------------------------------
+    // The phases of process_layer_batch(), in order.
     void prop_to_layer_edges(LayerBatch& b);
     void determine_search_windows(LayerBatch& b);
     void determine_wsr(LayerBatch& b);
@@ -165,42 +182,14 @@ namespace mkfit {
                                        int h,
                                        const MPlex3V& module_norm,
                                        bool is_barrel);
-    // Candidate-stopping cuts applied at pull-in, where only the candidate's own
-    // state is needed. Returns the reason, or SR_NotStopped to keep going.
-    TrackCand::StopReason_e stop_cuts_at_pickup(const TrackCand& tc) const;
-    // Which fake HoT a candidate that took no hit in this layer gets: the hole
-    // limits, the WSR override, and the gap case, in V1's order.
-    int fake_hit_index(const TrackCand& tc, const WSR_Result& wsr) const;
-
     void prepare_kalman_workload(LayerBatch& b);
 
-    // The in-layer combinatorial search. expand_in_layer() grows the SecTCandRep
-    // tree; select_and_materialise() runs the end-of-layer selection and
-    // registers the survivors into the CombCandidate.
+    //--------------------------------------------------------------------------
+    // The in-layer combinatorial search: expand_in_layer() grows the SecTCandRep
+    // tree. Depth 0 (the Hermite crossing is known, sPerp path) and deeper steps
+    // (the plane is solved) need different propagation, so there are two Kalman
+    // batches. Each fires only when full; rk_drain() empties both at end of layer.
     void expand_in_layer(LayerBatch& b);
-    void select_and_materialise(CCandRep& ccrep);
-    void drop_sister_dominated_holes(const CombCandidate& ccand);
-#if defined(MKFIT_STANDALONE)
-    void count_dominated_kept(const CombCandidate& ccand, int n_keep) const;
-#endif
-    bool long_step_to_layer(const TrackCand& tc) const;
-    void offer_best_short(CombCandidate& ccand, const TrackCand& tc) const;
-    // The direction- and layer-dependent part of a layer step, filled once per
-    // path root and carried down the tree, and once per hole entry.
-    void fill_step_geometry(LayerStepFeatures& f, float log_rho) const;
-    // Turn the Kalman results accumulated in m_sec_out into arena nodes, keeping
-    // those that pass the chi2 cut. Their indices go to m_sec_harvested.
-    void harvest_sec_nodes();
-    // A slot for one node: from the free list if it has any, else appended.
-    int sec_node_slot();
-    // After a layer batch: select each CombCandidate of the batch, or of
-    // m_ccrep_ready, that has nothing queued or in flight, and free its nodes.
-    void select_completed_ccreps(const LayerBatch& b);
-
-    // The Kalman batches of expand_in_layer(). Depth 0 (the Hermite crossing is
-    // known, sPerp path) and deeper steps (the plane is solved) need different
-    // propagation, so there are two batches. Each fires only when full;
-    // rk_drain() empties both at end of layer.
     void rk_setup(KalmanOpArgs& koa, bool solve_plane);
     void rk_flush(KalmanOpArgs& koa);
     void rk_add_item(KalmanOpArgs& koa, PrimTCandRep& ptc, const PrimTCandRep::PQE& pqe, int parent_idx, int hit_pos);
@@ -208,28 +197,47 @@ namespace mkfit {
     void rk_pump();
     void rk_drain();
     void load_hit_module(KalmanOpArgs& koa, const PrimTCandRep::PQE& pqe) const;
+    // Turn the Kalman results accumulated in m_sec_out into arena nodes, keeping
+    // those that pass the chi2 cut. Their indices go to m_sec_harvested.
+    void harvest_sec_nodes();
+    // A slot for one node: from the free list if it has any, else appended.
+    int sec_node_slot();
+    // The direction- and layer-dependent part of a layer step, filled once per
+    // path root and carried down the tree, and once per hole entry.
+    void fill_step_geometry(LayerStepFeatures& f, float log_rho) const;
 
-    //----------------------------------------------------------------------------
-    // Job / batch-of-seeds control variables and global references
+    //--------------------------------------------------------------------------
+    // End-of-layer selection: select_and_materialise() ranks the paths, holes and
+    // untouched candidates of one CombCandidate and registers the survivors.
+    // After a layer batch: select each CombCandidate of the batch, or of
+    // m_ccrep_ready, that has nothing queued or in flight, and free its nodes.
+    void select_completed_ccreps(const LayerBatch& b);
+    void select_and_materialise(CCandRep& ccrep);
+    void drop_sister_dominated_holes(const CombCandidate& ccand);
+    void offer_best_short(CombCandidate& ccand, const TrackCand& tc) const;
+#if defined(MKFIT_STANDALONE)
+    void count_dominated_kept(const CombCandidate& ccand, int n_keep) const;
+#endif
+
+    //==========================================================================
+    // Data
+
+    // The job, the layer plan position and the event, for one seed block.
     const MkJob* mp_job = nullptr;
     SteeringParams::iterator* mp_steeringparams_iter = nullptr;
     const Event* mp_event = nullptr;
 
     BatchManager m_batch_mgr;
 
-    //----------------------------------------------------------------------------
-    // Per-(di)layer state & control
+    // Per-layer state and control.
     std::list<CCandRep> m_active_ccreps;
     // Next CombCandidate to be pulled into the layer by begin_next_Ccrep_in_layer().
     std::list<CCandRep>::iterator m_active_ccreps_pos;
-
     // Pre-selection queue: the PrimTCandReps waiting for propagation, binnor fetch
     // and hit pre-selection. A FIFO as a vector and a read position, reset when it
     // drains, so it keeps its capacity.
     std::vector<PrimTCandRep*> m_cand_queue;
     int m_cand_queue_head = 0;
-
-    // Per-(di)layer geometrical state
     MkRZLimits m_rz_limits;
 
     // The in-layer combinatorial tree: one arena per finder, reached by index,
@@ -245,24 +253,17 @@ namespace mkfit {
     // are not yet queued.
     KalmanOpArgs m_koa_d0, m_koa_deep;
     std::vector<int> m_deep_queue;
+    // Kalman outcomes of the last flush, drained into the arena by
+    // harvest_sec_nodes().
+    std::vector<KalmanOpArgs::ItemOut> m_sec_out;
     // CombCandidates whose last in-flight work has finished, for
     // select_completed_ccreps(); m_ccrep_touched is rk_flush()'s scratch list.
     std::vector<CCandRep*> m_ccrep_ready;
     std::vector<CCandRep*> m_ccrep_touched;
-    // Kalman outcomes of the last flush, drained into the
-    // arena by harvest_sec_nodes().
-    std::vector<KalmanOpArgs::ItemOut> m_sec_out;
 
-    // One competitor in the end-of-layer selection.
-    struct SelEntry {
-      int tcand_idx;  // the TrackCand of the CombCandidate it continues
-      int node_idx;   // arena index of its in-layer path; -1 = it took no hit here
-      int fake_hit;   // with add_fake, the fake HoT to record: miss, edge, gap or stop
-      bool add_fake;  // false: nothing recorded (layer out of reach, or already stopped)
-      float score;    // its score after this layer
-    };
+    // End-of-layer selection: the competitors, and the survivors, built before
+    // the CombCandidate is rewritten from them.
     std::vector<SelEntry> m_sel;
-    // The survivors, built before the CombCandidate is rewritten from them.
     std::vector<TrackCand> m_new_cands;
   };
 
