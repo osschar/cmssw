@@ -500,7 +500,7 @@ namespace mkfit {
     MPlexLS err0;
     for (int i = 0; i < N_proc; ++i) {
       const TrackCand& tc = prim_tcand_ptrs[i]->tcand();
-      par0.copyIn(i, tc.posArray());
+      par0.copyIn(i, tc.parArray());
       err0.copyIn(i, tc.errArray());
     }
     for (int i = N_proc; i < NN; ++i) {

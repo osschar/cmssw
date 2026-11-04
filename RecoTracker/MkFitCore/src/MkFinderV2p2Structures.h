@@ -186,7 +186,7 @@ namespace mkfit {
     MPlexLS propErr{0.0f};  // intermediate: propagated from tsErr and used as input to Kalman
     MPlexLV propPar{0.0f};  // sPerp path: input, the search's crossing (compute_pars()); solve-plane path: output
 
-    MPlexQI outFailFlag{0};  // dummy, can be detected in pre-propagation, no other errors detected / reported
+    MPlexQI outFailFlag{0};  // not checked: the crossing is known from the search, or a few cm away within the layer
 
     int N_filled = 0;
   };
