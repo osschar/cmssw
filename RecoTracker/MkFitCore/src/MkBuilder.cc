@@ -946,6 +946,7 @@ namespace mkfit {
         cmeta.fwd_rank_max = bcand.m_rank_max;
         cmeta.fwd_rank_max_layer = bcand.m_rank_max_layer;
         cmeta.fwd_rank_over_layer = bcand.m_rank_over_layer;
+        cmeta.fwd_stop_reason = bcand.stopReason();
         const Track ft = bcand.exportTrack();
         unsigned long long h = 1469598103934665603ull;
         for (int ih = 0; ih < ft.nTotalHits(); ++ih) {

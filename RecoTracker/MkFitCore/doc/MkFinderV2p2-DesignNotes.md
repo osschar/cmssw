@@ -157,7 +157,9 @@ in code. V1 writes it as the literal 4.512, which is pi + A and lets the
 equivalent to cos(momPhi - posPhi) < sin(0.2).
 
 A stopped candidate records why, in `TrackCand::StopReason_e`, because loopers
-are of interest downstream (the phase-2 timing layer and HGCal).
+are of interest downstream (the phase-2 timing layer and HGCal). The trace
+carries it for the final candidate of the forward search,
+`TrCandMeta::fwd_stop_reason`; the export to CMSSW is not done yet.
 
 **Holes.** A candidate that takes no hit in a layer gets a fake HoT chosen by
 `fake_hit_index()`, in V1's order: the hole limits (`maxHolesPerCand`,
