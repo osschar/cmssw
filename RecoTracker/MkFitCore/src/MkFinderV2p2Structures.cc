@@ -5,9 +5,6 @@
 #include "PlaneSteps.h"
 #include "MatriplexPackers.h"
 
-//#define DEBUG
-#include "Debug.h"
-
 #ifdef MKFIT_TRACE
 #include "RecoTracker/MkFitCore/standalone/DataFormats/RntStructs.h"
 #include "RecoTracker/MkFitCore/standalone/Event.h"
@@ -16,20 +13,6 @@
 namespace mkfit {
 
   void KalmanOpArgs::do_kalman_stuff() {
-    // bool debug = true;
-
-    dprintf("do_kalman_stuff\n");
-    for (int i = 0; i < N_filled; ++i) {
-      dprintf("  %d: %f %f %f : %f %f %f : %f\n",
-              i,
-              tsXyz.x[i],
-              tsXyz.y[i],
-              tsXyz.z[i],
-              tsXyz.inv_pt[i],
-              vdt::fast_atan2(tsXyz.py[i], tsXyz.px[i]),
-              tsXyz.theta[i],
-              sPerp[i]);
-    }
     // Propagation to the module plane and the Kalman operation on it, composed from the steps of
     // PlaneSteps.h. m_solve_plane marks steps within one layer (second and later hits of an in-layer
     // path): they take the intra-layer propagation flags and solve for the path to the plane.
