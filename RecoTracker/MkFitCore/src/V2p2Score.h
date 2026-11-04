@@ -59,16 +59,12 @@ namespace mkfit {
     short n_holes_so_far = 0;
   };
 
-  // The coefficients, the score mode and the term switches are in
-  // V2p2Config.h, Config::V2p2::Score.
+  // The coefficients are V2p2ScoreParams, interface/V2p2Params.h; the score mode
+  // and the term switches are in V2p2Config.h, Config::V2p2::Score.
 
-  // Log-likelihood ratio against "this layer produced no hit":
-  //   take hit j :  ln(eps/(1-eps)) - ln(2pi) - chi2_j/2 - ln(det V_j)/2 - ln rho
-  //   take none  :  0
-  // eps = hit_eff, V the 2x2 residual covariance, rho the local hit density.
   // Layer group of V2p2ScoreParams::hit_eff_grp. The barrel strip split at layer 10 is the
   // phase-2 TBPS / TB2S boundary (layers 4-9 TBPS, 10-15 TB2S); it means nothing for phase 1,
-  // where the forward defaults in V2p2Config.h, a phase-2 tuning, then apply to the
+  // where the outward defaults of V2p2Params, a phase-2 tuning, then apply to the
   // TIB / TOB layers below and above layer 10.
   inline int v2p2_hit_eff_group(const LayerStepFeatures& f) {
     if (f.is_pixel)
@@ -78,6 +74,10 @@ namespace mkfit {
     return 4;
   }
 
+  // Log-likelihood ratio against "this layer produced no hit":
+  //   take hit j :  ln(eps/(1-eps)) - ln(2pi) - chi2_j/2 - ln(det V_j)/2 - ln rho
+  //   take none  :  0
+  // eps = hit_eff, V the 2x2 residual covariance, rho the local hit density.
   inline float v2p2_layer_step_loglh(const LayerStepFeatures& f, const V2p2ScoreParams& p) {
     if (f.n_hits == 0)
       return 0.0f;  // the reference hypothesis, whatever kind of hole it was
