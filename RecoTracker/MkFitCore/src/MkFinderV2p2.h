@@ -11,8 +11,6 @@
 
 #include "MkBins.h"
 
-#include <atomic>
-#include <functional>
 #include <list>
 #include <utility>
 #include <vector>
@@ -32,15 +30,7 @@ namespace mkfit {
   // finder increments them through V2P2_COUNT() and V2P2_COUNT_ADD(), which expand
   // to nothing in the CMSSW build.
 
-  class FindingFoos;
-  class IterationParams;
-  class IterationLayerConfig;
-  class SteeringParams;
-  struct LayerControl;
-  class LayerInfo;
   class Event;
-
-  class MkJob;
 
   class MkFinderV2p2 {
     friend class MkBuilder;
@@ -56,16 +46,8 @@ namespace mkfit {
 
       int m_n_dormant;
       int m_n_finding;
-      // int m_n_to_finalize;
       int m_n_finished;
 
-      // Not needed, have the list of CCandReps
-      // // Cursors into EOCCS for activation
-      // int m_Cc_pos;  // current CombCand index
-      // int m_pTc_pos; // current primary TrackCand index
-
-      // something for the derived ones --- teritary, to handle in-layer combinatorials
-      // or maybe we'll need a sub-manager for those? Or will the finder do that
     public:
       CombCandidate& ccand(int i) const { return (*mp_eoccs)[i]; }
       CombCandidate* ccand_ptr(int i) const { return &(*mp_eoccs)[i]; }
@@ -77,17 +59,9 @@ namespace mkfit {
         m_n_dormant = 0;
         m_n_finding = 0;
         m_n_finished = 0;
-        reset_for_new_layer();
       }
       void release() {
         mp_eoccs = nullptr;
-      }
-
-      void reset_for_new_layer() {
-        // Prepare for next layer / extraction.
-        // We have list of active CCandReps now
-        // m_Cc_pos = m_begin;
-        // m_pTc_pos = 0;
       }
 
       int n_total() const { return m_end - m_begin; }
@@ -123,14 +97,6 @@ namespace mkfit {
 
     void setup(const MkJob *job, EventOfCombCandidates &eoccs, int seed_begin, int seed_end,
                SteeringParams::iterator &sp_it, const Event *ev);
-              //  int region, // sp_it->region()
-              //  const PropagationConfig &pc, // trk_info.prop_config() and m_job->m_trk_info
-              //  const IterationConfig &ic, // m_job->m_iter_config
-              //  const IterationParams &ip, // m_job->params_cur();
-              //  const IterationLayerConfig &ilc, // m_job->m_iter_config.m_layer_configs[curr_layer]
-              //  const SteeringParams &sp, // m_job->steering_params(region)
-              //  const std::vector<bool> *ihm, // m_job->get_mask_for_layer(curr_layer)
-              //  bool infwd);               // m_job->m_in_fwd
     void release();
 
     int awaken_candidates();
@@ -249,7 +215,7 @@ namespace mkfit {
     void load_hit_module(KalmanOpArgs &koa, const PrimTCandRep::PQE &pqe) const;
 
     //----------------------------------------------------------------------------
-    // Job / batch-of-seeds control variables and globel references
+    // Job / batch-of-seeds control variables and global references
     const MkJob *mp_job = nullptr;
     SteeringParams::iterator *mp_steeringparams_iter = nullptr;
     const Event *mp_event = nullptr;
@@ -265,7 +231,6 @@ namespace mkfit {
     std::list<CCandRep>::iterator m_active_ccreps_pos; // Current CombCand to be processed or is in processing.
 
     // Pre-selection queue -- list of pTcs to do initial prop + Binnor + hit extraction for.
-    // Elements are slots in the pTC hot-tub.
     // A FIFO as a vector and a read position, reset when it drains: it keeps
     // its capacity, where a std::list allocated a node per candidate.
     std::vector<PrimTCandRep*> m_cand_queue;

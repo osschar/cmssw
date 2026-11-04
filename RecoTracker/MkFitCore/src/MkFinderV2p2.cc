@@ -1,8 +1,5 @@
 #include "MkFinderV2p2.h"
 
-#include "RecoTracker/MkFitCore/interface/cms_common_macros.h"
-// #include "FindingFoos.h"
-
 #include "MkBins.h"
 
 #include <algorithm>
@@ -23,9 +20,8 @@ namespace mkfit {
 
   using namespace Config::V2p2;
 
-
   //------------------------------------------------------------------------------
-  // Setup variables for full processing of a batch of CombCanditates
+  // Setup variables for full processing of a batch of CombCandidates
 
   void MkFinderV2p2::setup(const MkJob *job, EventOfCombCandidates &eoccs, int seed_begin, int seed_end,
                            SteeringParams::iterator &sp_it, const Event *ev) {
@@ -35,7 +31,7 @@ namespace mkfit {
 
     m_batch_mgr.setup(eoccs, seed_begin, seed_end);
 
-    // Assure all ccands are dormant and have a single tcand (?)
+    // Assure all ccands are dormant and have a single tcand.
     for (auto &ccand : m_batch_mgr) {
       if (ccand.state() != CombCandidate::Dormant)
         throw std::runtime_error("CombCandidate is expected to be dormant "
@@ -45,8 +41,6 @@ namespace mkfit {
                                  "TrackCand on entry into combinatorial search.");
     }
     m_batch_mgr.m_n_dormant = m_batch_mgr.n_total();
-
-    // AAAA reserve based on iter-param max-cands and N-sub-layer / skipped hit combinatorials.
   }
 
   void MkFinderV2p2::release() {
@@ -55,13 +49,9 @@ namespace mkfit {
     mp_steeringparams_iter = nullptr;
     mp_event = nullptr;
 
-    // XXXX this might need to be achieved through other means ... crashing when going to
-    // XXXX multi-event setup as old ccands have stayed in.
-    // See another XXXX about finalization below in end_layer()
-    m_active_ccreps.clear();
-
     // Finders are reused across seed blocks and events, and the queue holds
     // pointers into CCandRep::m_primTCs. process_layer() asserts it is empty on exit.
+    m_active_ccreps.clear();
     m_cand_queue.clear();
     m_cand_queue_head = 0;
   }
@@ -91,12 +81,11 @@ namespace mkfit {
             ccand[ic].setScore(0.0f);
         // auto &: the MKFIT_STANDALONE fields below must land on the list element.
         [[maybe_unused]] auto &ccrep = m_active_ccreps.emplace_back(ccand);
-        dprintf("MkFinderV2p2::awaken_candidates dummy printout N_TrackCands=%d\n",
+        dprintf("MkFinderV2p2::awaken_candidates N_TrackCands=%d\n",
                (int) ccand.size());
         ++count;
 
         #if defined(MKFIT_STANDALONE)
-        // XXXX hmmh, i could really just get it where i need it.
         auto sifh = mp_event->simInfoForCurrentSeed(ccand.seed_origin_index());
         ccrep.m_seed_mc_label = sifh.label;
         ccrep.m_mc_layer_sequence = 0;
@@ -169,35 +158,10 @@ namespace mkfit {
   }
 
   //------------------------------------------------------------------------------
-  // Per layer initialization / cleanup tasks,
+  // Per layer initialization / cleanup tasks.
 
   void MkFinderV2p2::begin_layer() {
-    // debug = true; // to be disabled at the end of end_layer()
-
-    // Count number of awakend ccands and number of non-stopped tcands.
-    // Well, I actually know n ccands.
-
     dprintf("MkFinderV2p2::begin_layer Expecting %d active ccands\n", (int) m_active_ccreps.size());
-
-// #ifdef RNT_DUMP_MkF_SelHitIdcs
-//     // clang-format off
-//     const IterationConfig &IC = mp_job->m_iter_config;
-//     SteeringParams::iterator &spi = *mp_steeringparams_iter;
-//     const LayerOfHits &L = mp_job->m_event_of_hits[spi->m_layer];
-//     const LayerInfo &LI = L.layer_info();
-//     rnt_shi.ResetH();
-//     rnt_shi.ResetF();
-//     *rnt_shi.h = {mp_event->evtID(), IC.m_iteration_index, IC.m_track_algorithm,
-//                   spi.region(), L.layer_id(),
-//                   L.is_barrel() ? LI.rin() : LI.zmin(), LI.is_barrel() ? LI.rout() : LI.zmax(),
-//                   L.is_barrel(), L.is_pixel(), L.is_stereo()};
-//     *rnt_shi.f = *rnt_shi.h;
-
-//     // Unlike in MkFinder, we process all active cands in one go.
-//     // And actually do not use the inner indices as we assign CandInfo* into PrimTCand.
-//     rnt_shi.InnerIdcsReset((int) m_active_ccreps.size());
-//     // clang-format on
-// #endif
 
 #ifdef DEBUG
     { int i = 1;
@@ -209,7 +173,6 @@ namespace mkfit {
     }
 #endif
 
-    m_batch_mgr.reset_for_new_layer();
     m_active_ccreps_pos = m_active_ccreps.begin();
 
     { // Setup m_rz_limits.
@@ -226,18 +189,8 @@ namespace mkfit {
         m_rz_limits.setup(LI_p, spi.is_outward());
       }
     }
-
-    // Hmmh, nothing to really do here, is it?
-
-    // Initialize best short (?) - to what? How was it before? The seed itself?
-    // Or let this happen after the first layer is processed?
-    // Score is set to worst-possible elsewhere.
   }
 
-  // Straight-line path length from the candidate's state (its last hit) to the
-  // layer's near surface, against InLayer::late_max_cands_step_cm. Barrel: radial gap
-  // times p / pT; endcap: z gap times p / |pz|. Curvature is ignored, so the
-  // barrel path is underestimated for strongly bending tracks.
   // InLayer::sister_hole_drop: remove from m_sel the holes that a path of the same
   // TrackCand dominates by taking the sister sensor of its last hit. A sister pair
   // is two adjacent layers, the lower one stereo and the upper one not, and the
@@ -284,7 +237,10 @@ namespace mkfit {
     m_sel.resize(w);
   }
 
-
+  // Straight-line path length from the candidate's state (its last hit) to the
+  // layer's near surface, against InLayer::late_max_cands_step_cm. Barrel: radial gap
+  // times p / pT; endcap: z gap times p / |pz|. Curvature is ignored, so the
+  // barrel path is underestimated for strongly bending tracks.
   bool MkFinderV2p2::long_step_to_layer(const TrackCand &tc) const {
     if (InLayer::late_max_cands_step_cm <= 0.0f)
       return false;
@@ -310,9 +266,6 @@ namespace mkfit {
     CCandRep &ccrep = * m_active_ccreps_pos;
     CombCandidate &ccand = ccrep.m_ccand;
 
-    // QQQQ reserve to CombCand.capacity already done CCandRep ctor.
-    // We will probably need a variable number per layer / layer pair.
-    // But this will be first relevant / handled elsewhere.
     // Beam width for this layer, per seed: see InLayer::late_max_cands. The
     // TrackCands are in score order from the previous selection, so dropping
     // the tail here is the selection having kept fewer.
@@ -331,8 +284,6 @@ namespace mkfit {
         ccand.resize(ccrep.m_max_cands);
       }
     }
-
-    ccrep.m_primTCs.reserve(ccand.size());
 
     for (int ic = 0; ic < (int) ccand.size(); ++ic) {
       TrackCand &tcand = ccand[ic];
@@ -362,8 +313,8 @@ namespace mkfit {
         continue;
       }
 
-      // Create and Register PrimTCandRep for processing.
-      // The CCandRep vector has the capacity for N_max_cands.
+      // Create and register a PrimTCandRep for processing. m_primTCs does not
+      // reallocate, see the CCandRep constructor.
       {
         PrimTCandRep &ptc = ccrep.m_primTCs.emplace_back( &ccrep, ic );
         m_cand_queue.push_back(&ptc);
@@ -376,7 +327,6 @@ namespace mkfit {
     #if defined(MKFIT_STANDALONE)
     {
       ccrep.m_n_mc_hits_in_layer = mp_event->countSimHitsInLayer(ccrep.m_seed_mc_label, mp_steeringparams_iter->layer());
-      // ccrep.m_n_mc_hits_in_layer_sec = mp_event->countSimHitsInLayer(ccrep.m_seed_mc_label, mp_steeringparams_iter->layer_sec());
       if (ccrep.m_n_mc_hits_in_layer > 0)
         ++ccrep.m_mc_layer_sequence;
     }
@@ -386,11 +336,6 @@ namespace mkfit {
   // void MkFinderV2p2::process_layer_batch() -- below in the "complex stuff" section
 
   void MkFinderV2p2::end_layer() {
-    // Stop tracks -- pT / apogee / missing layers.
-    // Choose best-short.
-    // Figure out what to copy back to EventOfCombCandidates.
-
-    // clear out ccands -- well, might keep them -- just flush the tcands out of hot-tub
     int count = 0;
     auto ai = m_active_ccreps.begin();
     while (ai != m_active_ccreps.end()) {
@@ -398,7 +343,6 @@ namespace mkfit {
       if (InLayer::comb && ! ai->m_selected)
         select_and_materialise(*ai);
 
-      // QQQQ should attempt to reuse the PrimTCandReps
       ai->m_primTCs.clear();
       ai->m_sec_nodes.clear();
 
@@ -450,8 +394,6 @@ namespace mkfit {
 
     if (m_batch_mgr.has_dormant_ccands())
       awaken_candidates();
-
-    // debug = false;
   }
 
   //------------------------------------------------------------------------------
@@ -523,7 +465,7 @@ namespace mkfit {
     PrimTCandRep **prim_tcand_ptrs = b.ptc;
 
     const int N_proc = b.N_proc = std::min(NN, cand_queue_size());
-    B.m_n_proc = N_proc;   // MkBins used to be constructed with it
+    B.m_n_proc = N_proc;
 
     dprintf("MkFinderV2p2::process_layer_batch work queue is %d, would process %d of them (NN=%d)\n",
             cand_queue_size(), N_proc, NN);
@@ -556,7 +498,6 @@ namespace mkfit {
 
     // Propagation so point 1 is first edge hit, 2 the second
     B.prop_to_limits_in_order(m_rz_limits);
-
   }
 
   //----------------------------------------------------------------------------
@@ -621,8 +562,6 @@ namespace mkfit {
     // Hermite cubic through the two layer crossings, the trajectory model for the
     // per-hit plane solve. See the design notes, "Layer crossings and the Hermite
     // cubic".
-    // This might belong better somewhere else, TPrimCanRep? Calculation into minipropagators.
-
     namespace mp = mini_propagators;
 
     H.calculate_coeffs(B.m_sp1, B.m_sp2, B.m_isp.inv_k);
@@ -693,7 +632,6 @@ namespace mkfit {
       }
     }
 #endif
-
   }
 
   //----------------------------------------------------------------------------
@@ -785,15 +723,12 @@ namespace mkfit {
     int *tr_layersearch_ids = b.tr_layersearch_ids;
 #endif
 
-    // Prototype for extract hits
-
     HitBatch hb;
     int &fill_pos = hb.fill_pos;
     auto &is_plex = hb.is_plex;
     auto &prim_idcs = hb.prim_idcs;
     auto &hit_idcs = hb.hit_idcs;
     auto &hit_orig_idcs = hb.hit_orig_idcs;
-
 
     // Both sub-layers, each into its own reduction queue. See the design notes,
     // "Reduction and hit ordering".
@@ -857,14 +792,6 @@ namespace mkfit {
 
         for (bidx_t qi = BL.q1[i]; qi != BL.q2[i]; ++qi) {
           for (bidx_t pi = BL.p1[i]; pi != BL.p2[i]; pi = L.phiMaskApply(pi + 1)) {
-
-            // Dead regions -- Limit to central Q-bin ???
-            // if (qi == qb && L.isBinDead(pi, qi) == true) {
-            //   dprint("dead module for track in layer=" << L.layer_id() << " qb=" << qi << " pi=" << pi
-            //                                            << " q=" << B.q_c[itrack] << " phi=" << B.phi_c[itrack]);
-            //   m_XWsrResult[itrack].m_in_gap = true;
-            // }
-
             auto pbi = L.phiQBinContent(pi, qi);
             for (bcnt_t hi = pbi.begin(); hi < pbi.end(); ++hi) {
 
@@ -912,7 +839,7 @@ namespace mkfit {
                 }
               }
 
-              // Try preloading Hits for the next step ... probably not really relevant.
+              // The Hit is read in preselect_hit_batch().
               __builtin_prefetch(&L.refHit(hi_orig));
 
               prim_idcs[fill_pos] = i;
@@ -927,11 +854,6 @@ namespace mkfit {
             }
           }
         }
-
-        // Done with one PrimTCandRep. We might have enough hits to go into full KalmanProp.
-        // Or wait for a change in ccand.
-        // But there will be more work to be done, the overlaps, the other layer ...
-        // ... so let's see.
       }
       if (fill_pos > 0) {
         preselect_hit_batch(b, hb, L, fill_pos, is_sec_layer);
@@ -1020,13 +942,12 @@ namespace mkfit {
   //
   // Solves the Hermite cubic onto each hit's own module plane, applies the
   // dq / dphi pre-selection cut, and pushes survivors into the candidate's
-  // bounded priority queue. Was a lambda inside the monolith.
+  // bounded priority queue.
   //----------------------------------------------------------------------------
 
   void MkFinderV2p2::preselect_hit_batch(LayerBatch &b, HitBatch &hb,
                                          const LayerOfHits &L, int N_proc_hits,
                                          bool is_sec_layer) {
-    SteeringParams::iterator &spi = *mp_steeringparams_iter;
     MkBins &B = b.B;
     MkBinTrackCovExtract &TCE = b.TCE;
     PrimTCandRep **prim_tcand_ptrs = b.ptc;
@@ -1042,7 +963,6 @@ namespace mkfit {
 #ifdef MKFIT_TRACE
     int *tr_layersearch_ids = b.tr_layersearch_ids;
 #endif
-    (void) spi; (void) TCE;
 
       MPlex3V module_pos;
       MPlex3V module_norm;
@@ -1137,8 +1057,7 @@ namespace mkfit {
                                                     : Window::dphi_flat_rad);
         const bool dqdphi_presel = ddq < dq_cut && ddphi < dphi_cut;
 
-        // To be moved down, only for hits that pass pre-selection, needed here for printout.
-        // Could be vectorized if we repack binnor stuff.
+        // For every hit, not only those that pass: the debug printout shows it.
         h3_state.dalpha[h] = B.m_sp1.dalpha[prim_idcs[h]] + h3dop.m_T[h]*(B.m_sp2.dalpha[prim_idcs[h]] - B.m_sp1.dalpha[prim_idcs[h]]);
 
 #ifdef DEBUG
@@ -1196,11 +1115,8 @@ namespace mkfit {
         tr_hitmatch.residual_z = res.Dot( EVec3(module_norm(h, 0, 0), module_norm(h, 1, 0), module_norm(h, 2, 0)) );
 #endif
 
-        if (/*prop_fail || */ !dqdphi_presel)
+        if (!dqdphi_presel)
           continue;
-
-        // float dalpha = h_plex.dalpha[h];
-        // is_plex might come from somewhere else, through another index.
 
         // The reduction is PER SUB-LAYER, so each sensor keeps its own budget.
         const int sl = is_sec_layer ? 1 : 0;
@@ -1212,9 +1128,8 @@ namespace mkfit {
 #endif
         };
 
-        if (ptc.m_pqueue_size[sl] < mp_job->v2p2().max_presel_hits) {
+        if (ptc.m_pqueue[sl].size() < mp_job->v2p2().max_presel_hits) {
           do_pqueue_push();
-          ++ptc.m_pqueue_size[sl];
         } else if (ddphi < ptc.pq_top(sl).score) {
           ptc.pq_pop(sl);
           do_pqueue_push();
@@ -1240,14 +1155,13 @@ namespace mkfit {
       PrimTCandRep &ptc = * prim_tcand_ptrs[i];
 #ifdef MKFIT_TRACE
       mp_event->tr_layersearch(tr_layersearch_ids[i]).n_hits_pqueue =
-        ptc.m_pqueue_size[0] + ptc.m_pqueue_size[1];
+        ptc.m_pqueue[0].size() + ptc.m_pqueue[1].size();
 #endif
       for (int sl = 0; sl < 2; ++sl) {
 #ifdef MKFIT_TRACE
-        int rank = ptc.m_pqueue_size[sl];
+        int rank = ptc.m_pqueue[sl].size();
 #endif
-        while (ptc.m_pqueue_size[sl]) {
-          --ptc.m_pqueue_size[sl];
+        while (!ptc.m_pqueue[sl].empty()) {
           const auto &pqe = ptc.pq_top(sl);
           ptc.m_layer_hits.push_back( pqe );
 #ifdef MKFIT_TRACE
@@ -1302,7 +1216,6 @@ namespace mkfit {
       K.reset();
     }; // end lambda do_kalman
 
-    // KalmanProp, prim layer -- should also be done in-line as slots fill up.
     KalmanOpArgs koa;
     koa.prop_config = & mp_job->m_trk_info.prop_config();
 #ifdef MKFIT_TRACE
@@ -1315,10 +1228,6 @@ namespace mkfit {
       for (int lh = 0; lh < nlh; ++ lh) {
         const PrimTCandRep::PQE &pqe = ptc.m_layer_hits[lh];
         dprintf("scheduling %d %d %d %f\n", i, pqe.hit_index, pqe.hit_orig_index, pqe.mixed_state.dalpha);
-
-        // Need to build all the Matriplexes for KalmanOperationPlane ... or some variant
-        // There really needs to be an intermediate structure with packers so we can
-        // set them up incrementally.
 
         TrackCand &tc = ptc.tcand();
         koa.item_begin(&ptc, { (int) pqe.hit_orig_index, pqe.layer });
@@ -1336,13 +1245,11 @@ namespace mkfit {
           do_kalman(koa);
         }
       }
-      // QQQQ hits stay in, somehow. Or it was leftover PrimTCands etc due to incomplete driver.
       ptc.m_layer_hits.clear();
     }
     if (koa.N_filled > 0) {
       do_kalman(koa);
     }
-
   }
 
   //----------------------------------------------------------------------------
@@ -1444,9 +1351,6 @@ namespace mkfit {
   // m_sec_arena until end of layer. See doc/MkFinderV2p2-DesignNotes.md,
   // "In-layer combinatorial search".
   //----------------------------------------------------------------------------
-
-  // V2p2Params::max_sec_depth caps the hits per path; InLayer::max_sec_depth_limit
-  // sizes the chain array.
 
   int MkFinderV2p2::sec_node_slot() {
     if (m_sec_free.empty()) {
@@ -1661,7 +1565,7 @@ namespace mkfit {
   // once per path root and then carried down the tree.
   void MkFinderV2p2::fill_step_geometry(LayerStepFeatures &f, const PrimTCandRep &ptc,
                                         float log_rho) const {
-    const TrackCand &tc = const_cast<PrimTCandRep &>(ptc).tcand();
+    const TrackCand &tc = ptc.tcand();
     const LayerInfo &li = m_rz_limits.layer_info_1();
     // layer_from is the layer of the candidate's LAST FOUND HIT, so the pair
     // names the propagation that actually happens. A candidate that missed the
@@ -1786,7 +1690,6 @@ namespace mkfit {
       harvest_sec_nodes();
       frontier.swap(m_sec_harvested);
     }
-
   }
 
   //----------------------------------------------------------------------------

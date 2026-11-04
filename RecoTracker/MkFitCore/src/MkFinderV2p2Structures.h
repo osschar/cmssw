@@ -90,9 +90,6 @@ namespace mkfit {
 #ifdef MKFIT_TRACE
         int tr_hitmatch_id;
 #endif
-        // float dalpha
-        // Hit &
-        // ModuleInfo &
 
         // state on new hit, inv_pt, inv_k, theta on hit on previous layer / last hit
         mini_propagators::InitialState mixed_state;
@@ -107,7 +104,6 @@ namespace mkfit {
       // exactly as std::priority_queue<PQE> does, in inline storage.
       static constexpr int kPqCap = Config::V2p2::InLayer::max_presel_hits_limit;
       InlineVec<PQE, kPqCap> m_pqueue[2];
-      int m_pqueue_size[2] = {0, 0};
 
       void pq_push(int sl, const PQE &e) {
         m_pqueue[sl].push_back(e);
@@ -141,10 +137,7 @@ namespace mkfit {
 
       CombCandidate& ccand();
       TrackCand& tcand();
-
-      // these go to SecTCandRep:
-      // score, params, chi2, new hits[4 or more for doulbe layers];
-      // index in the CombCand -- thing we will update as needed
+      const TrackCand& tcand() const;
 
       // Hack for best hit
       TrackState bState;
@@ -172,14 +165,6 @@ namespace mkfit {
       // PrimTCandReps, for the end-of-layer selection.
       std::vector<int> m_sec_nodes;
 
-      // We could also keep track of the TrackCands that do not enter layer
-      // processing at all -- either already stopped or missing this layer.
-      // Store indices into m_ccand, the way m_primTCs does, rather than
-      // pointers: indices stay valid regardless of how the CombCandidate grows.
-      // Only worth doing together with SecTCandRep and the selection / merging
-      // step -- the best-hit path has no use for it.
-      // std::vector<int> m_otherTCs;
-
       // PrimTCandReps of this layer still in MkFinderV2p2::m_cand_queue. They are
       // queued together, so at zero the CombCandidate is through the layer and
       // can be selected before end of layer.
@@ -200,17 +185,18 @@ namespace mkfit {
       // int m_n_mc_hits_in_layer_sec = -1;
     #endif
 
+      // m_cand_queue holds pointers into m_primTCs, so it must never reallocate:
+      // a CombCandidate never has more TrackCands than its capacity.
       CCandRep(CombCandidate& ccand) :
         m_ccand(ccand)
       {
-         // QQQQ reserve also in begin_next_Ccrep_in_layer()
-         // QQQQ clear in end_layer() -- might want to reuse the objects more
         m_primTCs.reserve(ccand.capacity());
       }
     }; // end struct CCandRep
 
     inline CombCandidate& PrimTCandRep::ccand() { return mp_ccrep->m_ccand; }
     inline TrackCand& PrimTCandRep::tcand() { return mp_ccrep->m_ccand[m_origin_tcand_index]; }
+    inline const TrackCand& PrimTCandRep::tcand() const { return mp_ccrep->m_ccand[m_origin_tcand_index]; }
 
     //----------------------------------------------------------------------------
     // BaseArgs
@@ -246,6 +232,7 @@ namespace mkfit {
       // entry of m_layer_hits it takes. Unused by the best-hit path.
       int           parent_idx[NN];
       int           hit_pos[NN];
+      unsigned int  hit_in_layer[NN];  // index within the LayerOfHits
 
       MPlexHS msErr { 0.0f }; // input measurement / hit [ms - measurement state]
       MPlexHV msPar { 0.0f }; // ""
@@ -287,9 +274,6 @@ namespace mkfit {
       bool m_solve_plane = false;
 
       void reset() { N_filled = 0; }
-
-      // There will be some more of this state, also secondary or who knows what.
-      unsigned int hit_in_layer[NN];
 
       void item_begin(PrimTCandRep *ptc, HitOnTrack ht, int par_idx = -1, int hpos = -1,
                       unsigned int hil = 0) {

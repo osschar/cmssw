@@ -94,16 +94,6 @@ namespace mkfit {
     to_global(U, L, pl, tsChg, bFld, tsPar, tsErr);
     kalmanCheckChargeFlip(tsPar, tsChg, N_filled);
 
-    // The original -- but Chi2 only.
-    // kalmanPropagateAndComputeChi2Plane(tsErr, tsPar, tsChg, msErr, msPar, plNrm, plDir, plPnt,
-    //                       nullptr,
-    //                       tsChi2,
-    //                       propPar,
-    //                       outFailFlag,
-    //                       N_filled,
-    //                       prop_config->finding_intra_layer_pflags,
-    //                       prop_config->finding_requires_propagation_to_hit_pos);
-
     // Update prim candidate state for best hit -- to be generalized
     dprintf("Kalman post-update check:\n");
     for (int i = 0; i < N_filled; ++i) {
@@ -141,12 +131,7 @@ namespace mkfit {
       TrKalmanUpdate &ku = mp_event->trace_kalmanupdate({ -1, hm_id, hm.state_id });
       ku.chi2 = tsChi2[i];
       ku.chi2_acc = tsChi2Acc[i];
-
-      // Do not know this yet -- how will I know?
-      // ku.chi2_trk = 0.0f;  // Could track cumulative if needed
-      // What does accepted mean? pass_chi2 cut / score cut ... when we have it.
-      // ku.accepted = (ptcp[i]->b_tr_hitmatch_id == hm_id);
-      // ku.state_id_out = ku.accepted ? ptcp[i]->tcand().m_trace_state_id : -1;
+      // accepted and state_id_out are set when a path is materialised.
 
 #ifdef MKFIT_TRACE_KALMAN_DEBUG
       // Full pre- and post-update states, for every hit including the rejected
