@@ -664,8 +664,6 @@ int main(int argc, const char* argv[]) {
           "                           that declined the layer, even when outranked (def: %d)\n"
           "  --v2p2-early-select <0|1>  MkFinderV2p2: select a CombCandidate after its last layer\n"
           "                           batch and reuse its tree-node slots (def: %d)\n"
-          "  --v2p2-running-kalman <0|1>  MkFinderV2p2: in-layer Kalman batches stay open across\n"
-          "                           layer batches and fire only when full (def: %d)\n"
           "  --v2p2-late-max-cands <n>      MkFinderV2p2: beam width per seed once its best candidate has\n"
           "                           more than --v2p2-late-max-cands-hits found hits; 0 = off (def: %d)\n"
           "  --v2p2-late-max-cands-hits <n> MkFinderV2p2: found hits above which --v2p2-late-max-cands applies (def: %d)\n"
@@ -852,7 +850,6 @@ int main(int argc, const char* argv[]) {
           int(V2p2::InLayer::best_short),
           int(V2p2::InLayer::reserve_hole_slot),
           int(V2p2::InLayer::early_select),
-          int(V2p2::InLayer::running_kalman),
           V2p2::InLayer::late_max_cands,
           V2p2::InLayer::late_max_cands_hits,
           V2p2::InLayer::late_max_cands_step_cm,
@@ -1125,9 +1122,6 @@ int main(int argc, const char* argv[]) {
     } else if (*i == "--v2p2-early-select") {
       next_arg_or_die(mArgs, i);
       V2p2::InLayer::early_select = (bool)atoi(i->c_str());
-    } else if (*i == "--v2p2-running-kalman") {
-      next_arg_or_die(mArgs, i);
-      V2p2::InLayer::running_kalman = (bool)atoi(i->c_str());
     } else if (*i == "--v2p2-late-max-cands") {
       next_arg_or_die(mArgs, i);
       V2p2::InLayer::late_max_cands = atoi(i->c_str());
