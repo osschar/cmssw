@@ -28,7 +28,9 @@ namespace mkfit {
 
   // One layer step: everything that happened to one candidate between its state
   // at layer check-in and its state at the end of the layer. Kept a POD so it can
-  // go into the trace unchanged.
+  // go into the trace unchanged. chi2_max, q_half_len_best, layer_from and the
+  // candidate fields are not read by the current scores; they are the inputs
+  // prepared for the next one.
   struct LayerStepFeatures {
     // What was taken.
     float chi2_sum = 0.0f;  // over the hits of this step
