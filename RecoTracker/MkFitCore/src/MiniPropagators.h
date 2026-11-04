@@ -201,6 +201,9 @@ namespace mkfit::mini_propagators {
     MP4V m_Hx, m_Hy, m_Hz;  // Hermite p(3) coefficients for x, y, z
     MPF m_Hderfac;          // 1 / (k * dalpha) -- turns dr/dt back into momentum
 
+    Hermite3D() = default;
+    explicit Hermite3D(float val) : m_Hx(val), m_Hy(val), m_Hz(val), m_Hderfac(val) {}
+
     void copyIn(int dst_slot, const Hermite3D& src, int src_slot) {
       m_Hx.copyIn(dst_slot, src.m_Hx, src_slot);
       m_Hy.copyIn(dst_slot, src.m_Hy, src_slot);

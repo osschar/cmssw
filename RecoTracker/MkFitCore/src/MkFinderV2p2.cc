@@ -985,9 +985,11 @@ namespace mkfit {
     int* tr_layersearch_ids = b.tr_layersearch_ids;
 #endif
 
-    MPlex3V module_pos;
-    MPlex3V module_norm;
-    mp::Hermite3D h3d;
+    // Zeroed: the lanes from N_proc_hits up are not filled, and init_coeffs() reads
+    // all of them.
+    MPlex3V module_pos(0.0f);
+    MPlex3V module_norm(0.0f);
+    mp::Hermite3D h3d(0.0f);
 
 #ifdef MKFIT_TRACE
     int tr_hitmatch_ids[NN];
