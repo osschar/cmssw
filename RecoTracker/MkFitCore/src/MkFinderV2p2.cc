@@ -1285,7 +1285,6 @@ namespace mkfit {
 #ifdef MKFIT_TRACE
       n.m_tr_hitmatch_id = o.tr_hitmatch_id;
 #endif
-      o.ptc->m_has_sec_nodes = true;
       const int slot = sec_node_slot();  // may grow the arena: pf is dead by now
       m_sec_arena[slot] = n;             // a reused slot is overwritten whole
       o.ptc->mp_ccrep->m_sec_nodes.push_back(slot);

@@ -118,8 +118,6 @@ namespace mkfit {
     // Survivors of both queues, in path order (sorted by dir * dalpha).
     InlineVec<PQE, 2 * kPqCap> m_layer_hits;
 
-    // Did this candidate produce any in-layer path? Set by expand_in_layer().
-    bool m_has_sec_nodes = false;
     float m_log_rho = 0.0f;  // local hit density, ln(hits / cm^2), for the score
 
     PrimTCandRep(CCandRep* ccr, int orig_idx) {
