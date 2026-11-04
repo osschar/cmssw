@@ -53,7 +53,6 @@ namespace mkfit {
       iterator(const SteeringParams& sp, IterationType_e t) : m_steering_params(sp), m_type(t) {}
 
     public:
-      const SteeringParams& steering_params() const { return m_steering_params; }
       IterationType_e type() const { return m_type; }
       const LayerControl& layer_control() const { return m_steering_params.m_layer_plan[m_cur_index]; }
       int layer() const { return layer_control().m_layer; }
@@ -111,12 +110,6 @@ namespace mkfit {
         else
           return m_steering_params.m_layer_plan[m_cur_index - 1].m_layer_sec;
       }
-      int last_layer_sec() const {
-        if (m_type == IT_FwdSearch)
-          return m_steering_params.m_layer_plan[m_end_index - 1].m_layer_sec;
-        else
-          return m_steering_params.m_layer_plan[m_end_index + 1].m_layer_sec;
-      }
     };  // class iterator
 
     std::vector<LayerControl> m_layer_plan;
@@ -163,21 +156,6 @@ namespace mkfit {
             m_layer_plan.emplace_back(LayerControl(i+1));
           }
         }
-      }
-    }
-
-    void fill_plan_pairs_with_swap(int first, int last) {
-      assert((last - first + 1) % 2 == 0 && "swap_pairs requires even number of layers");
-      for (int i = first; i <= last; i += 2) {
-        m_layer_plan.emplace_back(LayerControl(i+1, i));
-      }
-    }
-
-    void fill_plan_pairs_with_swap_as_singles(int first, int last) {
-      assert((last - first + 1) % 2 == 0 && "swap_pairs requires even number of layers");
-      for (int i = first; i <= last; i += 2) {
-        m_layer_plan.emplace_back(LayerControl(i+1));
-        m_layer_plan.emplace_back(LayerControl(i));
       }
     }
 
