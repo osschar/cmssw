@@ -36,7 +36,7 @@ namespace mkfit {
     n_ccand_retired = 0;
     n_sec_nodes = 0; n_sec_deep = 0; n_path_taken = 0; n_extra_hits = 0;
     n_sel_entries = 0; n_sel_kept = 0; n_selections = 0;
-    n_same_module = 0; n_diff_module = 0; n_same_module_vetoed = 0;
+    n_same_module_vetoed = 0;
     n_hole_slot_reserved = 0; n_best_short_offered = 0; n_best_short_taken = 0;
     n_kalman_calls = 0; n_kalman_lanes = 0; n_kalman_calls_d0 = 0; n_kalman_lanes_d0 = 0;
     n_arena_layers = 0; n_arena_hw_sum = 0; n_arena_hw_max = 0; n_early_selections = 0;
@@ -92,8 +92,7 @@ namespace mkfit {
            "  retired    : %ld CombCandidates\n"
            "  in-layer   : %ld tree nodes (%ld at depth >= 2), %ld paths taken, %ld extra hits\n"
            "  selection  : %ld of them, %ld competitors -> %ld kept (%.2f -> %.2f per seed)\n"
-           "  extra hits : %ld from another module (overlap), %ld from the SAME module (%.1f%%)"
-           ", %ld same-module extensions vetoed\n"
+           "  extra hits : %ld same-module extensions vetoed\n"
            "  hole slots : %ld reserved for an outranked decliner\n"
            "  best-short : %ld stopped cands left the beam, %ld became the seed's best short\n"
            "  Mplex lanes: depth 0 %.2f of %d over %ld calls; deeper %.2f over %ld calls\n"
@@ -110,9 +109,6 @@ namespace mkfit {
            n_selections.load(), n_sel_entries.load(), n_sel_kept.load(),
            n_selections > 0 ? (double) n_sel_entries / n_selections : 0.0,
            n_selections > 0 ? (double) n_sel_kept / n_selections : 0.0,
-           n_diff_module.load(), n_same_module.load(),
-           (n_same_module + n_diff_module) > 0 ?
-             100.0 * n_same_module / (n_same_module + n_diff_module) : 0.0,
            n_same_module_vetoed.load(), n_hole_slot_reserved.load(),
            n_best_short_offered.load(), n_best_short_taken.load(),
            n_kalman_calls_d0 > 0 ? (double) n_kalman_lanes_d0 / n_kalman_calls_d0 : 0.0, NN,

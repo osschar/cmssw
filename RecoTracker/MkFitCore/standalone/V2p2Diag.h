@@ -40,8 +40,6 @@ namespace mkfit {
     std::atomic<long> n_sel_entries{0};    // competitors entering the end-of-layer selection
     std::atomic<long> n_sel_kept{0};       // ... and surviving it
     std::atomic<long> n_selections{0};     // end-of-layer selections run
-    std::atomic<long> n_same_module{0};    // extra hit from the SAME module -- not an overlap
-    std::atomic<long> n_diff_module{0};    // extra hit from another module -- a genuine overlap
     std::atomic<long> n_same_module_vetoed{0};  // extensions refused for sharing a module
     std::atomic<long> n_hole_slot_reserved{0};  // beam slots given to an outranked decliner
     std::atomic<long> n_best_short_offered{0};  // stopped candidates removed from the beam
