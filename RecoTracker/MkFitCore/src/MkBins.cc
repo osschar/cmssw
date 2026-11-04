@@ -12,8 +12,8 @@ namespace mkfit {
 
   using namespace Config::V2p2;
 
-  // Largest phi half-width a range can have: just under pi, since at pi the two
-  // endpoints coincide and the arc degenerates to a point.
+  // Largest phi margin added on each side of the crossing span: just under pi,
+  // since at pi the two endpoints coincide and the arc degenerates to a point.
   static constexpr float kMaxHalfPhiWindow = 3.14f;
 
   namespace mp = mini_propagators;
@@ -198,7 +198,7 @@ namespace mkfit {
       if (i < m_n_proc) {
         // Fetch what the cut can accept, using the layer's largest hit extent since
         // the hit is not known yet, then extend by whole bins on the bin index.
-        // The half-width is clamped below pi: a larger one wraps to a small arc.
+        // The margin is clamped below pi: a larger one wraps to a small arc.
         // See doc/MkFinderV2p2-DesignNotes.md, "Search window".
         const float phi_hit_term =
             Window::phi_per_hit ? Window::dphi_hit_fac * loh.max_hit_phi_half_extent() : Window::dphi_flat_rad;

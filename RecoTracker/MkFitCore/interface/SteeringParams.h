@@ -192,11 +192,9 @@ namespace mkfit {
     }
 
     void set_iterator_limits(int fwd_search_pu, int bkw_fit_last, int bkw_search_pu = -1) {
-      // Bounds-check. iterator::is_valid() only tests != -1, so an index past the
-      // end of the plan is an unchecked out-of-range read of m_layer_plan --
-      // which is exactly what happened when these were written as arithmetic
-      // restating the plan's structure ("4 + 8 + 2*6 + 3") and the plan then got
-      // shorter. Use set_bkw_search_pickup_at_layer() instead of a literal.
+      // Bounds-check the pickups: iterator::is_valid() only tests != -1, so an
+      // index past the end of the plan would be an unchecked read of
+      // m_layer_plan. Prefer set_bkw_search_pickup_at_layer() to a literal index.
       if (fwd_search_pu < 0 || fwd_search_pu >= (int)m_layer_plan.size())
         throw std::runtime_error("SteeringParams: fwd_search pickup index outside layer plan");
       if (bkw_search_pu != -1 && (bkw_search_pu < 0 || bkw_search_pu >= (int)m_layer_plan.size()))

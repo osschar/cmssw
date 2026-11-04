@@ -130,7 +130,8 @@ namespace mkfit {
     //   WSR_Inside  -- the crossing is inside sensitive q; a missing hit is a hole;
     //   WSR_Edge    -- the crossing is near a boundary, or the track turns round
     //                  inside the layer; a missing hit is not counted;
-    //   WSR_Outside -- the track does not reach the layer, which is skipped.
+    //   WSR_Outside -- the crossing misses the layer's sensitive extent, or lies
+    //                  wholly in a disc's central hole; the layer is skipped.
     WSR_Result m_wsr;
 
     CombCandidate& ccand();
@@ -143,18 +144,17 @@ namespace mkfit {
   struct CCandRep {
     CombCandidate& m_ccand;
 
-    std::vector<PrimTCandRep> m_primTCs;  // for now, could live in the shared arena
+    std::vector<PrimTCandRep> m_primTCs;
 
     // Arena indices of every in-layer path of this CombCandidate, across all its
     // PrimTCandReps, for the end-of-layer selection.
     std::vector<int> m_sec_nodes;
 
     // PrimTCandReps of this layer still in MkFinderV2p2::m_cand_queue. They are
-    // queued together, so at zero the CombCandidate is through the layer and
-    // can be selected before end of layer.
+    // queued together, so at zero all of them have been through pre-selection.
     int m_n_queued = 0;
-    // With the running Kalman batches: Kalman items in flight plus nodes
-    // waiting to be expanded. Selection needs both counts at zero.
+    // Kalman items in flight plus nodes waiting to be expanded. Selection needs
+    // both counts at zero.
     int m_n_inflight = 0;
     bool m_selected = false;  // select_and_materialise() already ran this layer
     // Beam width this layer, set in begin_next_Ccrep_in_layer(); 0 = the
@@ -181,10 +181,10 @@ namespace mkfit {
     MPlexLV tsPar{0.0f};  // ""
     MPlexQI tsChg{0};     // "" Kalman update can flip it through curvature flip
 
-    MPlexQF sPerp{0.0f};  // path-length in transverse plane, calculated from alpha. p2plane really needs 3D path.
+    MPlexQF sPerp{0.0f};  // transverse path length, from dalpha in compute_pars(); path_from_perp() makes it 3D
 
     MPlexLS propErr{0.0f};  // intermediate: propagated from tsErr and used as input to Kalman
-    MPlexLV propPar{0.0f};  // input: pre-propagated as part of hit pre-selection
+    MPlexLV propPar{0.0f};  // sPerp path: input, the search's crossing (compute_pars()); solve-plane path: output
 
     MPlexQI outFailFlag{0};  // dummy, can be detected in pre-propagation, no other errors detected / reported
 
@@ -265,7 +265,7 @@ namespace mkfit {
 
     void load_state_err_chg(const mini_propagators::InitialState& params_on_hit, const TrackState& prev_state) {
       tsXyz.copyIn(N_filled, params_on_hit);
-      tsPar.copyIn(N_filled, prev_state.parArray());  // propToPlane needs initial parameters, too
+      tsPar.copyIn(N_filled, prev_state.parArray());  // the propagation steps need the initial parameters, too
       tsErr.copyIn(N_filled, prev_state.errArray());
       tsChg[N_filled] = prev_state.charge;
     }
@@ -279,9 +279,9 @@ namespace mkfit {
     }
 
     void compute_pars() {
-      // Parameters are stored in StatePlex -- so we can vectorize translation to pt, phi, theta.
-      // Some stuff could be passed over as it won't change before update: pt, theta, k_inv
-      // They are passed in output-parameters as propagation also needs input pars.
+      // The search's crossing on the module plane (tsXyz) becomes propPar and the
+      // transverse path length sPerp; tsPar keeps the parameters at the previous
+      // hit, which the jacobian needs.
       propPar.aij(0, 0) = tsXyz.x;
       propPar.aij(1, 0) = tsXyz.y;
       propPar.aij(2, 0) = tsXyz.z;

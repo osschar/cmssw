@@ -24,7 +24,8 @@
 
 namespace mkfit {
 
-  // Switches and parameters are in V2p2Config.h, namespace Config::V2p2.
+  // Switches are in V2p2Config.h, namespace Config::V2p2; the per-iteration
+  // tunings are V2p2Params (interface/V2p2Params.h), read through MkJob::v2p2().
 
   // Per-layer policy counters, standalone only: see standalone/V2p2Diag.h. The
   // finder increments them through V2P2_COUNT() and V2P2_COUNT_ADD(), which expand
@@ -135,8 +136,8 @@ namespace mkfit {
       MkBinTrackCovExtract TCE;       // position block of the window covariance
       MkBinLimits BL_p, BL_s;         // binnor ranges, primary / secondary layer
       mini_propagators::Hermite3D H;  // cubic through sp1, sp2 -- the trajectory model
-      // Local hit density per candidate, ln(hits / cm^2), over the bins walked;
-      // for the likelihood score.
+      // Local hit density for the likelihood score: hits counted, the region's
+      // padding (Score::rho_region 2) and ln(hits / cm^2).
       int n_scanned[NN] = {0};
       float rho_dphi[NN] = {0.0f};  // Score::rho_region 2: the cut region's padding, max over sub-layers
       float rho_dq[NN] = {0.0f};
@@ -150,7 +151,7 @@ namespace mkfit {
       int fill_pos = 0;
       MPlexQI prim_idcs;       // -> LayerBatch::ptc
       MPlexQUI hit_idcs;       // index within the LayerOfHits
-      MPlexQUI hit_orig_idcs;  // index in the event hit vector
+      MPlexQUI hit_orig_idcs;  // index in the layer's hit vector, as HitOnTrack::index
       mini_propagators::InitialStatePlex is_plex;
 #ifdef MKFIT_TRACE_PROP_COMPARE
       mini_propagators::StatePlex h_plex;  // PA_Line cross-check against the Hermite
@@ -191,15 +192,15 @@ namespace mkfit {
     bool long_step_to_layer(const TrackCand& tc) const;
     void offer_best_short(CombCandidate& ccand, const TrackCand& tc) const;
     // The direction-, layer- and candidate-dependent part of a layer step, filled
-    // once per path root and carried down the tree.
+    // once per path root and carried down the tree, and once per hole entry.
     void fill_step_geometry(LayerStepFeatures& f, const PrimTCandRep& ptc, float log_rho) const;
     // Turn the Kalman results accumulated in m_sec_out into arena nodes, keeping
     // those that pass the chi2 cut. Their indices go to m_sec_harvested.
     void harvest_sec_nodes();
     // A slot for one node: from the free list if it has any, else appended.
     int sec_node_slot();
-    // After a layer batch: select every CombCandidate of the batch that has no
-    // candidate left in the queue, and free its nodes.
+    // After a layer batch: select each CombCandidate of the batch, or of
+    // m_ccrep_ready, that has nothing queued or in flight, and free its nodes.
     void select_completed_ccreps(const LayerBatch& b);
 
     // The Kalman batches of expand_in_layer(). Depth 0 (the Hermite crossing is
@@ -225,14 +226,12 @@ namespace mkfit {
     //----------------------------------------------------------------------------
     // Per-(di)layer state & control
     std::list<CCandRep> m_active_ccreps;
-    // Current CombCand and next TrackCand to go through layer initialization, i.e.,
-    // propagation to layer limits, Binnor creation and extraction of bin-indices, and
-    // pre-selection of hits.
-    std::list<CCandRep>::iterator m_active_ccreps_pos;  // Current CombCand to be processed or is in processing.
+    // Next CombCandidate to be pulled into the layer by begin_next_Ccrep_in_layer().
+    std::list<CCandRep>::iterator m_active_ccreps_pos;
 
-    // Pre-selection queue -- list of pTcs to do initial prop + Binnor + hit extraction for.
-    // A FIFO as a vector and a read position, reset when it drains: it keeps
-    // its capacity, where a std::list allocated a node per candidate.
+    // Pre-selection queue: the PrimTCandReps waiting for propagation, binnor fetch
+    // and hit pre-selection. A FIFO as a vector and a read position, reset when it
+    // drains, so it keeps its capacity.
     std::vector<PrimTCandRep*> m_cand_queue;
     int m_cand_queue_head = 0;
 
@@ -248,11 +247,12 @@ namespace mkfit {
     std::vector<int> m_sec_free;
     // Arena indices appended by the last harvest_sec_nodes().
     std::vector<int> m_sec_harvested;
-    // Running Kalman batches, and the nodes whose children are not yet queued.
+    // The two Kalman batches of expand_in_layer(), and the nodes whose children
+    // are not yet queued.
     KalmanOpArgs m_koa_d0, m_koa_deep;
     std::vector<int> m_deep_queue;
-    // CombCandidates whose last in-flight work finished outside their own layer
-    // batch, checked by select_completed_ccreps().
+    // CombCandidates whose last in-flight work has finished, for
+    // select_completed_ccreps(); m_ccrep_touched is rk_flush()'s scratch list.
     std::vector<CCandRep*> m_ccrep_ready;
     std::vector<CCandRep*> m_ccrep_touched;
     // Kalman outcomes of the last flush, drained into the
@@ -261,7 +261,7 @@ namespace mkfit {
 
     // One competitor in the end-of-layer selection. node_idx >= 0 is an in-layer
     // path; otherwise the candidate declined the layer, and add_fake says whether
-    // that costs it a HoT (a hole) or nothing at all (the layer was out of
+    // that costs it a fake HoT (miss, edge, gap or stop) or nothing at all (the layer was out of
     // reach, or it was already stopped).
     struct SelEntry {
       int tcand_idx;

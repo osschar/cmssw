@@ -13,8 +13,7 @@ namespace mkfit {
   // TrackState
   //==============================================================================
 
-  struct TrackState  //  possible to add same accessors as track?
-  {
+  struct TrackState {
   public:
     TrackState() : charge(0), valid(true) {}
     TrackState(int charge, const SVector3& pos, const SVector3& mom, const SMatrixSym66& err)

@@ -81,8 +81,8 @@ namespace mkfit {
       // of holding every node until end of layer.
       MKFIT_V2P2_KNOB(bool, early_select, true);
       // Beam width per seed, decided when its CombCandidate is activated in a
-      // layer: the CombCandidate keeps late_max_cands candidates instead of its
-      // capacity (maxCandsPerSeed), and the surplus is dropped at activation,
+      // layer: the CombCandidate keeps late_max_cands candidates instead of the
+      // search direction's maxCandsPerSeed, and the surplus is dropped at activation,
       // unless its best candidate
       //  - has at most late_max_cands_hits found hits (the seed parameters are still
       //    poorly known), or
@@ -103,7 +103,8 @@ namespace mkfit {
 
     //--------------------------------------------------------------------------
     // Per-layer candidate policy and hit acceptance, design notes
-    // "Within-sensitive-region verdict" and "Candidate pickup and stopping cuts".
+    // "Within-sensitive-region verdict", "Candidate pickup and stopping cuts" and
+    // "Kalman hit acceptance".
     namespace Policy {
       MKFIT_V2P2_KNOB(bool, use_wsr, true);
       MKFIT_V2P2_KNOB(float, wsr_n_sigma, 5.0f);     // WSR edge fuzz, in sigma of the track's q error
@@ -121,13 +122,13 @@ namespace mkfit {
       MKFIT_V2P2_KNOB(float, looper_max_angle, Const::PIOver2 - 0.2f);
       MKFIT_V2P2_KNOB(float, looper_max_pt, 1.2f);
       MKFIT_V2P2_KNOB(float, looper_min_r, 25.0f);
-      // Kalman hit acceptance, both paths: chi2_acc < hit_chi2_cut, where chi2_acc
-      // is the residual against chi2_trk_fac^2 * C_trk + C_hit in the module's
-      // local frame. The hit covariance is taken as it is; chi2_trk_fac carries
-      // the track-covariance deficit, so hit_chi2_cut is a probability: 9.21 is
-      // the 99 % point of chi2 with 2 dof. The update and the score keep the
-      // plain chi2. chi2_trk_fac = 1 is the plain chi2 and costs nothing extra;
-      // the plain chi2 < 30 used before is hit_chi2_cut 30, chi2_trk_fac 1.
+      // Kalman hit acceptance, in harvest_sec_nodes(): chi2_acc < hit_chi2_cut,
+      // where chi2_acc is the residual against chi2_trk_fac^2 * C_trk + C_hit in
+      // the module's local frame. The hit covariance is taken as it is;
+      // chi2_trk_fac carries the track-covariance deficit, so hit_chi2_cut is a
+      // chi2 quantile: 9.21 is the 99 % point of chi2 with 2 dof. The update and
+      // the score keep the plain chi2. chi2_trk_fac = 1 is the plain chi2 and
+      // costs nothing extra.
       // hit_chi2_cut is V2p2Params::hit_chi2_cut.
       MKFIT_V2P2_KNOB(float, chi2_trk_fac, 3.0f);
     }  // namespace Policy
@@ -162,7 +163,8 @@ namespace mkfit {
       // Rank above which TrackCand::m_rank_over_layer records the layer, MKFIT_TRACE.
       MKFIT_V2P2_KNOB(int, rank_over, 6);
       // Standalone: classify each seed's beam at the end of the forward search by truth,
-      // MkBuilder::v2p2_final_beam_diag_*() (single-threaded accumulation).
+      // v2p2_final_beam_diag() and its _reset() / _report(), standalone/V2p2Diag.h
+      // (single-threaded accumulation).
       MKFIT_V2P2_KNOB(bool, final_beam_purity, false);
       // Standalone: record each pair the pixel-seed duplicate cleaner decides, for
       // v2p2_dupclean_diag() to classify by truth (single-threaded accumulation).

@@ -73,8 +73,9 @@ namespace mkfit {
 
   namespace {
     // For the final pick of the forward search, where score_in is the summed
-    // layer-step score of the search (V2p2Score.h). Compares candidates of one
-    // seed only: the score carries the seed's own score from importSeed().
+    // layer-step score of the search (V2p2Score.h). It compares candidates of one
+    // seed only, since that sum starts at 0 at pickup
+    // (MkFinderV2p2::awaken_candidates()).
     float trackScoreV2p2Llh(const TrackScoreInput &in) {
       namespace po = Config::V2p2::Policy;
       return in.score_in - po::final_pick_hole_penalty * in.n_inside_holes -
@@ -442,12 +443,9 @@ namespace mkfit {
         const TrackCand &bcand = eoccs[i].front();
         out_vec.emplace_back(bcand.exportTrack(remove_missing_hits));
 #ifdef MKFIT_TRACE
-        // Only the v2p2 path assigns trace states -- m_trace_state_id is set in
-        // MkFinderV2p2 and in findTracksStandardv2p2(), and defaults to -1
-        // everywhere else. tr_candstate() is an unchecked vector index, so
-        // without this guard any MKFIT_TRACE build segfaults here as soon as
-        // findTracksCloneEngine or findTracksStandard is used, i.e. --build-mimi
-        // without --build-mimi-v2p2.
+        // Only the v2p2 path assigns trace states (MkFinderV2p2,
+        // findTracksStandardv2p2()); for the other finders m_trace_state_id
+        // stays -1, and tr_candstate() does not check its index.
         if (bcand.m_trace_state_id >= 0) {
           auto &cs = m_event->tr_candstate(bcand.m_trace_state_id);
           auto &cm = m_event->tr_candmeta(cs.meta_id);
@@ -721,20 +719,12 @@ namespace mkfit {
               ccand[ic].addHitIdx(-2, layer, 0.0f);
               continue;
             }
-            // Stop the candidate once the transverse angle between position and
-            // momentum exceeds pi/2 - 0.2 rad (78.5 deg): hits at that grazing
-            // an incidence are wide and spoil the measurement.
-            //
-            // dphi is |posPhi - momPhi| with both wrapped to (-pi, pi], so an
-            // angle past the limit appears either as dphi > kMaxAngPosMom or,
-            // when the pair straddles the +-pi branch cut, as
-            // dphi < TwoPI - kMaxAngPosMom. The upper bound is the wrap image of
-            // the lower and must be DERIVED from it -- the previous hardcoded
-            // 4.512f was pi + kMaxAngPosMom, letting the 78.5-101.5 deg band
-            // escape whenever the pair straddled (3.2% of the (posPhi, momPhi)
-            // square, ~0.1% of displaced low-pT tracks, each stopped by 101.5
-            // deg anyway). As written the test is exactly equivalent to
-            // cos(momPhi - posPhi) < sin(0.2), verified over a 1200x1200 grid.
+            // Stop a low-pT candidate near its maximum radius, a looper: the
+            // transverse angle between position and momentum exceeds
+            // pi/2 - 0.2 rad (78.5 deg). dphi = |posPhi - momPhi| lies in
+            // [0, 2pi), so the angle is past the limit when
+            // kMaxAngPosMom < dphi < TwoPI - kMaxAngPosMom; the upper bound is
+            // the wrap image of the lower.
             if (iteration_dir == SteeringParams::IT_FwdSearch && ccand[ic].pT() < 1.2f) {
               constexpr float kMaxAngPosMom = Const::PIOver2 - 0.2f;
               const float dphi = std::abs(ccand[ic].posPhi() - ccand[ic].momPhi());
@@ -830,7 +820,7 @@ namespace mkfit {
 
 
   //------------------------------------------------------------------------------
-  // findTracksStandardv2p2 -- thin-thick layers version
+  // findTracksStandardv2p2 -- the MkFinderV2p2 search
   //------------------------------------------------------------------------------
 
   void MkBuilder::findTracksStandardv2p2(SteeringParams::IterationType_e iteration_dir) {
@@ -902,7 +892,6 @@ namespace mkfit {
                 layer_plan_it.next_layer(), layer_plan_it.next_layer_sec());
 
         // Loop over layers, starting from after the initial pickup-only.
-        // I think pickup-only is now also honored in the finder -- crosscheck.
         while (++layer_plan_it) {
 
           dprintf("\n* Processing layer %d/%d\n", layer_plan_it.layer(), layer_plan_it.layer_sec());
@@ -1187,9 +1176,6 @@ namespace mkfit {
         printf("No backward search plan for region %d\n", region);
         return;
       }
-
-      // Only do barrel
-      //if (region != 2) return;
 
       const RegionOfSeedIndices rosi(m_seedEtaSeparators, region);
 

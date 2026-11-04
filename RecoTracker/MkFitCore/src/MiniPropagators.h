@@ -9,9 +9,8 @@ namespace mkfit::mini_propagators {
   enum PropAlgo_e { PA_Line, PA_Quadratic, PA_Exact };
 
   // Guard band [cm] kept inside the radii the trajectory can reach, where the
-  // crossing becomes ill-conditioned (dr/ds -> 0). Provisional: chosen on one
-  // 10-event T5 inward sample; should probably scale with the track's dq error
-  // (per layer). See doc/MkFinderV2p2-DesignNotes.md, "Reachability".
+  // crossing becomes ill-conditioned (dr/ds -> 0). Provisional, see
+  // doc/MkFinderV2p2-DesignNotes.md, "Reachability".
   constexpr float kReachMargin = 0.1f;
 
   // How close to the target radius propagate_to_r() must land to count as
@@ -197,7 +196,7 @@ namespace mkfit::mini_propagators {
   // so  dr/da = k p(a)  exactly, which is where m_Hderfac comes from and why
   // z is reproduced exactly (it is linear in a) while x, y are cubic-accurate.
   struct Hermite3D {
-    // Hermite p(3) for trajectory approximation, could be Matriplex<float, 4, 3, NN>
+    // Hermite p(3) for trajectory approximation
     MP4V m_Hx, m_Hy, m_Hz;  // Hermite p(3) coefficients for x, y, z
     MPF m_Hderfac;          // 1 / (k * dalpha) -- turns dr/dt back into momentum
 
@@ -226,8 +225,9 @@ namespace mkfit::mini_propagators {
     // Truncation error ~ R_c * dalpha^4 / 24, i.e. 16x the two-point mode, so
     // half the usable span at equal accuracy. Usable transverse path for 10 um
     // is s ~ (24 eps)^1/4 * R_c^3/4: about 11 cm at 1 GeV, 63 cm at 10 GeV --
-    // ample for re-expanding inside a layer after a Kalman update, which is what
-    // this is for. Cheaper than the two-point mode: no trig, no propagation.
+    // ample for re-expanding inside a layer after a Kalman update, the intended
+    // use; not called in the search yet. Cheaper than the two-point mode: no
+    // trig, no propagation.
     void calculate_coeffs(const StatePlex& sp, const MPF& inv_k, const MPF& dalpha);
 
     void evaluate(const MPF& t, MPF& x, MPF& y, MPF& z) const;
@@ -236,8 +236,8 @@ namespace mkfit::mini_propagators {
 
     // Signed path length from the expansion point to t, positive along
     // increasing t. EXACT in both modes -- arc length is linear in the helix
-    // angle -- so this is the length to hand to the Kalman propagation, not an
-    // approximation of it. Pass |p| for the 3D length, pT for the transverse
+    // angle -- so this is the length the Kalman propagation would take (not
+    // called yet), not an approximation of it. Pass |p| for the 3D length, pT for the transverse
     // one; k cancels, which is why only m_Hderfac is needed.
     //   s = k * |p| * alpha,  alpha = dalpha * t,  m_Hderfac = 1 / (k * dalpha)
     MPF path_length(const MPF& t, const MPF& p_mag) const { return p_mag * t / m_Hderfac; }

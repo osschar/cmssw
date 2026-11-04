@@ -44,7 +44,7 @@ namespace mkfit {
     MPlexQF m_dphi_track, m_dq_track;  // 3 sigma track errors, from the covariance at m_sp2
 
     int m_n_proc;
-    bool m_is_barrel;  // set in prop_to_*()
+    bool m_is_barrel;  // set in prop_to_limits_in_order()
 
     MPlexQF q_center() const { return 0.5f * (m_q_min + m_q_max); }
     MPlexQF q_delta() const { return 0.5f * (m_q_max - m_q_min); }

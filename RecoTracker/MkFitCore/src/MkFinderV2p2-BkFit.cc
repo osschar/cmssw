@@ -34,11 +34,7 @@ namespace mkfit {
                                     const SteeringParams &st_par,
                                     const int N_proc,
                                     bool chiDebug) {
-    // Prototyping final backward fit.
-    // This works with track-finding indices, before remapping.
-    //
-    // Layers should be collected during track finding and list all layers that have actual hits.
-    // Then we could avoid checking which layers actually do have hits.
+    // Works with track-finding hit indices, before remapping.
 
     // bool debug = true;
 
@@ -51,9 +47,7 @@ namespace mkfit {
 
 #ifdef MKFIT_TRACE
     // Per-lane bookkeeping for the trace: which hit each lane is on this pass
-    // and how many steps it has taken. These existed for the old BkFitHook,
-    // which is gone, so they are now trace-only and live inside the guard --
-    // outside it they are set and never read, which is a -Werror build failure.
+    // and how many steps it has taken.
     int hk_layer[NN], hk_mcid[NN], hk_hit[NN], hk_step[NN], hk_live[NN];
     for (int i = 0; i < NN; ++i) { hk_layer[i] = hk_mcid[i] = hk_hit[i] = -1; hk_step[i] = 0; hk_live[i] = 0; }
 
@@ -113,16 +107,6 @@ namespace mkfit {
     const Hit *last_hit_ptr[NN];
     int last_layer[NN];
 #endif
-
-    // Skip the last hit (or two), ie, do not refit it (them).
-    // If there are overlap hits in the same layer, they will still get processed.
-    // A more proper thing to do might be to:
-    // a) skip all hits on the last double layer; or
-    // b) skip last hits that are closer than some ds, say, 5 cm.
-    // for (int i = 0; i < N_proc; ++i) {
-    //   m_CurNode[i] = m_HoTNodeArr[i][m_CurNode[i]].m_prev_idx;
-    //   // m_CurNode[i] = m_HoTNodeArr[i][m_CurNode[i]].m_prev_idx;
-    // }
 
     // Outlier rejection, as MkFinder::bkFitFitTracksProp2Plane(): the IterationConfig's
     // m_backward_fit_outlier_* (chi2 0 = off).
@@ -215,8 +199,6 @@ namespace mkfit {
       if (here_count == 0)
         continue;
 
-      // ZZZ Could add missing hits here, only if there are any actual matches.
-
       clearFailFlag();
 
       // PROP-FAIL-ENABLE We do not check for pfailed propagation here
@@ -253,8 +235,7 @@ namespace mkfit {
 
 #ifdef MKFIT_TRACE
       // The whole block records TrBkFitUpdate and nothing else, so it is guarded
-      // as a unit. It used to be compiled unconditionally with bk_rec forced
-      // false, which left its locals unused and broke a non-tracing -Werror build.
+      // as a unit.
       if (bk_rec) {
         for (int i = 0; i < N_proc; ++i) {
           if (!hk_live[i]) continue;
@@ -329,44 +310,6 @@ namespace mkfit {
       print_par_err(iC, DSLOT);
 #endif
       // clang-format on
-
-      // Fixup for failed propagation.
-      // for (int i = 0; i < NN; ++i) {
-      // PROP-FAIL-ENABLE The following to be enabled when propagation failure
-      // detection is properly implemented in propagate-to-R/Z.
-      // 1. The following code was only expecting barrel state to be restored.
-      //      auto barrel_pf(m_prop_config->backward_fit_pflags);
-      //      barrel_pf.copy_input_state_on_fail = true;
-      // 2. There is also check on chi2, commented out to keep physics changes minimal.
-      /*
-        if (m_FailFlag[i] && LI.is_barrel()) {
-          // Barrel pflags are set to include PF_copy_input_state_on_fail.
-          // Endcap errors are immaterial here (relevant for fwd search), with prop error codes
-          // one could do other things.
-          // Are there also fail conditions in KalmanUpdate?
-#ifdef DEBUG
-          if (debug && g_debug) {
-            dprintf("MkFinder::bkFitFitTracks prop fail: chi2=%f, layer=%d, label=%d. Recovering.\n",
-                    tmp_chi2[i], LI.layer_id(), m_Label[i]);
-            print_par_err(iC, i);
-          }
-#endif
-          m_Err[iC].copySlot(i, m_Err[iP]);
-          m_Par[iC].copySlot(i, m_Par[iP]);
-        } else if (tmp_chi2[i] > 200 || tmp_chi2[i] < 0) {
-#ifdef DEBUG
-          if (debug && g_debug) {
-            dprintf("MkFinder::bkFitFitTracks chi2 fail: chi2=%f, layer=%d, label=%d. Recovering.\n",
-                    tmp_chi2[i], LI.layer_id(), m_Label[i]);
-            print_par_err(iC, i);
-          }
-#endif
-          // Go back to propagated state (at the current hit, the previous one is lost).
-          m_Err[iC].copySlot(i, m_Err[iP]);
-          m_Par[iC].copySlot(i, m_Par[iP]);
-        }
-        */
-      // }
 
 #if defined(DEBUG_BACKWARD_FIT)
       // clang-format off

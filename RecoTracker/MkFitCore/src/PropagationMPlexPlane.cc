@@ -307,9 +307,7 @@ namespace {
              float kinv) {
     const float A = delta0 * eta0 + delta1 * eta1 + delta2 * eta2;
     // p0 is the UNIT momentum direction, so B is O(1) and the 1/pT factor lives
-    // only in rho. B and C are algebraically identical to the older form that
-    // carried `ip` through B once and C twice, just cheaper and better
-    // conditioned.
+    // only in rho.
     const float p0[3] = {cosP * sinT, sinP * sinT, cosT};
     const float B = (p0[0] * eta0 + p0[1] * eta1 + p0[2] * eta2);
     const float rho = kinv * sinT * ipt;

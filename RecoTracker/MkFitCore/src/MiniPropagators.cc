@@ -300,8 +300,8 @@ namespace mkfit::mini_propagators {
 
     // fail_flag: 2 = target radius not on the trajectory at all (pre-checked,
     // c was clamped to the closest reachable radius), 1 = solved but landed
-    // further than kReachTolerance from the target, which should now only
-    // happen through round-off.
+    // further than kReachTolerance from the target, which only round-off should
+    // cause.
     MPF r = Matriplex::hypot(c.x, c.y);
     c.fail_flag = 0;
     int n_fail = 0;

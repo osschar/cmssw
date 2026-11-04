@@ -57,7 +57,8 @@ namespace mkfit {
     extern bool usePropToPlane;
     extern bool usePtMultScat;
 
-    // MkFinderV2p2 switches and parameters are in src/V2p2Config.h.
+    // MkFinderV2p2 switches and parameters are in src/V2p2Config.h; the per-iteration
+    // ones are in interface/V2p2Params.h (IterationConfig::m_v2p2).
 
     // Config for Bfield.  bFieldFromZR() below: Bz = (b0 z^2 + b1 z + c1) (a r^2 + 1), the form of
     // ParabolicParametrizedMagneticField, with two sets of constants (defaults in Config.cc):

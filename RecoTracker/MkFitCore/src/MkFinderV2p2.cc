@@ -417,13 +417,14 @@ namespace mkfit {
   void MkFinderV2p2::process_layer_batch() {
     LayerBatch b;
 
-    prop_to_layer_edges(b);       // stage 1: pop the queue, propagate to the layer edges
+    prop_to_layer_edges(b);       // pop the queue, propagate to the layer edges
     determine_search_windows(b);  // covariance -> dphi/dq windows -> bin ranges
-    select_hits(b);               // stage 2: walk the bins, pre-select, reduce in a pqueue
+    select_hits(b);               // walk the bins, pre-select, reduce in a pqueue
     prepare_kalman_workload(b);   // pqueue -> m_layer_hits, step-ordered
-    // No materialisation here: the paths are left in the arena and everything
-    // competes at end of layer, in select_and_materialise().
-    expand_in_layer(b);  // stage 3: grow the SecTCandRep tree over the ordered hits
+    // The paths stay in the arena until their CombCandidate is selected in
+    // select_and_materialise(): right after the batch with InLayer::early_select,
+    // else in end_layer().
+    expand_in_layer(b);  // grow the SecTCandRep tree over the ordered hits
     if (InLayer::early_select)
       select_completed_ccreps(b);
   }
@@ -477,9 +478,9 @@ namespace mkfit {
   //----------------------------------------------------------------------------
   // Phase 2 -- the search windows. The position block of the track covariance is
   // transported to m_sp2 (MkBins::transport_position_cov()); from it come
-  // dphi_track and dq_track, the WSR verdict, the binnor ranges and the Hermite
-  // cubic. See
-  // doc/MkFinderV2p2-DesignNotes.md, "Search window".
+  // dphi_track and dq_track, and from those the WSR verdict and the binnor
+  // ranges. The function also builds the Hermite cubic through the two layer
+  // crossings. See doc/MkFinderV2p2-DesignNotes.md, "Search window".
   //----------------------------------------------------------------------------
 
   void MkFinderV2p2::determine_search_windows(LayerBatch& b) {
@@ -1054,7 +1055,7 @@ namespace mkfit {
 
     mp::StatePlex h3_state;
     h3d.evaluate(h3dop.m_T, h3_state);
-    // h3_state.dalpha calculated below, as needed
+    // h3_state.dalpha is interpolated per hit below.
 
     // Post-process hits into the per-candidate queues. The cut is taken on
     // h3_state, the cubic solved onto the hit's module plane.
@@ -1448,7 +1449,8 @@ namespace mkfit {
 
   // The parts of a layer step that do not depend on which hits were taken: where
   // the step goes, which way, and what the candidate was when it arrived. Filled
-  // once per path root and then carried down the tree.
+  // once per path root and carried down the tree, and once per hole entry of the
+  // end-of-layer selection.
   void MkFinderV2p2::fill_step_geometry(LayerStepFeatures& f, const PrimTCandRep& ptc, float log_rho) const {
     const TrackCand& tc = ptc.tcand();
     const LayerInfo& li = m_rz_limits.layer_info_1();
@@ -1471,7 +1473,8 @@ namespace mkfit {
   //----------------------------------------------------------------------------
   // End-of-layer selection: every in-layer path, every candidate as the hole it
   // would record, and every candidate that did not enter the layer compete in
-  // one sort on the additive layer-step score; the top maxCandsPerSeed survive.
+  // one sort on the additive layer-step score; the top CCandRep::m_max_cands
+  // survive.
   // See doc/MkFinderV2p2-DesignNotes.md, "End-of-layer selection".
   //----------------------------------------------------------------------------
 
@@ -1594,8 +1597,7 @@ namespace mkfit {
           const SecTCandRep& n = m_sec_arena[chain[c]];
           nc.addHitIdx(n.m_hot.index, n.m_hot.layer, n.m_chi2);
           if (c != n_chain - 1) {
-            nc.incOverlapCount();  // every hit past the first in one layer IS the overlap case
-                                   // Counted by module: same module against a genuine overlap.
+            nc.incOverlapCount();  // a second hit in one layer: an overlap, or the sister sensor of a paired entry
 #if defined(MKFIT_STANDALONE)
             const SecTCandRep& pn = m_sec_arena[chain[c + 1]];
             const auto& Ln = mp_job->m_event_of_hits[n.m_hot.layer];
@@ -1649,8 +1651,8 @@ namespace mkfit {
 #endif
       }
 
-      // score_ holds the layer-step score during finding; track_score_func
-      // overwrites it at the end of the search.
+      // score_ holds the summed layer-step score during finding; the final-pick
+      // scorer overwrites it in mergeCandsAndBestShortOne() at the end of the search.
       nc.setScore(e.score);
 #ifdef MKFIT_TRACE
       {

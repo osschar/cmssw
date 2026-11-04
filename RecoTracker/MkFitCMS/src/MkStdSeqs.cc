@@ -540,7 +540,7 @@ namespace mkfit {
         }
 
         // Number of equal (i, j) key pairs between two tracks, multiplicities
-        // included, which is what the all-pairs hit loop counted.
+        // included.
         int count_equal_pairs(int a, int b) const {
           int n = 0;
           int i = begin[a], j = begin[b];
@@ -581,8 +581,8 @@ namespace mkfit {
       }
 
       // One pair, itrack < jtrack. The body is asymmetric (the region threshold
-      // comes from itrack's cot(theta), and a tie marks itrack), so the order of
-      // the arguments is the original loop's. hasPixel: with pixelPriority, whether
+      // comes from itrack's cot(theta), and a tie marks itrack), so itrack must
+      // be the lower index. hasPixel: with pixelPriority, whether
       // each track has at least two pixel hits.
       template <bool pixelPriority>
       void dupclean_pair(TrackVec &tracks,
@@ -642,7 +642,7 @@ namespace mkfit {
         const int sharedCount = hk.count_equal_pairs(itrack, jtrack);
         const int sharedFirst = (hk.first[itrack] >= 0 && hk.first[itrack] == hk.first[jtrack]) ? 1 : 0;
 
-        //selection here - 11percent fraction of shared hits to label a duplicate
+        // Duplicate if the shared fraction reaches itconf.dc_fracSharedHits.
         if ((sharedCount - sharedFirst) >= ((minFoundHits - sharedFirst) * itconf.dc_fracSharedHits)) {
           if (iWins)
             track2.setDuplicateValue(true);
@@ -656,14 +656,12 @@ namespace mkfit {
       }
     }  // namespace
 
-    // Same decisions as visiting all pairs, which is what this did before, at
-    // about a tenth of the cost on PU200. A pair can only be marked if its
-    // |dcot(theta)| is within Config::maxdcth, so pairs are visited in cot(theta)
-    // order within that window. A duplicate mark is only ever set, so the visiting
-    // order does not change the outcome. A track with a non-finite cot(theta) is
-    // paired with every other one, and the pair's own dcot(theta) cut decides.
-    // Shared hits are counted by merging sorted (layer, index) keys; the early
-    // continues of the old all-pairs hit loop changed neither count.
+    // A pair can only be marked if its |dcot(theta)| is within Config::maxdcth,
+    // so pairs are visited in cot(theta) order within that window. A duplicate
+    // mark is only ever set, so the visiting order does not change the outcome.
+    // A track with a non-finite cot(theta) is paired with every other one, and
+    // the pair's own dcot(theta) cut decides. Shared hits are counted by merging
+    // sorted (layer, index) keys.
 
     // pixelPriority = false is the phase-1 pixelseed cleaner; true adds the pixel-priority rules.
     template <bool pixelPriority>
@@ -901,14 +899,11 @@ namespace mkfit {
 
     float trackScoreLstIntoPixels(const TrackScoreInput &in) {
       const int ntailholes = in.penalize_tail_holes ? in.n_tail_holes : 0;
+      // For LST T5 tracks extended into the pixels: a found hit is worth more than
+      // the largest chi2 (30), and tail holes cost as much as inside holes.
       float bonus = 30;
-      // Max chi2 is 30 -- having a hit is always better
-      // We keep penalty the same for inner hits ... this is for T5 into pix!
-      // - Note that we keep too many -1 hits -- this needs to be done better.
-
       float penalty = Config::missingHitPenalty_;
-      float tailPenalty = Config::missingHitPenalty_; // !!! not tailMissingHitPenalty_ !!!!
-      // float overlapBonus = 0; // Config::overlapHitBonus_;
+      float tailPenalty = Config::missingHitPenalty_;
       float score = bonus * in.n_found_hits - penalty * in.n_inside_holes - tailPenalty * ntailholes - in.chi2;
       return score;
     }

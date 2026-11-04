@@ -261,8 +261,7 @@ namespace mkfit {
     short int nInsideMinusOneHits_ = 0;
     short int nTailMinusOneHits_ = 0;
 
-    // Fits in what was tail padding: five short ints were already padded to six
-    // for the following int, so sizeof(TrackCand) is unchanged.
+    // Uses padding after the other short ints; sizeof(TrackCand) is unchanged.
     short int m_stop_reason = SR_NotStopped;
 
     short int m_origin_index = -1;  // index of origin candidate (used for overlaps in Standard)
@@ -390,8 +389,6 @@ namespace mkfit {
     const TrackCand& front() const { return m_trk_cands.front(); }
     TrackCand& back() { return m_trk_cands.back(); }
     const TrackCand& back() const { return m_trk_cands.back(); }
-    // emplace_back not needed as TrackCand has no movable parts
-    // trk_cand_vec_type::reference emplace_back(const TrackCand& tc) { return m_trk_cands.emplace_back(tc); }
     trk_cand_vec_type::reference push_back(const TrackCand& tc) { m_trk_cands.push_back(tc); return m_trk_cands.back(); }
     void clear() { m_trk_cands.clear(); }
 
@@ -410,7 +407,7 @@ namespace mkfit {
       // expected_num_hots is different for CloneEngine and Std, especially as long as we
       // instantiate all candidates before purging them.
       // ce:  N_layer * N_cands ~~ 20 * 6 = 120
-      // std: i don't know, maybe double? no -- we copy back a limited subset.
+      // std: copies back only a limited subset, so no more.
       m_hots.reserve(expected_num_hots);
       m_hots_size = 0;
       m_hots.clear();

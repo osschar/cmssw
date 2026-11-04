@@ -88,7 +88,7 @@ namespace mkfit {
   }
 
   void TrackState::convertFromCCSToGlbCurvilinear() {
-    //assume we are currently in ccs coordinates and want to move to global state with cartesian error
+    //assume we are currently in ccs coordinates and want to move to global state with curvilinear error
     const float invpt = parameters.At(3);
     const float phi = parameters.At(4);
     const float theta = parameters.At(5);
