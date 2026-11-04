@@ -25,29 +25,6 @@ namespace mkfit {
 
   //----------------------------------------------------------------------------
 
-  // One node of the in-layer combinatorial tree: a candidate that has taken a
-  // particular sequence of hits within this layer, with the Kalman updates
-  // applied. Nodes live in MkFinderV2p2::m_sec_arena, are reached by index and
-  // link only to their parent. See doc/MkFinderV2p2-DesignNotes.md,
-  // "In-layer combinatorial search".
-  struct SecTCandRep {
-    PrimTCandRep* m_ptc;  // the candidate this path extends
-    int m_parent_idx;     // arena index of the predecessor; -1 = the PrimTCandRep itself
-    int m_hit_pos;        // position of this hit in m_ptc->m_layer_hits; the next
-                          // hit a child may take is at m_hit_pos + 1
-    HitOnTrack m_hot;
-    TrackState m_state;  // AFTER the update at m_hot
-    float m_chi2;        // of this hit alone
-    // The whole path through this layer, accumulated parent -> child: one layer
-    // step however many hits the path took.
-    LayerStepFeatures m_feat;
-#ifdef MKFIT_TRACE
-    int m_tr_hitmatch_id = -1;
-#endif
-  };
-
-  //----------------------------------------------------------------------------
-
   // A vector with fixed inline capacity and no construction of the unused
   // slots, for trivially copyable T. Per-candidate, per-layer storage that
   // std::vector would allocate and free on every layer.
@@ -77,6 +54,35 @@ namespace mkfit {
     void pop_back() { --m_size; }
   };
 
+  //----------------------------------------------------------------------------
+
+  // One node of the in-layer combinatorial tree: a candidate that has taken a
+  // particular sequence of hits within this layer, with the Kalman updates
+  // applied. Nodes live in MkFinderV2p2::m_sec_arena, are reached by index and
+  // link only to their parent. See doc/MkFinderV2p2-DesignNotes.md,
+  // "In-layer combinatorial search".
+  struct SecTCandRep {
+    PrimTCandRep* m_ptc;  // the candidate this path extends
+    int m_parent_idx;     // arena index of the predecessor; -1 = the PrimTCandRep itself
+    int m_hit_pos;        // position of this hit in m_ptc->m_layer_hits; the next
+                          // hit a child may take is at m_hit_pos + 1
+    HitOnTrack m_hot;
+    TrackState m_state;  // AFTER the update at m_hot
+    float m_chi2;        // of this hit alone
+    // The whole path through this layer, accumulated parent -> child: one layer
+    // step however many hits the path took.
+    LayerStepFeatures m_feat;
+#ifdef MKFIT_TRACE
+    int m_tr_hitmatch_id = -1;
+#endif
+  };
+
+  //----------------------------------------------------------------------------
+
+  // One TrackCand of a CombCandidate entering the layer. Its state stays in the
+  // TrackCand (tcand()); this carries the layer's work for it: the pre-selection
+  // queues per sub-layer, the path-ordered hits, the WSR verdict and the local
+  // hit density. Lives in CCandRep::m_primTCs for one layer.
   struct PrimTCandRep {
     CCandRep* mp_ccrep;
     int m_origin_tcand_index;  // TrackCand index in CombCandidate
@@ -141,6 +147,10 @@ namespace mkfit {
 
   //----------------------------------------------------------------------------
 
+  // One CombCandidate (one seed) in the search: its PrimTCandReps in this layer,
+  // the arena indices of all their in-layer paths, and the counts that say when
+  // it can be selected. Lives in MkFinderV2p2::m_active_ccreps from pickup until
+  // all its TrackCands have stopped.
   struct CCandRep {
     CombCandidate& m_ccand;
 
