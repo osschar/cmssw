@@ -83,7 +83,7 @@ namespace mkfit {
     float emomEta() const { return std::sqrt(errors.At(5, 5)) / std::sin(parameters.At(5)); }
     float epxpx() const { return std::sqrt(getPxPxErr2(invpT(), momPhi(), errors.At(3, 3), errors.At(4, 4))); }
     float epypy() const { return std::sqrt(getPyPyErr2(invpT(), momPhi(), errors.At(3, 3), errors.At(4, 4))); }
-    float epzpz() const { return std::sqrt(getPyPyErr2(invpT(), theta(), errors.At(3, 3), errors.At(5, 5))); }
+    float epzpz() const { return std::sqrt(getPzPzErr2(invpT(), theta(), errors.At(3, 3), errors.At(5, 5))); }
 
     void convertFromCartesianToCCS();
     void convertFromCCSToCartesian();
