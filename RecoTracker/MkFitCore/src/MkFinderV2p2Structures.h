@@ -177,14 +177,6 @@ namespace mkfit {
       // CombCandidate's capacity. See InLayer::late_max_cands.
       int  m_max_cands = 0;
 
-    #if defined(MKFIT_STANDALONE)
-      // Tuning & Debugging. Managed in MkFinderV2p2 processing.
-      int m_seed_mc_label = -1;
-      int m_mc_layer_sequence = -1; // counts layers WITH mc hits
-      int m_n_mc_hits_in_layer = -1;
-      // int m_n_mc_hits_in_layer_sec = -1;
-    #endif
-
       // m_cand_queue holds pointers into m_primTCs, so it must never reallocate:
       // a CombCandidate never has more TrackCands than its capacity.
       CCandRep(CombCandidate& ccand) :

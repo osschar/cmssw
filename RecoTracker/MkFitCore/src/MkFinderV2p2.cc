@@ -79,18 +79,10 @@ namespace mkfit {
         if (InLayer::comb)
           for (int ic = 0; ic < (int) ccand.size(); ++ic)
             ccand[ic].setScore(0.0f);
-        // auto &: the MKFIT_STANDALONE fields below must land on the list element.
-        [[maybe_unused]] auto &ccrep = m_active_ccreps.emplace_back(ccand);
+        m_active_ccreps.emplace_back(ccand);
         dprintf("MkFinderV2p2::awaken_candidates N_TrackCands=%d\n",
                (int) ccand.size());
         ++count;
-
-        #if defined(MKFIT_STANDALONE)
-        auto sifh = mp_event->simInfoForCurrentSeed(ccand.seed_origin_index());
-        ccrep.m_seed_mc_label = sifh.label;
-        ccrep.m_mc_layer_sequence = 0;
-        // ccrep.m_n_mc_hits_in_current_layer set later
-        #endif
       }
     }
     m_batch_mgr.m_n_dormant -= count;
@@ -323,14 +315,6 @@ namespace mkfit {
     ccrep.m_n_queued = (int) ccrep.m_primTCs.size();
     ccrep.m_selected = false;
     ++m_active_ccreps_pos;
-
-    #if defined(MKFIT_STANDALONE)
-    {
-      ccrep.m_n_mc_hits_in_layer = mp_event->countSimHitsInLayer(ccrep.m_seed_mc_label, mp_steeringparams_iter->layer());
-      if (ccrep.m_n_mc_hits_in_layer > 0)
-        ++ccrep.m_mc_layer_sequence;
-    }
-    #endif
   }
 
   // void MkFinderV2p2::process_layer_batch() -- below in the "complex stuff" section
