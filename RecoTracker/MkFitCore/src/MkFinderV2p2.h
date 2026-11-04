@@ -253,18 +253,16 @@ namespace mkfit {
     // arena by harvest_sec_nodes().
     std::vector<KalmanOpArgs::ItemOut> m_sec_out;
 
-    // One competitor in the end-of-layer selection. node_idx >= 0 is an in-layer
-    // path; otherwise the candidate declined the layer, and add_fake says whether
-    // that costs it a fake HoT (miss, edge, gap or stop) or nothing at all (the layer was out of
-    // reach, or it was already stopped).
+    // One competitor in the end-of-layer selection.
     struct SelEntry {
-      int tcand_idx;
-      int node_idx;
-      int fake_hit;
-      bool add_fake;
-      float score;
+      int tcand_idx;  // the TrackCand of the CombCandidate it continues
+      int node_idx;   // arena index of its in-layer path; -1 = it took no hit here
+      int fake_hit;   // with add_fake, the fake HoT to record: miss, edge, gap or stop
+      bool add_fake;  // false: nothing recorded (layer out of reach, or already stopped)
+      float score;    // its score after this layer
     };
     std::vector<SelEntry> m_sel;
+    // The survivors, built before the CombCandidate is rewritten from them.
     std::vector<TrackCand> m_new_cands;
   };
 
