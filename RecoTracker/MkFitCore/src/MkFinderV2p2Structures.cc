@@ -20,8 +20,14 @@ namespace mkfit {
 
     dprintf("do_kalman_stuff\n");
     for (int i = 0; i < N_filled; ++i) {
-      dprintf("  %d: %f %f %f : %f %f %f : %f\n", i, tsXyz.x[i], tsXyz.y[i], tsXyz.z[i],
-              tsXyz.inv_pt[i], vdt::fast_atan2(tsXyz.py[i], tsXyz.px[i]), tsXyz.theta[i],
+      dprintf("  %d: %f %f %f : %f %f %f : %f\n",
+              i,
+              tsXyz.x[i],
+              tsXyz.y[i],
+              tsXyz.z[i],
+              tsXyz.inv_pt[i],
+              vdt::fast_atan2(tsXyz.py[i], tsXyz.px[i]),
+              tsXyz.theta[i],
               sPerp[i]);
     }
     // Propagation to the module plane and the Kalman operation on it, composed from the steps of
@@ -31,7 +37,7 @@ namespace mkfit {
     // and supplies the transverse path length sPerp, so only the covariance is transported.
     using namespace plane;
 
-    const PropagationFlags &pf =
+    const PropagationFlags& pf =
         m_solve_plane ? prop_config->finding_intra_layer_pflags : prop_config->finding_inter_layer_pflags;
     const TrackRef in{tsPar, tsChg, N_filled};
     const PlaneRef pl{plPnt, plNrm};
@@ -98,9 +104,9 @@ namespace mkfit {
 #ifdef MKFIT_TRACE
       // Create TrKalmanUpdate for EVERY hit that went through Kalman
       int hm_id = tr_hitmatch_ids[i];
-      TrHitMatch &hm = mp_event->tr_hitmatch(hm_id);
+      TrHitMatch& hm = mp_event->tr_hitmatch(hm_id);
 
-      TrKalmanUpdate &ku = mp_event->trace_kalmanupdate({ -1, hm_id, hm.state_id });
+      TrKalmanUpdate& ku = mp_event->trace_kalmanupdate({-1, hm_id, hm.state_id});
       ku.chi2 = tsChi2[i];
       ku.chi2_acc = tsChi2Acc[i];
       // accepted and state_id_out are set when a path is materialised.
@@ -146,4 +152,4 @@ namespace mkfit {
     }
   }
 
-}
+}  // namespace mkfit

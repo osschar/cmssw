@@ -37,10 +37,10 @@ namespace mkfit {
 
     //-------------------------------------------------------------------------
     class BatchManager {
-    //-------------------------------------------------------------------------
+      //-------------------------------------------------------------------------
       friend class MkFinderV2p2;
 
-      EventOfCombCandidates *mp_eoccs = nullptr;
+      EventOfCombCandidates* mp_eoccs = nullptr;
       int m_begin;
       int m_end;
 
@@ -52,7 +52,7 @@ namespace mkfit {
       CombCandidate& ccand(int i) const { return (*mp_eoccs)[i]; }
       CombCandidate* ccand_ptr(int i) const { return &(*mp_eoccs)[i]; }
 
-      void setup(EventOfCombCandidates &eoccs, int seed_begin, int seed_end) {
+      void setup(EventOfCombCandidates& eoccs, int seed_begin, int seed_end) {
         mp_eoccs = &eoccs;
         m_begin = seed_begin;
         m_end = seed_end;
@@ -60,9 +60,7 @@ namespace mkfit {
         m_n_finding = 0;
         m_n_finished = 0;
       }
-      void release() {
-        mp_eoccs = nullptr;
-      }
+      void release() { mp_eoccs = nullptr; }
 
       int n_total() const { return m_end - m_begin; }
       int n_dormant() const { return m_n_dormant; }
@@ -73,21 +71,22 @@ namespace mkfit {
 
       // Iteration over all CombCandidates for top-level administrative tasks.
       class iterator {
-        CombCandidate *m_ccand;
+        CombCandidate* m_ccand;
+
       public:
-        iterator(CombCandidate *bm) : m_ccand(bm) {}
+        iterator(CombCandidate* bm) : m_ccand(bm) {}
         CombCandidate& operator*() { return *m_ccand; }
         iterator& operator++() {
           ++m_ccand;
           return *this;
         }
-        bool operator!=(const iterator &i) const { return m_ccand != i.m_ccand; }
+        bool operator!=(const iterator& i) const { return m_ccand != i.m_ccand; }
       };
 
       iterator begin() const { return iterator(ccand_ptr(m_begin)); }
       iterator end() const { return iterator(ccand_ptr(m_end - 1) + 1); }
-    //-------------------------------------------------------------------------
-    }; // end class BatchManager
+      //-------------------------------------------------------------------------
+    };  // end class BatchManager
     //-------------------------------------------------------------------------
 
   public:
@@ -95,8 +94,12 @@ namespace mkfit {
 
     //----------------------------------------------------------------------------
 
-    void setup(const MkJob *job, EventOfCombCandidates &eoccs, int seed_begin, int seed_end,
-               SteeringParams::iterator &sp_it, const Event *ev);
+    void setup(const MkJob* job,
+               EventOfCombCandidates& eoccs,
+               int seed_begin,
+               int seed_end,
+               SteeringParams::iterator& sp_it,
+               const Event* ev);
     void release();
 
     int awaken_candidates();
@@ -106,7 +109,7 @@ namespace mkfit {
     bool any_Ccreps_to_begin() const { return m_active_ccreps_pos != m_active_ccreps.end(); }
     void begin_next_Ccrep_in_layer();
 
-    int  cand_queue_size() const { return (int) m_cand_queue.size() - m_cand_queue_head; }
+    int cand_queue_size() const { return (int)m_cand_queue.size() - m_cand_queue_head; }
     bool enough_work_for_batch() const { return cand_queue_size() >= NN; }
     bool any_work_for_batch() const { return cand_queue_size() > 0; }
     void process_layer_batch();
@@ -127,14 +130,14 @@ namespace mkfit {
     // h, with prim_idcs[h] naming the candidate.
     struct LayerBatch {
       int N_proc = 0;
-      PrimTCandRep *ptc[NN];             // the candidates in this pass
-      MkBins B { 0 };                    // isp + the two bounding-surface crossings
-      MkBinTrackCovExtract TCE;          // position block of the window covariance
-      MkBinLimits BL_p, BL_s;            // binnor ranges, primary / secondary layer
-      mini_propagators::Hermite3D H;     // cubic through sp1, sp2 -- the trajectory model
+      PrimTCandRep* ptc[NN];          // the candidates in this pass
+      MkBins B{0};                    // isp + the two bounding-surface crossings
+      MkBinTrackCovExtract TCE;       // position block of the window covariance
+      MkBinLimits BL_p, BL_s;         // binnor ranges, primary / secondary layer
+      mini_propagators::Hermite3D H;  // cubic through sp1, sp2 -- the trajectory model
       // Local hit density per candidate, ln(hits / cm^2), over the bins walked;
       // for the likelihood score.
-      int   n_scanned[NN] = {0};
+      int n_scanned[NN] = {0};
       float rho_dphi[NN] = {0.0f};  // Score::rho_region 2: the cut region's padding, max over sub-layers
       float rho_dq[NN] = {0.0f};
       float log_rho[NN] = {0.0f};
@@ -145,49 +148,51 @@ namespace mkfit {
 
     struct HitBatch {
       int fill_pos = 0;
-      MPlexQI  prim_idcs;                // -> LayerBatch::ptc
-      MPlexQUI hit_idcs;                 // index within the LayerOfHits
-      MPlexQUI hit_orig_idcs;            // index in the event hit vector
+      MPlexQI prim_idcs;       // -> LayerBatch::ptc
+      MPlexQUI hit_idcs;       // index within the LayerOfHits
+      MPlexQUI hit_orig_idcs;  // index in the event hit vector
       mini_propagators::InitialStatePlex is_plex;
 #ifdef MKFIT_TRACE_PROP_COMPARE
       mini_propagators::StatePlex h_plex;  // PA_Line cross-check against the Hermite
 #endif
     };
 
-    void prop_to_layer_edges(LayerBatch &b);
-    void determine_search_windows(LayerBatch &b);
-    void determine_wsr(LayerBatch &b);
-    void select_hits(LayerBatch &b);
-    void preselect_hit_batch(LayerBatch &b, HitBatch &hb, const LayerOfHits &L, int N_proc_hits,
-                             bool is_sec_layer);
+    void prop_to_layer_edges(LayerBatch& b);
+    void determine_search_windows(LayerBatch& b);
+    void determine_wsr(LayerBatch& b);
+    void select_hits(LayerBatch& b);
+    void preselect_hit_batch(LayerBatch& b, HitBatch& hb, const LayerOfHits& L, int N_proc_hits, bool is_sec_layer);
     // The track's q error referenced to the hit's module plane. See MkFinderV2p2.cc.
     static float surface_referenced_dq(float dq_track_fallback,
-                                       const MkBinTrackCovExtract &TCE, int pi,
-                                       const mini_propagators::StatePlex &h3_state, int h,
-                                       const MPlex3V &module_norm, bool is_barrel);
+                                       const MkBinTrackCovExtract& TCE,
+                                       int pi,
+                                       const mini_propagators::StatePlex& h3_state,
+                                       int h,
+                                       const MPlex3V& module_norm,
+                                       bool is_barrel);
     // Candidate-stopping cuts applied at pull-in, where only the candidate's own
     // state is needed. Returns the reason, or SR_NotStopped to keep going.
-    TrackCand::StopReason_e stop_cuts_at_pickup(const TrackCand &tc) const;
+    TrackCand::StopReason_e stop_cuts_at_pickup(const TrackCand& tc) const;
     // Which fake HoT a candidate that took no hit in this layer gets: the hole
     // limits, the WSR override, and the gap case, in V1's order.
-    int fake_hit_index(const TrackCand &tc, const WSR_Result &wsr) const;
+    int fake_hit_index(const TrackCand& tc, const WSR_Result& wsr) const;
 
-    void prepare_kalman_workload(LayerBatch &b);
+    void prepare_kalman_workload(LayerBatch& b);
 
     // The in-layer combinatorial search. expand_in_layer() grows the SecTCandRep
     // tree; select_and_materialise() runs the end-of-layer selection and
     // registers the survivors into the CombCandidate.
-    void expand_in_layer(LayerBatch &b);
-    void select_and_materialise(CCandRep &ccrep);
-    void drop_sister_dominated_holes(const CombCandidate &ccand);
+    void expand_in_layer(LayerBatch& b);
+    void select_and_materialise(CCandRep& ccrep);
+    void drop_sister_dominated_holes(const CombCandidate& ccand);
 #if defined(MKFIT_STANDALONE)
-    void count_dominated_kept(const CombCandidate &ccand, int n_keep) const;
+    void count_dominated_kept(const CombCandidate& ccand, int n_keep) const;
 #endif
-    bool long_step_to_layer(const TrackCand &tc) const;
-    void offer_best_short(CombCandidate &ccand, const TrackCand &tc) const;
+    bool long_step_to_layer(const TrackCand& tc) const;
+    void offer_best_short(CombCandidate& ccand, const TrackCand& tc) const;
     // The direction-, layer- and candidate-dependent part of a layer step, filled
     // once per path root and carried down the tree.
-    void fill_step_geometry(LayerStepFeatures &f, const PrimTCandRep &ptc, float log_rho) const;
+    void fill_step_geometry(LayerStepFeatures& f, const PrimTCandRep& ptc, float log_rho) const;
     // Turn the Kalman results accumulated in m_sec_out into arena nodes, keeping
     // those that pass the chi2 cut. Their indices go to m_sec_harvested.
     void harvest_sec_nodes();
@@ -195,26 +200,25 @@ namespace mkfit {
     int sec_node_slot();
     // After a layer batch: select every CombCandidate of the batch that has no
     // candidate left in the queue, and free its nodes.
-    void select_completed_ccreps(const LayerBatch &b);
+    void select_completed_ccreps(const LayerBatch& b);
 
     // The Kalman batches of expand_in_layer(). Depth 0 (the Hermite crossing is
     // known, sPerp path) and deeper steps (the plane is solved) need different
     // propagation, so there are two batches. Each fires only when full;
     // rk_drain() empties both at end of layer.
-    void rk_setup(KalmanOpArgs &koa, bool solve_plane);
-    void rk_flush(KalmanOpArgs &koa);
-    void rk_add_item(KalmanOpArgs &koa, PrimTCandRep &ptc, const PrimTCandRep::PQE &pqe, int parent_idx,
-                     int hit_pos);
+    void rk_setup(KalmanOpArgs& koa, bool solve_plane);
+    void rk_flush(KalmanOpArgs& koa);
+    void rk_add_item(KalmanOpArgs& koa, PrimTCandRep& ptc, const PrimTCandRep::PQE& pqe, int parent_idx, int hit_pos);
     void rk_expand_node(int ni);
     void rk_pump();
     void rk_drain();
-    void load_hit_module(KalmanOpArgs &koa, const PrimTCandRep::PQE &pqe) const;
+    void load_hit_module(KalmanOpArgs& koa, const PrimTCandRep::PQE& pqe) const;
 
     //----------------------------------------------------------------------------
     // Job / batch-of-seeds control variables and global references
-    const MkJob *mp_job = nullptr;
-    SteeringParams::iterator *mp_steeringparams_iter = nullptr;
-    const Event *mp_event = nullptr;
+    const MkJob* mp_job = nullptr;
+    SteeringParams::iterator* mp_steeringparams_iter = nullptr;
+    const Event* mp_event = nullptr;
 
     BatchManager m_batch_mgr;
 
@@ -224,7 +228,7 @@ namespace mkfit {
     // Current CombCand and next TrackCand to go through layer initialization, i.e.,
     // propagation to layer limits, Binnor creation and extraction of bin-indices, and
     // pre-selection of hits.
-    std::list<CCandRep>::iterator m_active_ccreps_pos; // Current CombCand to be processed or is in processing.
+    std::list<CCandRep>::iterator m_active_ccreps_pos;  // Current CombCand to be processed or is in processing.
 
     // Pre-selection queue -- list of pTcs to do initial prop + Binnor + hit extraction for.
     // A FIFO as a vector and a read position, reset when it drains: it keeps
@@ -260,16 +264,16 @@ namespace mkfit {
     // that costs it a HoT (a hole) or nothing at all (the layer was out of
     // reach, or it was already stopped).
     struct SelEntry {
-      int   tcand_idx;
-      int   node_idx;
-      int   fake_hit;
-      bool  add_fake;
+      int tcand_idx;
+      int node_idx;
+      int fake_hit;
+      bool add_fake;
       float score;
     };
     std::vector<SelEntry> m_sel;
     std::vector<TrackCand> m_new_cands;
   };
 
-} // end namespace mkfit
+}  // end namespace mkfit
 
 #endif
