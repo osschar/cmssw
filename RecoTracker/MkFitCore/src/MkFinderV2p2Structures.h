@@ -181,8 +181,9 @@ namespace mkfit {
   inline const TrackCand& PrimTCandRep::tcand() const { return mp_ccrep->m_ccand[m_origin_tcand_index]; }
 
   //----------------------------------------------------------------------------
-  // BaseArgs
 
+  // The track side of a Kalman batch, NN lanes: the state at the previous hit,
+  // the propagated state and the path length to the module plane.
   struct BaseArgs {
     const PropagationConfig* prop_config = nullptr;
 
@@ -202,8 +203,10 @@ namespace mkfit {
   };
 
   //----------------------------------------------------------------------------
-  // KalmanOpArgs
 
+  // One Kalman batch of the in-layer search, NN (candidate, hit) items: the hits
+  // and module planes, where each lane came from, and the outcomes, appended to
+  // *mp_out by do_kalman_stuff().
   struct KalmanOpArgs : public BaseArgs {
     PrimTCandRep* ptcp[NN];
     HitOnTrack hot[NN];
