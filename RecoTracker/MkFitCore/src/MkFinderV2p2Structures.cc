@@ -5,11 +5,7 @@
 #include "PlaneSteps.h"
 #include "MatriplexPackers.h"
 
-// DEBUG is on here and off in MkFinderV2p2.cc, so a g_debug run prints the
-// Kalman side and not the search side.
-#ifndef DEBUG
-#define DEBUG
-#endif
+//#define DEBUG
 #include "Debug.h"
 
 #ifdef MKFIT_TRACE

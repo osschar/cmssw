@@ -913,7 +913,7 @@ namespace mkfit {
               }
 
               // Try preloading Hits for the next step ... probably not really relevant.
-              _mm_prefetch(&L.refHit(hi_orig), _MM_HINT_T0);
+              __builtin_prefetch(&L.refHit(hi_orig));
 
               prim_idcs[fill_pos] = i;
               hit_idcs[fill_pos] = hi;
