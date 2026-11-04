@@ -1267,19 +1267,13 @@ namespace mkfit {
       if (pf)
         f = *pf;
       else
-        fill_step_geometry(f, *o.ptc, o.ptc->m_log_rho);
+        fill_step_geometry(f, o.ptc->m_log_rho);
       if (pf)
         V2P2_COUNT(n_sec_deep);
       f.n_hits = (pf ? pf->n_hits : 0) + 1;
       f.n_overlap = f.n_hits - 1;
       f.hole_kind = V2P2_NoHole;
       f.chi2_sum = (pf ? pf->chi2_sum : 0.0f) + o.chi2;
-      f.chi2_max = std::max(pf ? pf->chi2_max : 0.0f, o.chi2);
-      {
-        const auto& L = mp_job->m_event_of_hits[o.hot.layer];
-        const float qhl = L.hit_q_half_length(o.hit_in_layer);
-        f.q_half_len_best = (pf && pf->n_hits > 0) ? std::min(pf->q_half_len_best, qhl) : qhl;
-      }
       f.log_det_v_sum = (pf ? pf->log_det_v_sum : 0.0f) + std::log(std::max(1e-30f, o.det_v));
 #ifdef MKFIT_TRACE
       n.m_tr_hitmatch_id = o.tr_hitmatch_id;
@@ -1336,7 +1330,7 @@ namespace mkfit {
 
   void MkFinderV2p2::rk_add_item(
       KalmanOpArgs& koa, PrimTCandRep& ptc, const PrimTCandRep::PQE& pqe, int parent_idx, int hit_pos) {
-    koa.item_begin(&ptc, {(int)pqe.hit_orig_index, pqe.layer}, parent_idx, hit_pos, pqe.hit_index);
+    koa.item_begin(&ptc, {(int)pqe.hit_orig_index, pqe.layer}, parent_idx, hit_pos);
     if (parent_idx < 0)
       koa.load_state_err_chg(pqe.mixed_state, ptc.tcand().state());
     else
@@ -1446,25 +1440,14 @@ namespace mkfit {
   }
 
   // The parts of a layer step that do not depend on which hits were taken: where
-  // the step goes, which way, and what the candidate was when it arrived. Filled
-  // once per path root and carried down the tree, and once per hole entry of the
-  // end-of-layer selection.
-  void MkFinderV2p2::fill_step_geometry(LayerStepFeatures& f, const PrimTCandRep& ptc, float log_rho) const {
-    const TrackCand& tc = ptc.tcand();
+  // the step goes and which way. Filled once per path root and carried down the
+  // tree, and once per hole entry of the end-of-layer selection.
+  void MkFinderV2p2::fill_step_geometry(LayerStepFeatures& f, float log_rho) const {
     const LayerInfo& li = m_rz_limits.layer_info_1();
-    // layer_from is the layer of the candidate's LAST FOUND HIT, so the pair
-    // names the propagation that actually happens. A candidate that missed the
-    // previous layer steps across two, and keying anything on plan adjacency
-    // instead would attribute it to a step that never took place.
-    f.layer_from = (short)tc.getLastFoundHitLyr();
     f.layer_to = (short)li.layer_id();
     f.is_outward = m_rz_limits.is_outward();
     f.is_pixel = li.is_pixel();
     f.is_barrel = li.is_barrel();
-    f.pt = tc.pT();
-    f.step = (short)tc.nTotalHits();
-    f.n_found_so_far = (short)tc.nFoundHits();
-    f.n_holes_so_far = (short)tc.nAllMinusOneHits();
     f.log_rho = log_rho;
   }
 
@@ -1513,7 +1496,7 @@ namespace mkfit {
       } else {
         const int fake = fake_hit_index(tc, ptc.m_wsr);
         LayerStepFeatures f;
-        fill_step_geometry(f, ptc, 0.0f);
+        fill_step_geometry(f, 0.0f);
         f.hole_kind = v2p2_hole_kind(fake);
         m_sel.push_back(
             {ptc.m_origin_tcand_index, -1, fake, true, tc.score() + v2p2_layer_step_score(f, mp_job->v2p2())});

@@ -136,7 +136,6 @@ namespace mkfit {
         o.parent_idx = parent_idx[i];
         o.hit_pos = hit_pos[i];
         o.hot = hot[i];
-        o.hit_in_layer = hit_in_layer[i];
         o.chi2 = tsChi2[i];
         o.det_v = tsDetV[i];
         o.chi2_acc = tsChi2Acc[i];

@@ -787,14 +787,17 @@ and for the final output. It differs in three ways.
    and inward parameter sets (`V2p2Params::score_outward`, `score_inward`) for
    this; today they differ in the hit efficiency (0.10 with the TBPS / TB2S
    groups outward, 0.90 inward).
-3. **A feature struct.** `LayerStepFeatures` carries what a layer step did: hits
-   taken, chi2, the best hit's `q_half_length`, ln det V of the residual
-   covariance, local hit density, hole kind, the layers stepped between, and the
-   candidate's state. New features do not change a function signature, and the
-   struct can be written to the trace for fitting a score offline.
+3. **A feature struct.** `LayerStepFeatures` carries what the scores read of a
+   layer step: hits taken, the chi2 sum, ln det V of the residual covariance,
+   local hit density, hole kind, the layer and direction. A new term adds a
+   member without changing a function signature: a fact of the step or of the
+   candidate is filled in `fill_step_geometry()`, a per-hit one accumulated in
+   `harvest_sec_nodes()`. The struct can be written to the trace for fitting a
+   score offline.
 
-`layer_from` is the layer of the candidate's last found hit, so the step names
-the propagation that happened. A candidate that missed a layer steps across two.
+A term keyed on the step should take its origin from the layer of the
+candidate's last found hit (`getLastFoundHitLyr()`), not from the plan
+neighbour: a candidate that missed a layer steps across two.
 
 **Two forms.** `Score::mode` 0 is linear: a bonus per hit and per overlap hit,
 minus a chi2 weight, minus a penalty per hole kind. Mode 1 is a log-likelihood

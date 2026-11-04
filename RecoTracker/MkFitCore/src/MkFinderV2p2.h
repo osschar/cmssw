@@ -185,9 +185,9 @@ namespace mkfit {
 #endif
     bool long_step_to_layer(const TrackCand& tc) const;
     void offer_best_short(CombCandidate& ccand, const TrackCand& tc) const;
-    // The direction-, layer- and candidate-dependent part of a layer step, filled
-    // once per path root and carried down the tree, and once per hole entry.
-    void fill_step_geometry(LayerStepFeatures& f, const PrimTCandRep& ptc, float log_rho) const;
+    // The direction- and layer-dependent part of a layer step, filled once per
+    // path root and carried down the tree, and once per hole entry.
+    void fill_step_geometry(LayerStepFeatures& f, float log_rho) const;
     // Turn the Kalman results accumulated in m_sec_out into arena nodes, keeping
     // those that pass the chi2 cut. Their indices go to m_sec_harvested.
     void harvest_sec_nodes();

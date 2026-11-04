@@ -28,15 +28,13 @@ namespace mkfit {
 
   // One layer step: everything that happened to one candidate between its state
   // at layer check-in and its state at the end of the layer. Kept a POD so it can
-  // go into the trace unchanged. chi2_max, q_half_len_best, layer_from and the
-  // candidate fields are not read by the current scores; they are the inputs
-  // prepared for the next one.
+  // go into the trace unchanged. A term that needs a new input adds a member: a
+  // fact of the step or of the candidate is filled in
+  // MkFinderV2p2::fill_step_geometry(), a per-hit one accumulated in
+  // MkFinderV2p2::harvest_sec_nodes().
   struct LayerStepFeatures {
     // What was taken.
     float chi2_sum = 0.0f;  // over the hits of this step
-    float chi2_max = 0.0f;
-    // q half-length of the most precise hit taken, cm.
-    float q_half_len_best = 0.0f;
     // Sum over the hits taken of ln(det V), V the 2x2 residual covariance chi2 is
     // formed with. Carries the hit precision that chi2 divides out.
     float log_det_v_sum = 0.0f;
@@ -46,19 +44,11 @@ namespace mkfit {
     short n_overlap = 0;  // = max(n_hits - 1, 0)
     short hole_kind = V2P2_NoHole;
 
-    // Where. layer_from is the layer of the candidate's last found hit, so the
-    // pair names the propagation that happened.
-    short layer_from = -1;
+    // Where.
     short layer_to = -1;
     bool is_outward = true;
     bool is_pixel = false;
     bool is_barrel = true;
-
-    // What the candidate is, for terms that cannot be per hit.
-    float pt = 0.0f;
-    short step = 0;  // HoTs so far, i.e. layers this candidate has traversed
-    short n_found_so_far = 0;
-    short n_holes_so_far = 0;
   };
 
   // The coefficients are V2p2ScoreParams, interface/V2p2Params.h; the score mode

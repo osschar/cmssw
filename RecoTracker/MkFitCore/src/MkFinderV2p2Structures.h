@@ -202,7 +202,6 @@ namespace mkfit {
     // entry of m_layer_hits it takes.
     int parent_idx[NN];
     int hit_pos[NN];
-    unsigned int hit_in_layer[NN];  // index within the LayerOfHits
 
     MPlexHS msErr{0.0f};  // input measurement / hit [ms - measurement state]
     MPlexHV msPar{0.0f};  // ""
@@ -226,7 +225,6 @@ namespace mkfit {
       int parent_idx;
       int hit_pos;
       HitOnTrack hot;
-      unsigned int hit_in_layer;  // index WITHIN the LayerOfHits, for hit_q_half_length()
       float chi2;
       float det_v;     // det of the 2x2 residual covariance, for the score
       float chi2_acc;  // acceptance chi2, compared with V2p2Params::hit_chi2_cut
@@ -244,12 +242,11 @@ namespace mkfit {
 
     void reset() { N_filled = 0; }
 
-    void item_begin(PrimTCandRep* ptc, HitOnTrack ht, int par_idx = -1, int hpos = -1, unsigned int hil = 0) {
+    void item_begin(PrimTCandRep* ptc, HitOnTrack ht, int par_idx = -1, int hpos = -1) {
       ptcp[N_filled] = ptc;
       hot[N_filled] = ht;
       parent_idx[N_filled] = par_idx;
       hit_pos[N_filled] = hpos;
-      hit_in_layer[N_filled] = hil;
     }
     bool item_finished() { return ++N_filled == NN; }
 
