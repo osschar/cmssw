@@ -36,8 +36,6 @@ namespace mkfit {
     const SMatrixSym66& errors() const { return state_.errors; }
 
     // Access for packing into Matriplexes
-    // = parArray(), for MatriplexErrParPackerSlurpIn, which packs Hit and TrackBase alike.
-    const float* posArray() const { return state_.parameters.Array(); }
     const float* parArray() const { return state_.parArray(); }
     const float* errArray() const { return state_.errArray(); }
 

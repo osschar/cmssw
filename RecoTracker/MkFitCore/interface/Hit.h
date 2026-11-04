@@ -51,6 +51,7 @@ namespace mkfit {
     const SMatrixSym33& error() const { return state_.err_; }
 
     const float* posArray() const { return state_.pos_.Array(); }
+    const float* parArray() const { return state_.pos_.Array(); }
     const float* errArray() const { return state_.err_.Array(); }
 
     // Non-const versions needed for CopyOut of Matriplex.
