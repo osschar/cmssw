@@ -53,8 +53,6 @@ namespace mkfit {
 
     MkBins(int n_proc) : m_n_proc(n_proc) {}
 
-    MkBins(const MPlexLV& par, const MPlexQI& chg, int n_proc) : m_isp(par, chg), m_n_proc(n_proc) {}
-
     void prop_to_limits_in_order(const MkRZLimits& ls);
 
     // Covariance position block at m_sp2 from the previous-hit state (par0, err0).
