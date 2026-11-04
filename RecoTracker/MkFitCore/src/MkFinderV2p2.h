@@ -47,10 +47,8 @@ namespace mkfit {
 
       int m_n_dormant;
       int m_n_finding;
-      int m_n_finished;
 
     public:
-      CombCandidate& ccand(int i) const { return (*mp_eoccs)[i]; }
       CombCandidate* ccand_ptr(int i) const { return &(*mp_eoccs)[i]; }
 
       void setup(EventOfCombCandidates& eoccs, int seed_begin, int seed_end) {
@@ -59,15 +57,12 @@ namespace mkfit {
         m_end = seed_end;
         m_n_dormant = 0;
         m_n_finding = 0;
-        m_n_finished = 0;
       }
       void release() { mp_eoccs = nullptr; }
 
       int n_total() const { return m_end - m_begin; }
       int n_dormant() const { return m_n_dormant; }
       int n_finding() const { return m_n_finding; }
-      int n_finished() const { return m_n_finished; }
-      bool are_all_ccands_finished() const { return n_finished() == n_total(); }
       bool has_dormant_ccands() const { return n_dormant() > 0; }
 
       // Iteration over all CombCandidates for top-level administrative tasks.
@@ -141,7 +136,6 @@ namespace mkfit {
       int n_scanned[NN] = {0};
       float rho_dphi[NN] = {0.0f};  // Score::rho_region 2: the cut region's padding, max over sub-layers
       float rho_dq[NN] = {0.0f};
-      float log_rho[NN] = {0.0f};
 #ifdef MKFIT_TRACE
       int tr_layersearch_ids[NN];
 #endif

@@ -353,7 +353,6 @@ namespace mkfit {
       ++ai;
     }
     m_batch_mgr.m_n_finding -= count;
-    m_batch_mgr.m_n_finished += count;
 
     // One rewind for the whole layer, keeping capacity: after a few layers the
     // arena is at high water and stops allocating. Its size here is this layer's
@@ -897,8 +896,7 @@ namespace mkfit {
       // Over the window or the cut region the count can be 0 with a hit about to be
       // scored, so the scored hit is counted too.
       const float n_rho = Score::rho_region != 0 ? b.n_scanned[i] + 1.0f : (float)b.n_scanned[i];
-      b.log_rho[i] = std::log(std::max(1e-6f, n_rho / area));
-      b.ptc[i]->m_log_rho = b.log_rho[i];
+      b.ptc[i]->m_log_rho = std::log(std::max(1e-6f, n_rho / area));
 #if defined(MKFIT_STANDALONE)
       // Diag::final_beam_purity: hits in the density region, the expected background
       // of this layer step, per (seed, layer), forward search only.
@@ -1598,16 +1596,6 @@ namespace mkfit {
           nc.addHitIdx(n.m_hot.index, n.m_hot.layer, n.m_chi2);
           if (c != n_chain - 1) {
             nc.incOverlapCount();  // a second hit in one layer: an overlap, or the sister sensor of a paired entry
-#if defined(MKFIT_STANDALONE)
-            const SecTCandRep& pn = m_sec_arena[chain[c + 1]];
-            const auto& Ln = mp_job->m_event_of_hits[n.m_hot.layer];
-            const auto& Lp = mp_job->m_event_of_hits[pn.m_hot.layer];
-            if (n.m_hot.layer == pn.m_hot.layer &&
-                Ln.refHit(n.m_hot.index).detIDinLayer() == Lp.refHit(pn.m_hot.index).detIDinLayer())
-              V2P2_COUNT(n_same_module);
-            else
-              V2P2_COUNT(n_diff_module);
-#endif
           }
 #ifdef MKFIT_TRACE
           int pid = nc.m_trace_state_id;

@@ -12,7 +12,6 @@
 #include "RecoTracker/MkFitCore/interface/cms_common_macros.h"
 #include "RecoTracker/MkFitCore/interface/IterationConfig.h"
 #include "KalmanUtilsMPlex.h"
-#include "V2p2Config.h"
 
 #include <algorithm>
 
@@ -90,7 +89,6 @@ namespace mkfit {
         tr_state[i] = state_id;
       }
     }
-    const bool bk_rec = bk_trace;
 #endif
 
     MPlexHV plNrm{0.0f};  // input detector plane [pl - plane]
@@ -168,7 +166,7 @@ namespace mkfit {
           plPnt.copyIn(i, mi.pos.Array());
 
 #ifdef MKFIT_TRACE
-          if (bk_rec) {
+          if (bk_trace) {
             hk_layer[i] = layer;
             hk_mcid[i] = hit.mcHitID();
             hk_hit[i] = m_HoTNodeArr[i][m_CurNode[i]].m_hot.index;
@@ -236,7 +234,7 @@ namespace mkfit {
 #ifdef MKFIT_TRACE
       // The whole block records TrBkFitUpdate and nothing else, so it is guarded
       // as a unit.
-      if (bk_rec) {
+      if (bk_trace) {
         for (int i = 0; i < N_proc; ++i) {
           if (!hk_live[i]) continue;
           hk_live[i] = 0;
