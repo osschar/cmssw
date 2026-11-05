@@ -218,9 +218,7 @@ namespace mkfit {
     // the tail here is the selection having kept fewer.
     // The capacity is reserved for the larger of the forward and backward widths
     // (MkJob::max_max_cands()); the search direction's own maxCandsPerSeed applies.
-    const auto& iter_params =
-        (mp_steeringparams_iter->type() == SteeringParams::IT_BkwSearch) ? mp_job->params_bks() : mp_job->params();
-    ccrep.m_max_cands = std::min((int)ccand.capacity(), iter_params.maxCandsPerSeed);
+    ccrep.m_max_cands = std::min((int)ccand.capacity(), mp_job->params_cur().maxCandsPerSeed);
     if (InLayer::late_max_cands > 0 && ccand.size() > 0 && ccand[0].nFoundHits() > InLayer::late_max_cands_hits &&
         !long_step_to_layer(ccand[0])) {
       ccrep.m_max_cands = std::min(ccrep.m_max_cands, (int)InLayer::late_max_cands);
@@ -300,15 +298,12 @@ namespace mkfit {
   //----------------------------------------------------------------------------
 
   TrackCand::StopReason_e MkFinderV2p2::stop_cuts_at_pickup(const TrackCand& tc) const {
-    const SteeringParams::iterator& spi = *mp_steeringparams_iter;
-    const auto& iter_params = (spi.type() == SteeringParams::IT_BkwSearch) ? mp_job->params_bks() : mp_job->params();
-
-    if (tc.pT() < iter_params.minPtCut)
+    if (tc.pT() < mp_job->params_cur().minPtCut)
       return TrackCand::SR_MinPt;
 
     // Forward search only: going inward the track is leaving the turning region,
     // so a large angle there is not evidence that it is about to curl up.
-    if (spi.type() == SteeringParams::IT_FwdSearch && tc.pT() < Policy::looper_max_pt &&
+    if (mp_steeringparams_iter->is_outward() && tc.pT() < Policy::looper_max_pt &&
         tc.posRsq() > Policy::looper_min_r * Policy::looper_min_r) {
       const float max_ang = Policy::looper_max_angle;
       const float dphi = std::abs(tc.posPhi() - tc.momPhi());
@@ -351,8 +346,7 @@ namespace mkfit {
   //----------------------------------------------------------------------------
 
   int MkFinderV2p2::fake_hit_index(const TrackCand& tc, const WSR_Result& wsr) const {
-    const SteeringParams::iterator& spi = *mp_steeringparams_iter;
-    const auto& iter_params = (spi.type() == SteeringParams::IT_BkwSearch) ? mp_job->params_bks() : mp_job->params();
+    const auto& iter_params = mp_job->params_cur();
 
     int fake_hit_idx = Hit::kHitMissIdx;
 
