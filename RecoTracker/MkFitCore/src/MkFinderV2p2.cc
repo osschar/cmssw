@@ -287,7 +287,7 @@ namespace mkfit {
     // The paths stay in the arena until their CombCandidate is selected in
     // select_and_materialise(): right after the batch with InLayer::early_select,
     // else in end_layer().
-    expand_in_layer(b);  // grow the SecTCandRep tree over the ordered hits
+    expand_in_layer(b);  // grow the paths, as deep as the full Kalman batches allow
     if (InLayer::early_select)
       select_completed_ccreps(b);
   }
@@ -1174,8 +1174,12 @@ namespace mkfit {
 
   //----------------------------------------------------------------------------
   // In-layer combinatorial search: grow the tree of paths through the layer
-  // over the path-ordered m_layer_hits. Nodes live in m_sec_arena until end of
-  // layer. See doc/MkFinderV2p2-DesignNotes.md,
+  // over the path-ordered m_layer_hits. expand_in_layer() queues the depth-0
+  // items; from there it is a worklist, not recursion: each flush harvests
+  // nodes into m_deep_queue, rk_pump() turns them into deeper items, and so on
+  // to max_sec_depth. Items in a batch that is not yet full wait for a later
+  // layer batch or rk_drain(). Nodes live in m_sec_arena until their
+  // CombCandidate is selected. See doc/MkFinderV2p2-DesignNotes.md,
   // "In-layer combinatorial search".
   //----------------------------------------------------------------------------
 
