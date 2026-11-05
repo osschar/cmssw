@@ -3,6 +3,7 @@
 
 #include "RecoTracker/MkFitCore/standalone/DataFormats/RntStructs.h"
 
+#include "RecoTracker/MkFitCore/interface/HitStructures.h"
 #include "RecoTracker/MkFitCore/interface/SteeringParams.h"
 #include "RecoTracker/MkFitCore/interface/Track.h"
 #include "RecoTracker/MkFitCore/src/Matrix.h"
@@ -59,10 +60,22 @@ namespace mkfit {
     }
   }
 
+  // TrHitMatch for a pre-selected hit, without the state and search ids. mc_match:
+  // the hit was made by the seed's sim track. layer is L.layer_id(), not the plan
+  // entry's layer: with the secondary sub-layer scanned the two differ.
+  inline TrHitMatch make_hitmatch(const Event *ev, int seed_idx, const LayerOfHits &L, int hit_idx, bool is_sec) {
+    const int sim_lbl = ev->simInfoForCurrentSeed(seed_idx).label;
+    const int hit_lbl = ev->simHitsInfo_[L.refHit(hit_idx).mcHitID()].mcTrackID();
+    TrHitMatch hm{-1, -1, -1, (int)L.layer_id(), hit_idx, sim_lbl == hit_lbl};
+    hm.is_sec_layer = is_sec;
+    return hm;
+  }
+
   inline EVec3 hit2pos(const Hit &h) { return {h.x(), h.y(), h.z()}; }
   inline EVec3 track2pos(const TrackBase &s) { return {s.x(), s.y(), s.z()}; }
   inline EVec3 track2mom(const TrackBase &s) { return {s.px(), s.py(), s.pz()}; }
   inline EBiVec3 track2bivec3(const TrackBase &s) { return {track2pos(s), track2mom(s)}; }
+  inline EBiVec3 state2bivec3(const TrackState &s) { return {{s.x(), s.y(), s.z()}, {s.px(), s.py(), s.pz()}}; }
 
   inline SimSeedInfo evsi2ssinfo(const Event *ev, int seed_idx) {
     SimSeedInfo ssi;
