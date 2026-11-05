@@ -456,6 +456,7 @@ namespace mkfit {
       B.find_bin_ranges(mp_job->m_event_of_hits[spi->m_layer_sec], BL_s);
     }
 
+#ifdef DEBUG
     // clang-format off
     for (int i = 0; i < N_proc; ++i) {
       dprintf("%d: BinCheck Prim %c %+8.6f %+8.6f | %3d %3d || %+8.6f %+8.6f | %2d %2d\n",
@@ -470,6 +471,7 @@ namespace mkfit {
       }
     }
     // clang-format on
+#endif
 
     // Hermite cubic through the two layer crossings, the trajectory model for the
     // per-hit plane solve. See the design notes, "Layer crossings and the Hermite
