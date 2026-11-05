@@ -482,41 +482,14 @@ namespace mkfit {
 
 #ifdef MKFIT_TRACE
     for (int i = 0; i < N_proc; ++i) {
+      const PrimTCandRep& ptc = *prim_tcand_ptrs[i];
       TrLayerSearch ls;
-      ls.state_id = prim_tcand_ptrs[i]->tcand().m_trace_state_id;
-      ls.layer = spi->m_layer;
-      ls.layer_sec = m_rz_limits.m_is_double ? spi->m_layer_sec : -1;
-      ls.is_barrel = m_rz_limits.m_is_barrel;
-      ls.is_outward = m_rz_limits.m_is_outward;
-      ls.wsr = (signed char)prim_tcand_ptrs[i]->m_wsr.m_wsr;
-      ls.wsr_in_gap = prim_tcand_ptrs[i]->m_wsr.m_in_gap;
-
-      ls.prop_entry = statep2propinfo(B.m_sp1, i);
-      ls.prop_exit = statep2propinfo(B.m_sp2, i);
-
-      ls.phi_center = B.m_phi_center[i];
-      ls.phi_delta = B.m_phi_delta[i];
-      ls.q_min = B.m_q_min[i];
-      ls.q_max = B.m_q_max[i];
-      ls.dphi_track = B.m_dphi_track[i];
-      ls.dq_track = B.m_dq_track[i];
-
-      ls.cov_xx = TCE.m_cov_0_0[i];
-      ls.cov_xy = TCE.m_cov_0_1[i];
-      ls.cov_yy = TCE.m_cov_1_1[i];
-      ls.cov_zz = TCE.m_cov_2_2[i];
-
-      ls.p1 = BL_p.p1[i];
-      ls.p2 = BL_p.p2[i];
-      ls.q1 = BL_p.q1[i];
-      ls.q2 = BL_p.q2[i];
-      if (m_rz_limits.m_is_double) {
-        ls.p1_sec = BL_s.p1[i];
-        ls.p2_sec = BL_s.p2[i];
-        ls.q1_sec = BL_s.q1[i];
-        ls.q2_sec = BL_s.q2[i];
-      }
-
+      ls.state_id = ptc.tcand().m_trace_state_id;
+      ls.wsr = (signed char)ptc.m_wsr.m_wsr;
+      ls.wsr_in_gap = ptc.m_wsr.m_in_gap;
+      fill_layer(ls, *spi, m_rz_limits);
+      fill_window(ls, B, TCE, i);
+      fill_bins(ls, BL_p, m_rz_limits.m_is_double ? &BL_s : nullptr, i);
       tr_layersearch_ids[i] = mp_event->trace_layersearch(std::move(ls)).id;
     }
 #endif
