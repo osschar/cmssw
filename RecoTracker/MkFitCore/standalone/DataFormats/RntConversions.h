@@ -3,9 +3,12 @@
 
 #include "RecoTracker/MkFitCore/standalone/DataFormats/RntStructs.h"
 
+#include "RecoTracker/MkFitCore/interface/SteeringParams.h"
 #include "RecoTracker/MkFitCore/interface/Track.h"
 #include "RecoTracker/MkFitCore/src/Matrix.h"
 #include "RecoTracker/MkFitCore/src/MiniPropagators.h"
+#include "RecoTracker/MkFitCore/src/MkBins.h"
+#include "RecoTracker/MkFitCore/src/MkRZLimits.h"
 
 namespace mkfit {
   namespace miprops = mkfit::mini_propagators;
@@ -19,6 +22,41 @@ namespace mkfit {
   inline EBiVec3 statep2bivec3(const miprops::StatePlex &s, int i) { return {statep2pos(s, i), statep2mom(s, i)}; }
   inline PropInfo statep2propinfo(const miprops::StatePlex &s, int i) {
     return {statep2bivec3(s, i), s.dalpha[i], s.fail_flag[i]};
+  }
+
+  // TrLayerSearch from MkFinderV2p2::determine_search_windows(), lane i.
+  inline void fill_layer(TrLayerSearch &ls, const LayerControl &lc, const MkRZLimits &rz) {
+    ls.layer = lc.m_layer;
+    ls.layer_sec = lc.m_layer_sec;
+    ls.is_barrel = rz.m_is_barrel;
+    ls.is_outward = rz.m_is_outward;
+  }
+  inline void fill_window(TrLayerSearch &ls, const MkBins &B, const MkBinTrackCovExtract &TCE, int i) {
+    ls.prop_entry = statep2propinfo(B.m_sp1, i);
+    ls.prop_exit = statep2propinfo(B.m_sp2, i);
+    ls.phi_center = B.m_phi_center[i];
+    ls.phi_delta = B.m_phi_delta[i];
+    ls.q_min = B.m_q_min[i];
+    ls.q_max = B.m_q_max[i];
+    ls.dphi_track = B.m_dphi_track[i];
+    ls.dq_track = B.m_dq_track[i];
+    ls.cov_xx = TCE.m_cov_0_0[i];
+    ls.cov_xy = TCE.m_cov_0_1[i];
+    ls.cov_yy = TCE.m_cov_1_1[i];
+    ls.cov_zz = TCE.m_cov_2_2[i];
+  }
+  // bl_s is null for a single layer.
+  inline void fill_bins(TrLayerSearch &ls, const MkBinLimits &bl_p, const MkBinLimits *bl_s, int i) {
+    ls.p1 = bl_p.p1[i];
+    ls.p2 = bl_p.p2[i];
+    ls.q1 = bl_p.q1[i];
+    ls.q2 = bl_p.q2[i];
+    if (bl_s) {
+      ls.p1_sec = bl_s->p1[i];
+      ls.p2_sec = bl_s->p2[i];
+      ls.q1_sec = bl_s->q1[i];
+      ls.q2_sec = bl_s->q2[i];
+    }
   }
 
   inline EVec3 hit2pos(const Hit &h) { return {h.x(), h.y(), h.z()}; }
