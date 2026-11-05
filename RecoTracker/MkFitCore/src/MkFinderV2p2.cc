@@ -892,7 +892,7 @@ namespace mkfit {
 #ifdef MKFIT_TRACE
       module_xdir.copyIn(h, mi.xdir.Array());
       module_ydir.copyIn(h, mi.calc_ydir().Array());
-      const PrimTCandRep& ptc = *prim_tcand_ptrs[prim_idcs[h]];
+      PrimTCandRep& ptc = *prim_tcand_ptrs[prim_idcs[h]];
       TrHitMatch hm = make_hitmatch(mp_event, ptc.ccand().seed_origin_index(), L, hit_orig_idcs[h], is_sec_layer);
       hm.state_id = ptc.tcand().m_trace_state_id;
       hm.search_id = tr_layersearch_ids[prim_idcs[h]];
