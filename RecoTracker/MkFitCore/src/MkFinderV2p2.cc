@@ -892,20 +892,10 @@ namespace mkfit {
 #ifdef MKFIT_TRACE
       module_xdir.copyIn(h, mi.xdir.Array());
       module_ydir.copyIn(h, mi.calc_ydir().Array());
-      PrimTCandRep& ptc = *prim_tcand_ptrs[prim_idcs[h]];
-      int sim_lbl = mp_event->simInfoForCurrentSeed(ptc.ccand().seed_origin_index()).label;
-      const MCHitInfo& mchinfo = mp_event->simHitsInfo_[L.refHit(hit_orig_idcs[h]).mcHitID()];
-      int hit_lbl = mchinfo.mcTrackID();
-
-      // L.layer_id(), not spi->m_layer: with the secondary sub-layer scanned
-      // these differ, and `layer` has to name the layer the hit is actually in.
-      TrHitMatch hm{-1,
-                    ptc.tcand().m_trace_state_id,
-                    tr_layersearch_ids[prim_idcs[h]],
-                    (int)L.layer_id(),
-                    (int)hit_orig_idcs[h],
-                    sim_lbl == hit_lbl};
-      hm.is_sec_layer = is_sec_layer;
+      const PrimTCandRep& ptc = *prim_tcand_ptrs[prim_idcs[h]];
+      TrHitMatch hm = make_hitmatch(mp_event, ptc.ccand().seed_origin_index(), L, hit_orig_idcs[h], is_sec_layer);
+      hm.state_id = ptc.tcand().m_trace_state_id;
+      hm.search_id = tr_layersearch_ids[prim_idcs[h]];
       tr_hitmatch_ids[h] = mp_event->trace_hitmatch(std::move(hm)).id;
 #endif
     }
@@ -1503,16 +1493,7 @@ namespace mkfit {
       // scorer overwrites it in mergeCandsAndBestShortOne() at the end of the search.
       nc.setScore(e.score);
 #ifdef MKFIT_TRACE
-      {
-        const short int lay_sel = m_rz_limits.layer_info_1().layer_id();
-        const short int rank = k + 1;
-        if (rank > nc.m_rank_max) {
-          nc.m_rank_max = rank;
-          nc.m_rank_max_layer = lay_sel;
-        }
-        if (rank > Diag::rank_over && nc.m_rank_over_layer < 0)
-          nc.m_rank_over_layer = lay_sel;
-      }
+      nc.note_rank(k + 1, m_rz_limits.layer_info_1().layer_id(), Diag::rank_over);
 #endif
     }
 

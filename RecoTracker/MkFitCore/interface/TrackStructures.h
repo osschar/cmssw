@@ -275,6 +275,15 @@ namespace mkfit {
     short int m_rank_max = 0;
     short int m_rank_max_layer = -1;
     short int m_rank_over_layer = -1;
+
+    void note_rank(short int rank, short int layer, short int rank_over) {
+      if (rank > m_rank_max) {
+        m_rank_max = rank;
+        m_rank_max_layer = layer;
+      }
+      if (rank > rank_over && m_rank_over_layer < 0)
+        m_rank_over_layer = layer;
+    }
 #endif
   };
 
