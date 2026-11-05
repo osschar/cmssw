@@ -456,32 +456,20 @@ namespace mkfit {
       B.find_bin_ranges(mp_job->m_event_of_hits[spi->m_layer_sec], BL_s);
     }
 
+    // clang-format off
     for (int i = 0; i < N_proc; ++i) {
       dprintf("%d: BinCheck Prim %c %+8.6f %+8.6f | %3d %3d || %+8.6f %+8.6f | %2d %2d\n",
-              i,
-              m_rz_limits.m_is_barrel ? 'B' : 'E',
-              B.m_phi_center[i],
-              B.m_phi_delta[i],
-              BL_p.p1[i],
-              BL_p.p2[i],
-              B.m_q_min[i],
-              B.m_q_max[i],
-              BL_p.q1[i],
-              BL_p.q2[i]);
+              i, m_rz_limits.m_is_barrel ? 'B' : 'E',
+              B.m_phi_center[i], B.m_phi_delta[i], BL_p.p1[i], BL_p.p2[i],
+              B.m_q_min[i], B.m_q_max[i], BL_p.q1[i], BL_p.q2[i]);
       if (m_rz_limits.m_is_double) {
         dprintf("%d: BinCheck Sec  %c %+8.6f %+8.6f | %3d %3d || %+8.6f %+8.6f | %2d %2d\n",
-                i,
-                m_rz_limits.m_is_barrel ? 'B' : 'E',
-                B.m_phi_center[i],
-                B.m_phi_delta[i],
-                BL_s.p1[i],
-                BL_s.p2[i],
-                B.m_q_min[i],
-                B.m_q_max[i],
-                BL_s.q1[i],
-                BL_s.q2[i]);
+                i, m_rz_limits.m_is_barrel ? 'B' : 'E',
+                B.m_phi_center[i], B.m_phi_delta[i], BL_s.p1[i], BL_s.p2[i],
+                B.m_q_min[i], B.m_q_max[i], BL_s.q1[i], BL_s.q2[i]);
       }
     }
+    // clang-format on
 
     // Hermite cubic through the two layer crossings, the trajectory model for the
     // per-hit plane solve. See the design notes, "Layer crossings and the Hermite
