@@ -541,15 +541,11 @@ namespace mkfit {
       }
       for (int i = 0; i < N_proc; ++i) {
         EVec3 dev(hx[i] - sp_mid.x[i], hy[i] - sp_mid.y[i], hz[i] - sp_mid.z[i]);
+        // clang-format off
         dprintf("%d: HermiteMid dev %+9.6f %+9.6f %+9.6f  (|d| = %.6f, dalpha %.4f -> %.4f, derfac %.5f)\n",
-                i,
-                dev[0],
-                dev[1],
-                dev[2],
-                std::sqrt(dev.Mag2()),
-                B.m_sp1.dalpha[i],
-                B.m_sp2.dalpha[i],
-                H.m_Hderfac[i]);
+                i, dev[0], dev[1], dev[2],
+                std::sqrt(dev.Mag2()), B.m_sp1.dalpha[i], B.m_sp2.dalpha[i], H.m_Hderfac[i]);
+        // clang-format on
 #ifdef MKFIT_TRACE
         mp_event->tr_layersearch(tr_layersearch_ids[i]).hermite_mid_dev = dev;
 #endif
@@ -635,17 +631,11 @@ namespace mkfit {
       if (w.m_in_gap)
         V2P2_COUNT(n_wsr_in_gap);
 
+      // clang-format off
       dprintf("%d: WSR %d in_gap %d  (q %.3f - %.3f vs layer %.3f - %.3f, dq3 %.4f, fail %d/%d)\n",
-              i,
-              w.m_wsr,
-              (int)w.m_in_gap,
-              B.m_q_min[i],
-              B.m_q_max[i],
-              q_lo,
-              q_hi,
-              B.m_dq_track[i],
-              B.m_sp1.fail_flag[i],
-              B.m_sp2.fail_flag[i]);
+              i, w.m_wsr, (int)w.m_in_gap, B.m_q_min[i], B.m_q_max[i], q_lo, q_hi,
+              B.m_dq_track[i], B.m_sp1.fail_flag[i], B.m_sp2.fail_flag[i]);
+      // clang-format on
     }
   }
 
@@ -734,15 +724,10 @@ namespace mkfit {
             for (bcnt_t hi = pbi.begin(); hi < pbi.end(); ++hi) {
               const unsigned int hi_orig = L.getOriginalHitIndex(hi);
 
+              // clang-format off
               dprintf(" %d: P_HIT %3u %4u %5u [%5u]  %6.3f %6.3f %6.3f\n",
-                      i,
-                      pi,
-                      qi,
-                      hi,
-                      hi_orig,
-                      L.hit_phi(hi),
-                      L.hit_q(hi),
-                      L.hit_qbar(hi));
+                      i, pi, qi, hi, hi_orig, L.hit_phi(hi), L.hit_q(hi), L.hit_qbar(hi));
+              // clang-format on
 
               if (Score::rho_region == 0 || (std::abs(squashPhiGeneral(L.hit_phi(hi) - rho_phi_c)) < rho_phi_half &&
                                              L.hit_q(hi) > rho_q_lo && L.hit_q(hi) < rho_q_hi))
