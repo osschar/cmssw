@@ -1041,28 +1041,17 @@ namespace mkfit {
     int* tr_layersearch_ids = b.tr_layersearch_ids;
 #endif
 
-    // Drain both sub-layer queues into one list, then order it by path length.
-    // sub_rank (within a sub-layer) and full_rank (across both) are trace-only;
-    // the pqueue pops worst first, hence the count-down.
+    // Copy both sub-layer queues into one list, then order it by path length. The
+    // queues only bound the number of hits; their order is not used.
     for (int i = 0; i < N_proc; ++i) {
       PrimTCandRep& ptc = *prim_tcand_ptrs[i];
 #ifdef MKFIT_TRACE
       mp_event->tr_layersearch(tr_layersearch_ids[i]).n_hits_pqueue = ptc.m_pqueue[0].size() + ptc.m_pqueue[1].size();
 #endif
       for (int sl = 0; sl < 2; ++sl) {
-#ifdef MKFIT_TRACE
-        int rank = ptc.m_pqueue[sl].size();
-#endif
-        while (!ptc.m_pqueue[sl].empty()) {
-          const auto& pqe = ptc.pq_top(sl);
-          ptc.m_layer_hits.push_back(pqe);
-#ifdef MKFIT_TRACE
-          TrHitMatch& tr_hitmatch = mp_event->tr_hitmatch(pqe.tr_hitmatch_id);
-          tr_hitmatch.sub_rank = rank--;
-          tr_hitmatch.passed_pqueue = true;
-#endif
-          ptc.pq_pop(sl);
-        }
+        for (const auto& e : ptc.m_pqueue[sl])
+          ptc.m_layer_hits.push_back(e);
+        ptc.m_pqueue[sl].clear();
       }
 
       // Path order for the in-layer search: dalpha is monotone in path length
@@ -1081,15 +1070,21 @@ namespace mkfit {
     }
 
 #ifdef MKFIT_TRACE
-    // full_rank -- rank by score across both sub-layers. Counted rather than
-    // sorted, so m_layer_hits keeps its path order.
+    // Ranks by the pre-selection score, 1 = best: sub_rank within the hit's
+    // sub-layer, full_rank across both. Counted rather than sorted, so
+    // m_layer_hits keeps its path order.
     for (int i = 0; i < N_proc; ++i) {
       PrimTCandRep& ptc = *prim_tcand_ptrs[i];
       for (const auto& e : ptc.m_layer_hits) {
-        int better = 0;
-        for (const auto& o : ptc.m_layer_hits)
+        int better = 0, better_sub = 0;
+        for (const auto& o : ptc.m_layer_hits) {
           better += (o.score < e.score);
-        mp_event->tr_hitmatch(e.tr_hitmatch_id).full_rank = better + 1;
+          better_sub += (o.score < e.score && o.layer == e.layer);
+        }
+        TrHitMatch& hm = mp_event->tr_hitmatch(e.tr_hitmatch_id);
+        hm.passed_pqueue = true;
+        hm.sub_rank = better_sub + 1;
+        hm.full_rank = better + 1;
       }
     }
 #endif
