@@ -118,10 +118,10 @@ namespace mkfit {
       MkBinTrackCovExtract TCE;       // position block of the window covariance
       MkBinLimits BL_p, BL_s;         // binnor ranges, primary / secondary layer
       mini_propagators::Hermite3D H;  // cubic through sp1, sp2 -- the trajectory model
-      // Local hit density for the likelihood score: hits counted, the region's
-      // padding (Score::rho_region 2) and ln(hits / cm^2).
+      // Local hit density for the likelihood score: the hits counted in the cut
+      // region, and the region's padding, max over the sub-layers.
       int n_scanned[NN] = {0};
-      float rho_dphi[NN] = {0.0f};  // Score::rho_region 2: the cut region's padding, max over sub-layers
+      float rho_dphi[NN] = {0.0f};
       float rho_dq[NN] = {0.0f};
 #ifdef MKFIT_TRACE
       int tr_layersearch_ids[NN];

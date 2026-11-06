@@ -145,12 +145,6 @@ namespace mkfit {
       MKFIT_V2P2_KNOB(float, rho_const, 0.0f);  // ln(hits/cm^2), used when use_rho is false
       MKFIT_V2P2_KNOB(bool, use_detv, true);
       MKFIT_V2P2_KNOB(float, detv_const, 0.0f);  // ln(det V) per hit, used when use_detv is false
-      // The region rho counts hits over and divides by. 0: every hit of the fetched bins over
-      // the track window's area (the count depends on the fetch: hit-extent padding, whole
-      // bins, spare bins). 1: the track window for both, (n + 1) / area. 2: the cut region
-      // for both, the window widened by the cut's track and largest-hit-extent terms as in
-      // the fetch, without bin rounding or spare bins, (n + 1) / area.
-      MKFIT_V2P2_KNOB(int, rho_region, 2);
     }  // namespace Score
 
 #if defined(MKFIT_STANDALONE)
