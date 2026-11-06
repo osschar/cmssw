@@ -1125,10 +1125,10 @@ namespace mkfit {
   }
 
   //----------------------------------------------------------------------------
-  // The Kalman batches of the in-layer search stay open across layer batches
-  // and fire only when full. Each CombCandidate counts its Kalman items in
-  // flight and its nodes still to be expanded, so it can be selected as soon as
-  // both reach zero.
+  // Running Kalman (rk_): the Kalman batches of the in-layer search stay open
+  // across layer batches and fire only when full. Each CombCandidate counts its
+  // Kalman items in flight and its nodes still to be expanded, so it can be
+  // selected as soon as both reach zero.
   //----------------------------------------------------------------------------
 
   void MkFinderV2p2::rk_setup(KalmanOpArgs& koa, bool solve_plane) {

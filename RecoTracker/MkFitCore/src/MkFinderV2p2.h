@@ -189,6 +189,7 @@ namespace mkfit {
     // tree. Depth 0 (the Hermite crossing is known, sPerp path) and deeper steps
     // (the plane is solved) need different propagation, so there are two Kalman
     // batches. Each fires only when full; rk_drain() empties both at end of layer.
+    // rk_ = running Kalman: these batches and the functions that run them.
     void expand_in_layer(LayerBatch& b);
     void rk_setup(KalmanOpArgs& koa, bool solve_plane);
     void rk_add_item(KalmanOpArgs& koa, PrimTCandRep& ptc, const PrimTCandRep::PQE& pqe, int parent_idx, int hit_pos);
