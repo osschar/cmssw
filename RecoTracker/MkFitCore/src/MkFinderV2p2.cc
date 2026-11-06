@@ -1068,12 +1068,12 @@ namespace mkfit {
                   const float ka = dir * a.mixed_state.dalpha, kb = dir * b.mixed_state.dalpha;
                   if (ka != kb)
                     return ka < kb;
-                  // Equal keys: hits on one module, or on coplanar modules, share the
-                  // plane crossing. Worse pre-selection score first, then by hit: an
-                  // order that does not depend on the pqueues'.
+                  // Equal keys: hits on one module, or on coplanar modules of one layer,
+                  // share the plane crossing. Worse pre-selection score first, then by
+                  // hit: an order that does not depend on the pqueues'.
                   if (a.score != b.score)
                     return a.score > b.score;
-                  return a.layer != b.layer ? a.layer < b.layer : a.hit_orig_index < b.hit_orig_index;
+                  return a.hit_orig_index < b.hit_orig_index;
                 });
     }
 
