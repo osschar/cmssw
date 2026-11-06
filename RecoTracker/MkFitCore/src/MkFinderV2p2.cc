@@ -1065,7 +1065,12 @@ namespace mkfit {
       std::sort(ptc.m_layer_hits.begin(),
                 ptc.m_layer_hits.end(),
                 [dir](const PrimTCandRep::PQE& a, const PrimTCandRep::PQE& b) {
-                  return dir * a.mixed_state.dalpha < dir * b.mixed_state.dalpha;
+                  const float ka = dir * a.mixed_state.dalpha, kb = dir * b.mixed_state.dalpha;
+                  if (ka != kb)
+                    return ka < kb;
+                  // Equal keys occur, e.g. hits on one module share its plane crossing.
+                  // Order them by hit, so the order does not depend on the pqueues'.
+                  return a.layer != b.layer ? a.layer < b.layer : a.hit_orig_index < b.hit_orig_index;
                 });
     }
 
