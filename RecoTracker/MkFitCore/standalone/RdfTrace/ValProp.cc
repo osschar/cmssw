@@ -1645,13 +1645,6 @@ namespace mkfit {
     printf("val_mini_prop_param_b: %d (0 uniform Config::Bfield, 1 bFieldFromZR at each state, 2 as the Kalman)\n", on);
   }
 
-  void val_rho_region(int region) {
-    V2p2::Score::rho_region = region;
-    static const char *nm[] = {"fetched bins over the window area", "the track window, (n+1)/area",
-                               "the cut region, (n+1)/area"};
-    printf("val_rho_region: %d, rho over %s\n", region, region >= 0 && region <= 2 ? nm[region] : "?");
-  }
-  void val_rho_in_window(bool on) { val_rho_region(on ? 1 : 0); }
 
   // Fix one term of the log-likelihood at a constant, at fixed eps. Passing the term's own
   // MEAN as the constant removes its variation and nothing else -- see the note
