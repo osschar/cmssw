@@ -36,6 +36,8 @@ namespace mkfit {
 
   struct MkBins {
     mini_propagators::InitialStatePlex m_isp;
+    // Crossings of the layer's two bounding surfaces in the search direction:
+    // m_sp1 the near one, m_sp2 the far one. See prop_to_limits_in_order().
     mini_propagators::StatePlex m_sp1, m_sp2;
 
     MPlexQF m_phi_min, m_phi_max, m_phi_center, m_phi_delta;

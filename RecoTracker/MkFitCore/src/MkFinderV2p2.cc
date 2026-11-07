@@ -16,6 +16,65 @@
 //#define DEBUG
 #include "Debug.h"
 
+//==============================================================================
+// How MkFinderV2p2 works, a reader's map.
+//
+// MkBuilder::findTracksStandardv2p2() runs one finder over a block of seeds and
+// the layer plan: begin_layer(), process_layer(), end_layer() per plan entry. A
+// plan entry is one layer, or two sub-layers (m_layer, m_layer_sec) such as the
+// two sensors of a PS / 2S module.
+//
+// The objects, per layer:
+//   CCandRep      one CombCandidate (one seed) while it is finding, from pickup
+//                 until all its TrackCands have stopped.
+//   CandIncoming  one of its TrackCands entering this layer: the search window,
+//                 the pre-selected hits, those hits in path order. One layer.
+//   CandNode      one path through this layer: the candidate after taking a
+//                 sequence of those hits, each Kalman-updated. In m_node_arena
+//                 until its CombCandidate has been selected.
+//   PQE           one pre-selected hit, with its plane crossing. Its dalpha (the
+//                 turning angle at the crossing) orders the hits along the path.
+//   layer step    what one candidate does in one layer, scored as one additive
+//                 term (V2p2Score.h).
+//
+// One CombCandidate in one layer, as if it were alone:
+//   for each TrackCand not stopped and not past the layer      begin_next_Ccrep_in_layer()
+//     propagate to the layer's two bounding surfaces           prop_to_layer_edges()
+//     window from the covariance, binnor bin ranges            determine_search_windows()
+//     in / at the edge of / outside the sensitive region       determine_wsr()
+//     each hit in the bins: cross its module plane, cut,       select_hits(), preselect_hit_batch()
+//       keep the best max_presel_hits per sub-layer by dphi
+//     order the kept hits along the path                       prepare_kalman_workload()
+//     paths: the subsequences of those hits in path order,     expand_in_layer(), rk_*()
+//       up to max_sec_depth hits, one per module, each hit
+//       Kalman-updated and accepted on its chi2
+//   compete on score: every path, one hole per incoming        select_and_materialise()
+//     candidate, the TrackCands not taken in; the best
+//     m_max_cands become the CombCandidate's TrackCands
+//
+// What the code adds to that, for speed:
+//   Batching. Up to NN incoming candidates, from any CombCandidates, pass the
+//     front end together: LayerBatch is NN candidates wide, HitBatch NN
+//     (candidate, hit) pairs. The Kalman updates of the paths go into two
+//     batches that fire only when all NN lanes are filled, and stay open across
+//     layer batches ("running Kalman", rk_): depth 0 takes the plane crossing
+//     found in pre-selection, deeper steps solve for the plane from the parent
+//     path's state. Accepted nodes go onto m_deep_queue and are turned into the
+//     next depth's items there: a worklist, not recursion.
+//   Completion. With batches mixing candidates, a CombCandidate's paths finish
+//     at different times. Its CCandRep counts m_n_queued (incoming candidates
+//     not yet through the front end) and m_n_inflight (Kalman items not yet run,
+//     plus nodes not yet expanded; a child is counted before its parent is
+//     released, so the count cannot pass through zero early). With both at zero
+//     it can be selected: right after the batch with InLayer::early_select, its
+//     nodes then reused through m_node_free, otherwise in end_layer().
+//     m_ccrep_ready is only a hint; the counts are checked again before selecting.
+//   Storage. Nodes sit in one vector, m_node_arena, reached by index with one
+//     parent link, and rewound at end_layer().
+//
+// The reasons behind each piece are in doc/MkFinderV2p2-DesignNotes.md.
+//==============================================================================
+
 namespace mkfit {
 
   using namespace Config::V2p2;
@@ -406,7 +465,7 @@ namespace mkfit {
       m_cand_queue_head = 0;
     }
 
-    // Propagation so point 1 is first edge hit, 2 the second
+    // m_sp1 at the layer's near bounding surface, m_sp2 at the far one.
     B.prop_to_limits_in_order(m_rz_limits);
   }
 
@@ -1023,7 +1082,7 @@ namespace mkfit {
 
       if (cand.m_pqueue[sl].size() < mp_job->v2p2().max_presel_hits) {
         do_pqueue_push();
-      } else if (ddphi < cand.pq_top(sl).score) {
+      } else if (ddphi < cand.pq_top(sl).ddphi) {
         cand.pq_pop(sl);
         do_pqueue_push();
       }
@@ -1069,16 +1128,16 @@ namespace mkfit {
                   if (ka != kb)
                     return ka < kb;
                   // Equal keys: hits on one module, or on coplanar modules of one layer,
-                  // share the plane crossing. Worse pre-selection score first, then by
-                  // hit: an order that does not depend on the pqueues'.
-                  if (a.score != b.score)
-                    return a.score > b.score;
+                  // share the plane crossing. Larger ddphi first, then by hit: an
+                  // order that does not depend on the pqueues'.
+                  if (a.ddphi != b.ddphi)
+                    return a.ddphi > b.ddphi;
                   return a.hit_orig_index < b.hit_orig_index;
                 });
     }
 
 #ifdef MKFIT_TRACE
-    // Ranks by the pre-selection score, 1 = best: sub_rank within the hit's
+    // Ranks by the pre-selection's ddphi, 1 = best: sub_rank within the hit's
     // sub-layer, full_rank across both. Counted rather than sorted, so
     // m_layer_hits keeps its path order.
     for (int i = 0; i < N_proc; ++i) {
@@ -1086,8 +1145,8 @@ namespace mkfit {
       for (const auto& e : cand.m_layer_hits) {
         int better = 0, better_sub = 0;
         for (const auto& o : cand.m_layer_hits) {
-          better += (o.score < e.score);
-          better_sub += (o.score < e.score && o.layer == e.layer);
+          better += (o.ddphi < e.ddphi);
+          better_sub += (o.ddphi < e.ddphi && o.layer == e.layer);
         }
         TrHitMatch& hm = mp_event->tr_hitmatch(e.tr_hitmatch_id);
         hm.passed_pqueue = true;
@@ -1339,17 +1398,17 @@ namespace mkfit {
 
     // Which TrackCands got a CandIncoming this layer. The rest are entered
     // unchanged below.
-    bool has_ptc[64] = {false};
     const int n_tc = (int)ccand.size();
+    m_has_cand.assign(n_tc, 0);
 
     for (auto& cand : ccrep.m_cands) {
-      if (cand.m_origin_tcand_index < 64)
-        has_ptc[cand.m_origin_tcand_index] = true;
+      m_has_cand[cand.m_origin_tcand_index] = 1;
 
       TrackCand& tc = cand.tcand();
 
       // Every CandIncoming also competes as the hole it would record, including
-      // those that found paths.
+      // those that found paths. In the log-likelihood score (Score::mode 1) a hole
+      // adds exactly 0, whatever its kind; hole penalties apply in the final pick.
       // WSR_Outside is not a hole: the candidate competes unchanged.
       if (Policy::use_wsr && cand.m_wsr.m_wsr == WSR_Outside) {
         V2P2_COUNT(n_layer_skipped);
@@ -1378,7 +1437,7 @@ namespace mkfit {
     // best is kept on the CombCandidate.
     const bool best_short = InLayer::best_short && m_rz_limits.is_outward();
     for (int ic = 0; ic < n_tc; ++ic) {
-      if (ic < 64 && has_ptc[ic])
+      if (m_has_cand[ic])
         continue;
       if (best_short && ccand[ic].getLastHitIdx() == Hit::kHitStopIdx) {
         offer_best_short(ccand, ccand[ic]);
@@ -1509,7 +1568,11 @@ namespace mkfit {
   // InLayer::sister_hole_drop: remove from m_sel the holes that a path of the same
   // TrackCand dominates by taking the sister sensor of its last hit. A sister pair
   // is two adjacent layers, the lower one stereo and the upper one not, and the
-  // upper sensor's detid is the lower one's + 1; either may be crossed first.
+  // upper sensor's detid is the lower one's + 1; either may be crossed first. A
+  // track through one sensor of a module crosses the other a few mm away, so
+  // when a path took the sister hit, the hole is the worse explanation of the
+  // same crossing. The path's first hit is tested. For the split plan, where the
+  // previous hit is in the sister plan entry.
   void MkFinderV2p2::drop_sister_dominated_holes(const CombCandidate& ccand) {
     const int lay = m_rz_limits.layer_info_1().layer_id();
     const TrackerInfo& ti = mp_job->m_trk_info;

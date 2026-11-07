@@ -265,6 +265,7 @@ namespace mkfit {
     // End-of-layer selection: the competitors, and the survivors, built before
     // the CombCandidate is rewritten from them.
     std::vector<SelEntry> m_sel;
+    std::vector<char> m_has_cand;  // per TrackCand: entered as a CandIncoming
     std::vector<TrackCand> m_new_cands;
   };
 
