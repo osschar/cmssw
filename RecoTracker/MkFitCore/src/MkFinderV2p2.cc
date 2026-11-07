@@ -73,8 +73,8 @@
 //     it can be selected: right after the batch with InLayer::early_select, its
 //     nodes then reused through m_node_free, otherwise in end_layer().
 //     m_ccrep_ready is only a hint; the counts are checked again before selecting.
-//   Storage. Nodes sit in one vector, m_node_arena, reached by index with one
-//     parent link, and rewound at end_layer().
+//   Storage. m_node_arena is rewound at end_layer() and keeps its capacity, so
+//     after a few layers it no longer allocates.
 //
 // The reasons behind each piece are in doc/MkFinderV2p2-DesignNotes.md.
 //==============================================================================
