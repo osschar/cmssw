@@ -73,7 +73,7 @@ in the standalone build only. The finder increments them through
 **Code:** `MkFinderV2p2::process_layer()`, `process_layer_batch()`, the
 `LayerBatch` and `HitBatch` structs in `MkFinderV2p2.h`.
 
-`process_layer()` pulls CombCandidates into the layer, one `PrimTCandRep` per
+`process_layer()` pulls CombCandidates into the layer, one `CandIncoming` per
 live TrackCand, and drains the resulting queue NN candidates at a time. Pulling
 in stops once the queue holds NN entries, so the Matriplex batches run full.
 
@@ -92,7 +92,7 @@ in stops once the queue holds NN entries, so the Matriplex batches run full.
 
 Two batch widths are in play. `LayerBatch` is NN candidates wide and indexed by
 `i`. `HitBatch` is NN (candidate, hit) pairs wide and indexed by `h`, with
-`prim_idcs[h]` naming the candidate.
+`cand_idcs[h]` naming the candidate.
 
 Each phase keeps its own Matriplex batches full: pre-selection batches pairs
 across candidates, and the Kalman stage batches lanes across candidates and
@@ -215,7 +215,7 @@ searches, pixel seeds and the full pT range.
 
 ## Within-sensitive-region verdict
 
-**Code:** `MkFinderV2p2::determine_wsr()`, `PrimTCandRep::m_wsr`.
+**Code:** `MkFinderV2p2::determine_wsr()`, `CandIncoming::m_wsr`.
 
 The verdict is per candidate and per layer, and asks whether the segment the
 track cuts through the layer's bounding shell lies in sensitive material. V1
@@ -515,7 +515,7 @@ pass the real cut.
 
 ## Reduction and hit ordering
 
-**Code:** `PrimTCandRep::m_pqueue`, `preselect_hit_batch()`,
+**Code:** `CandIncoming::m_pqueue`, `preselect_hit_batch()`,
 `prepare_kalman_workload()`.
 
 **Reduction.** Hits that pass the cut go into a bounded priority queue keyed on
@@ -524,7 +524,7 @@ per sub-layer gives each sensor of a pair its own budget, so a busy sensor
 cannot crowd out the other. The cap sits upstream of the in-layer search and
 bounds what it can see. The queues and `m_layer_hits` use inline storage
 (`InlineVec`) sized by `InLayer::max_presel_hits_limit`, because a
-`PrimTCandRep` lives for one layer and a `std::vector` there allocated and freed
+`CandIncoming` lives for one layer and a `std::vector` there allocated and freed
 on every layer. The heaps run `std::push_heap` / `std::pop_heap` exactly as
 `std::priority_queue` does. Overlap availability varies strongly across the
 detector, so the cap should become per layer.
@@ -552,8 +552,8 @@ The trace records `sub_rank` (rank by ddphi within the sub-layer) and
 
 ## In-layer combinatorial search
 
-**Code:** `expand_in_layer()`, `harvest_sec_nodes()`, `SecTCandRep`,
-`MkFinderV2p2::m_sec_arena`.
+**Code:** `expand_in_layer()`, `harvest_nodes()`, `CandNode`,
+`MkFinderV2p2::m_node_arena`.
 
 **What it replaced.** The first version of v2p2 ran one Kalman update per
 pre-selected hit, all from the candidate's incoming state, and kept the lowest
@@ -599,11 +599,11 @@ measurement: taking it twice shrinks the covariance without adding information.
 on 20 events of chopped pT5, fully recovered tracks go from 82.4 % at depth 2
 to 90.8 % at depth 4.
 
-**Storage.** Nodes live in one `std::vector<SecTCandRep>` per finder, reached by
+**Storage.** Nodes live in one `std::vector<CandNode>` per finder, reached by
 index, with a single parent index each. A node exists to be walked back from,
 so a surviving leaf can register its hits into the CombCandidate; nothing needs
 to walk forward. `end_layer()` clears the vector and keeps its capacity. Slots
-of a selected CombCandidate go to a free list, `m_sec_free`, reused last in,
+of a selected CombCandidate go to a free list, `m_node_free`, reused last in,
 first out. A node with live children must not be reused, so slots are only ever
 freed a whole CombCandidate at a time, after it has materialised.
 
@@ -613,7 +613,7 @@ means a parent is always in the arena before its children are created. Nothing
 depends on parents having lower indices: each depth's harvest is handed on as a
 list of indices.
 
-A `SecTCandRep` carries a full `TrackState` and lives for one layer. A
+A `CandNode` carries a full `TrackState` and lives for one layer. A
 `HoTNode` in `CombCandidate::m_hots` is 12 bytes and lives for the event. That
 difference is why the two are separate.
 
@@ -631,7 +631,7 @@ search on was 60.79 s at cap 3 and 76.45 s at cap 4.
 ## Kalman hit acceptance
 
 **Code:** `plane::chi2_scaled()` in `KalmanOpArgs::do_kalman_stuff()`,
-`KalmanOpArgs::tsChi2Acc`, `harvest_sec_nodes()`,
+`KalmanOpArgs::tsChi2Acc`, `harvest_nodes()`,
 `V2p2Params::hit_chi2_cut`, `Policy::chi2_trk_fac`.
 
 **The cut.** A hit is accepted if
@@ -729,10 +729,10 @@ is fixed (the forward material model), as `Window::dphi_trk_fac` should.
 Everything that could continue a CombCandidate competes in one list on one
 score:
 
-- every in-layer path of every `PrimTCandRep`;
-- every `PrimTCandRep` as the hole it would record, including those that did
+- every in-layer path of every `CandIncoming`;
+- every `CandIncoming` as the hole it would record, including those that did
   find paths;
-- every TrackCand that did not become a `PrimTCandRep` (stopped, skipped at
+- every TrackCand that did not become a `CandIncoming` (stopped, skipped at
   pull-in), at its unchanged score.
 
 The list is partially sorted and the top `maxCandsPerSeed` survive. One sort is
@@ -792,7 +792,7 @@ and for the final output. It differs in three ways.
    local hit density, hole kind, the layer and direction. A new term adds a
    member without changing a function signature: a fact of the step or of the
    candidate is filled in `fill_step_geometry()`, a per-hit one accumulated in
-   `harvest_sec_nodes()`. The struct can be written to the trace for fitting a
+   `harvest_nodes()`. The struct can be written to the trace for fitting a
    score offline.
 
 A term keyed on the step should take its origin from the layer of the

@@ -53,7 +53,7 @@ namespace mkfit {
     mp_event = nullptr;
 
     // Finders are reused across seed blocks and events, and the queue holds
-    // pointers into CCandRep::m_primTCs. process_layer() asserts it is empty on exit.
+    // pointers into CCandRep::m_cands. process_layer() asserts it is empty on exit.
     m_active_ccreps.clear();
     m_cand_queue.clear();
     m_cand_queue_head = 0;
@@ -150,8 +150,8 @@ namespace mkfit {
       if (!ai->m_selected)
         select_and_materialise(*ai);
 
-      ai->m_primTCs.clear();
-      ai->m_sec_nodes.clear();
+      ai->m_cands.clear();
+      ai->m_nodes.clear();
 
       // A CombCandidate is finished once every TrackCand under it has stopped.
       bool is_finished = false;
@@ -184,7 +184,7 @@ namespace mkfit {
     // high water, since slots are reused but the vector never shrinks.
 #if defined(MKFIT_STANDALONE)
     {
-      const long hw = (long)m_sec_arena.size();
+      const long hw = (long)m_node_arena.size();
       V2P2_COUNT(n_arena_layers);
       V2P2_COUNT_ADD(n_arena_hw_sum, hw);
       long mx = g_v2p2_policy_counters.n_arena_hw_max.load();
@@ -192,8 +192,8 @@ namespace mkfit {
       }
     }
 #endif
-    m_sec_arena.clear();
-    m_sec_free.clear();
+    m_node_arena.clear();
+    m_node_free.clear();
 
     m_rz_limits.reset();
 
@@ -257,14 +257,14 @@ namespace mkfit {
         continue;
       }
 
-      // Create and register a PrimTCandRep for processing. m_primTCs does not
+      // Create and register a CandIncoming for processing. m_cands does not
       // reallocate, see the CCandRep constructor.
       {
-        PrimTCandRep& ptc = ccrep.m_primTCs.emplace_back(&ccrep, ic);
-        m_cand_queue.push_back(&ptc);
+        CandIncoming& cand = ccrep.m_cands.emplace_back(&ccrep, ic);
+        m_cand_queue.push_back(&cand);
       }
     }
-    ccrep.m_n_queued = (int)ccrep.m_primTCs.size();
+    ccrep.m_n_queued = (int)ccrep.m_cands.size();
     ccrep.m_selected = false;
     ++m_active_ccreps_pos;
   }
@@ -370,7 +370,7 @@ namespace mkfit {
 
   void MkFinderV2p2::prop_to_layer_edges(LayerBatch& b) {
     MkBins& B = b.B;
-    PrimTCandRep** prim_tcand_ptrs = b.ptc;
+    CandIncoming** cand_ptrs = b.cand;
 
     const int N_proc = b.N_proc = std::min(NN, cand_queue_size());
     B.m_n_proc = N_proc;
@@ -388,10 +388,10 @@ namespace mkfit {
                           mp_job->m_trk_info.prop_config().finding_inter_layer_pflags.use_param_b_field);
 
     for (int i = 0; i < N_proc; ++i) {
-      PrimTCandRep& ptc = *m_cand_queue[m_cand_queue_head++];
-      prim_tcand_ptrs[i] = &ptc;
-      TrackCand& tc = ptc.tcand();
-      --ptc.mp_ccrep->m_n_queued;
+      CandIncoming& cand = *m_cand_queue[m_cand_queue_head++];
+      cand_ptrs[i] = &cand;
+      TrackCand& tc = cand.tcand();
+      --cand.mp_ccrep->m_n_queued;
 
       // Copy in x, y,z, invpT, theta.
       B.m_isp.copyIn_partial_track_state(i, tc.state());
@@ -421,7 +421,7 @@ namespace mkfit {
   void MkFinderV2p2::determine_search_windows(LayerBatch& b) {
     SteeringParams::iterator& spi = *mp_steeringparams_iter;
     const int N_proc = b.N_proc;
-    PrimTCandRep** prim_tcand_ptrs = b.ptc;
+    CandIncoming** cand_ptrs = b.cand;
     MkBins& B = b.B;
     MkBinTrackCovExtract& TCE = b.TCE;
     MkBinLimits& BL_p = b.BL_p;
@@ -435,7 +435,7 @@ namespace mkfit {
     MPlexLV par0;
     MPlexLS err0;
     for (int i = 0; i < N_proc; ++i) {
-      const TrackCand& tc = prim_tcand_ptrs[i]->tcand();
+      const TrackCand& tc = cand_ptrs[i]->tcand();
       par0.copyIn(i, tc.parArray());
       err0.copyIn(i, tc.errArray());
     }
@@ -482,11 +482,11 @@ namespace mkfit {
 
 #ifdef MKFIT_TRACE
     for (int i = 0; i < N_proc; ++i) {
-      const PrimTCandRep& ptc = *prim_tcand_ptrs[i];
+      const CandIncoming& cand = *cand_ptrs[i];
       TrLayerSearch ls;
-      ls.state_id = ptc.tcand().m_trace_state_id;
-      ls.wsr = (signed char)ptc.m_wsr.m_wsr;
-      ls.wsr_in_gap = ptc.m_wsr.m_in_gap;
+      ls.state_id = cand.tcand().m_trace_state_id;
+      ls.wsr = (signed char)cand.m_wsr.m_wsr;
+      ls.wsr_in_gap = cand.m_wsr.m_in_gap;
       fill_layer(ls, *spi, m_rz_limits);
       fill_window(ls, B, TCE, i);
       fill_bins(ls, BL_p, m_rz_limits.m_is_double ? &BL_s : nullptr, i);
@@ -541,7 +541,7 @@ namespace mkfit {
 
     const int N_proc = b.N_proc;
     MkBins& B = b.B;
-    PrimTCandRep** prim_tcand_ptrs = b.ptc;
+    CandIncoming** cand_ptrs = b.cand;
 
     const bool is_barrel = m_rz_limits.m_is_barrel;
     const float q_lo = is_barrel ? m_rz_limits.m_zmin : m_rz_limits.m_rin;
@@ -586,7 +586,7 @@ namespace mkfit {
         }
       }
 
-      prim_tcand_ptrs[i]->m_wsr = w;
+      cand_ptrs[i]->m_wsr = w;
 
       switch (w.m_wsr) {
         case WSR_Inside:
@@ -628,7 +628,7 @@ namespace mkfit {
     HitBatch hb;
     int& fill_pos = hb.fill_pos;
     auto& is_plex = hb.is_plex;
-    auto& prim_idcs = hb.prim_idcs;
+    auto& cand_idcs = hb.cand_idcs;
     auto& hit_idcs = hb.hit_idcs;
     auto& hit_orig_idcs = hb.hit_orig_idcs;
 
@@ -648,7 +648,7 @@ namespace mkfit {
         using bcnt_t = LayerOfHits::bin_content_t;
 
         // The track does not reach this layer.
-        if (Policy::use_wsr && b.ptc[i]->m_wsr.m_wsr == WSR_Outside)
+        if (Policy::use_wsr && b.cand[i]->m_wsr.m_wsr == WSR_Outside)
           continue;
 
         // Line pre-cut, per candidate: the straight line m_sp1 -> m_sp2 in
@@ -742,7 +742,7 @@ namespace mkfit {
               // The Hit is read in preselect_hit_batch().
               __builtin_prefetch(&L.refHit(hi_orig));
 
-              prim_idcs[fill_pos] = i;
+              cand_idcs[fill_pos] = i;
               hit_idcs[fill_pos] = hi;
               hit_orig_idcs[fill_pos] = hi_orig;
               is_plex.copyIn(fill_pos, B.m_isp, i);
@@ -771,12 +771,12 @@ namespace mkfit {
       const float w_phi = (B.m_phi_max[i] - B.m_phi_min[i]) + 2.0f * b.rho_dphi[i];
       const float w_q = (B.m_q_max[i] - B.m_q_min[i]) + 2.0f * b.rho_dq[i];
       const float area = std::max(1e-4f, w_phi * r * w_q);
-      b.ptc[i]->m_log_rho = std::log(std::max(1e-6f, (b.n_scanned[i] + 1.0f) / area));
+      b.cand[i]->m_log_rho = std::log(std::max(1e-6f, (b.n_scanned[i] + 1.0f) / area));
 #if defined(MKFIT_STANDALONE)
       // Diag::final_beam_purity: hits in the density region, the expected background
       // of this layer step, per (seed, layer), forward search only.
       if (Diag::final_beam_purity && spi.type() == SteeringParams::IT_FwdSearch) {
-        const int seed = b.ptc[i]->ccand().seed_origin_index();
+        const int seed = b.cand[i]->ccand().seed_origin_index();
         v2p2_final_beam_bg_record(seed, spi->m_layer, b.n_scanned[i]);
         if (spi->m_layer_sec >= 0)
           v2p2_final_beam_bg_record(seed, spi->m_layer_sec, b.n_scanned[i]);
@@ -845,11 +845,11 @@ namespace mkfit {
       LayerBatch& b, HitBatch& hb, const LayerOfHits& L, int N_proc_hits, bool is_sec_layer) {
     MkBins& B = b.B;
     MkBinTrackCovExtract& TCE = b.TCE;
-    PrimTCandRep** prim_tcand_ptrs = b.ptc;
+    CandIncoming** cand_ptrs = b.cand;
     mini_propagators::Hermite3D& H = b.H;
     namespace mp = mini_propagators;
     auto& is_plex = hb.is_plex;
-    auto& prim_idcs = hb.prim_idcs;
+    auto& cand_idcs = hb.cand_idcs;
     auto& hit_idcs = hb.hit_idcs;
     auto& hit_orig_idcs = hb.hit_orig_idcs;
 #ifdef MKFIT_TRACE_PROP_COMPARE
@@ -878,15 +878,15 @@ namespace mkfit {
       module_pos.copyIn(h, mi.pos.Array());
       module_norm.copyIn(h, mi.zdir.Array());
 
-      h3d.copyIn(h, H, prim_idcs[h]);
+      h3d.copyIn(h, H, cand_idcs[h]);
 
 #ifdef MKFIT_TRACE
       module_xdir.copyIn(h, mi.xdir.Array());
       module_ydir.copyIn(h, mi.calc_ydir().Array());
-      PrimTCandRep& ptc = *prim_tcand_ptrs[prim_idcs[h]];
-      TrHitMatch hm = make_hitmatch(mp_event, ptc.ccand().seed_origin_index(), L, hit_orig_idcs[h], is_sec_layer);
-      hm.state_id = ptc.tcand().m_trace_state_id;
-      hm.search_id = tr_layersearch_ids[prim_idcs[h]];
+      CandIncoming& cand = *cand_ptrs[cand_idcs[h]];
+      TrHitMatch hm = make_hitmatch(mp_event, cand.ccand().seed_origin_index(), L, hit_orig_idcs[h], is_sec_layer);
+      hm.state_id = cand.tcand().m_trace_state_id;
+      hm.search_id = tr_layersearch_ids[cand_idcs[h]];
       tr_hitmatch_ids[h] = mp_event->trace_hitmatch(std::move(hm)).id;
 #endif
     }
@@ -923,7 +923,7 @@ namespace mkfit {
     // Post-process hits into the per-candidate queues. The cut is taken on
     // h3_state, the cubic solved onto the hit's module plane.
     for (int h = 0; h < N_proc_hits; ++h) {
-      PrimTCandRep& ptc = *prim_tcand_ptrs[prim_idcs[h]];
+      CandIncoming& cand = *cand_ptrs[cand_idcs[h]];
       float q, ddq, phi, ddphi;
       if (m_rz_limits.m_is_barrel) {
         q = h3_state.z[h];
@@ -938,19 +938,19 @@ namespace mkfit {
       const float dq_trk =
           Window::surface_q
               ? surface_referenced_dq(
-                    B.m_dq_track[prim_idcs[h]], TCE, prim_idcs[h], h3_state, h, module_norm, m_rz_limits.m_is_barrel)
-              : B.m_dq_track[prim_idcs[h]];
+                    B.m_dq_track[cand_idcs[h]], TCE, cand_idcs[h], h3_state, h, module_norm, m_rz_limits.m_is_barrel)
+              : B.m_dq_track[cand_idcs[h]];
 
       // The pre-selection cut. See doc/MkFinderV2p2-DesignNotes.md, "Search window".
       const float dq_cut = Window::dq_trk_fac * dq_trk + Window::dq_hit_fac * L.hit_q_half_length(hit_idcs[h]);
       const float dphi_cut =
-          Window::dphi_trk_fac * B.m_dphi_track[prim_idcs[h]] +
+          Window::dphi_trk_fac * B.m_dphi_track[cand_idcs[h]] +
           (Window::phi_per_hit ? Window::dphi_hit_fac * L.hit_phi_half_extent(hit_idcs[h]) : Window::dphi_flat_rad);
       const bool dqdphi_presel = ddq < dq_cut && ddphi < dphi_cut;
 
       // For every hit, not only those that pass: the debug printout shows it.
       h3_state.dalpha[h] =
-          B.m_sp1.dalpha[prim_idcs[h]] + h3dop.m_T[h] * (B.m_sp2.dalpha[prim_idcs[h]] - B.m_sp1.dalpha[prim_idcs[h]]);
+          B.m_sp1.dalpha[cand_idcs[h]] + h3dop.m_T[h] * (B.m_sp2.dalpha[cand_idcs[h]] - B.m_sp1.dalpha[cand_idcs[h]]);
 
 #ifdef DEBUG
       // clang-format off
@@ -959,7 +959,7 @@ namespace mkfit {
                 ddq, ddphi, h3_state.dalpha[h], dqdphi_presel ? "PASS" : "REJECT",
                 (int) (ddq < dq_cut), (int) (ddphi < dphi_cut));
         dprintf("       ddq=%.3f, dq_track=%.4f, hit_q_half_len=%.4f, dq_cut=%.4f\n",
-                ddq, B.m_dq_track[prim_idcs[h]], L.hit_q_half_length(hit_idcs[h]), dq_cut);
+                ddq, B.m_dq_track[cand_idcs[h]], L.hit_q_half_length(hit_idcs[h]), dq_cut);
 
         dprintf("      H3 d0=%.4f d1=%.4f -> d2=%e t2=%e -> d3=%e t3=%e ... dalpha=%6.4f\n",
                d0[h], d1[h], d2[h], t2[h], d3[h], h3dop.m_T[h],
@@ -992,7 +992,7 @@ namespace mkfit {
       tr_hitmatch.hit_q_half_len = L.hit_q_half_length(hit_idcs[h]);
       tr_hitmatch.passed_preselect = dqdphi_presel;
 
-      auto& tr_ls = mp_event->tr_layersearch(tr_layersearch_ids[prim_idcs[h]]);
+      auto& tr_ls = mp_event->tr_layersearch(tr_layersearch_ids[cand_idcs[h]]);
       if (dqdphi_presel)
         ++tr_ls.n_hits_presel;
 
@@ -1014,17 +1014,17 @@ namespace mkfit {
       const int sl = is_sec_layer ? 1 : 0;
       auto do_pqueue_push = [&]() {
 #ifdef MKFIT_TRACE
-        ptc.pq_push(
+        cand.pq_push(
             sl, {ddphi, hit_orig_idcs[h], hit_idcs[h], L.layer_id(), tr_hitmatch_ids[h], {h3_state, h, is_plex, h}});
 #else
-        ptc.pq_push(sl, {ddphi, hit_orig_idcs[h], hit_idcs[h], L.layer_id(), {h3_state, h, is_plex, h}});
+        cand.pq_push(sl, {ddphi, hit_orig_idcs[h], hit_idcs[h], L.layer_id(), {h3_state, h, is_plex, h}});
 #endif
       };
 
-      if (ptc.m_pqueue[sl].size() < mp_job->v2p2().max_presel_hits) {
+      if (cand.m_pqueue[sl].size() < mp_job->v2p2().max_presel_hits) {
         do_pqueue_push();
-      } else if (ddphi < ptc.pq_top(sl).score) {
-        ptc.pq_pop(sl);
+      } else if (ddphi < cand.pq_top(sl).score) {
+        cand.pq_pop(sl);
         do_pqueue_push();
       }
     }
@@ -1036,7 +1036,7 @@ namespace mkfit {
 
   void MkFinderV2p2::prepare_kalman_workload(LayerBatch& b) {
     const int N_proc = b.N_proc;
-    PrimTCandRep** prim_tcand_ptrs = b.ptc;
+    CandIncoming** cand_ptrs = b.cand;
 #ifdef MKFIT_TRACE
     int* tr_layersearch_ids = b.tr_layersearch_ids;
 #endif
@@ -1044,14 +1044,14 @@ namespace mkfit {
     // Copy both sub-layer queues into one list, then order it by path length. The
     // queues only bound the number of hits; their order is not used.
     for (int i = 0; i < N_proc; ++i) {
-      PrimTCandRep& ptc = *prim_tcand_ptrs[i];
+      CandIncoming& cand = *cand_ptrs[i];
 #ifdef MKFIT_TRACE
-      mp_event->tr_layersearch(tr_layersearch_ids[i]).n_hits_pqueue = ptc.m_pqueue[0].size() + ptc.m_pqueue[1].size();
+      mp_event->tr_layersearch(tr_layersearch_ids[i]).n_hits_pqueue = cand.m_pqueue[0].size() + cand.m_pqueue[1].size();
 #endif
       for (int sl = 0; sl < 2; ++sl) {
-        for (const auto& e : ptc.m_pqueue[sl])
-          ptc.m_layer_hits.push_back(e);
-        ptc.m_pqueue[sl].clear();
+        for (const auto& e : cand.m_pqueue[sl])
+          cand.m_layer_hits.push_back(e);
+        cand.m_pqueue[sl].clear();
       }
 
       // Path order for the in-layer search: dalpha is monotone in path length
@@ -1062,9 +1062,9 @@ namespace mkfit {
       // Once per candidate is enough. See doc/MkFinderV2p2-DesignNotes.md,
       // "Reduction and hit ordering".
       const float dir = b.B.m_sp2.dalpha[i] >= b.B.m_sp1.dalpha[i] ? 1.0f : -1.0f;
-      std::sort(ptc.m_layer_hits.begin(),
-                ptc.m_layer_hits.end(),
-                [dir](const PrimTCandRep::PQE& a, const PrimTCandRep::PQE& b) {
+      std::sort(cand.m_layer_hits.begin(),
+                cand.m_layer_hits.end(),
+                [dir](const CandIncoming::PQE& a, const CandIncoming::PQE& b) {
                   const float ka = dir * a.mixed_state.dalpha, kb = dir * b.mixed_state.dalpha;
                   if (ka != kb)
                     return ka < kb;
@@ -1082,10 +1082,10 @@ namespace mkfit {
     // sub-layer, full_rank across both. Counted rather than sorted, so
     // m_layer_hits keeps its path order.
     for (int i = 0; i < N_proc; ++i) {
-      PrimTCandRep& ptc = *prim_tcand_ptrs[i];
-      for (const auto& e : ptc.m_layer_hits) {
+      CandIncoming& cand = *cand_ptrs[i];
+      for (const auto& e : cand.m_layer_hits) {
         int better = 0, better_sub = 0;
-        for (const auto& o : ptc.m_layer_hits) {
+        for (const auto& o : cand.m_layer_hits) {
           better += (o.score < e.score);
           better_sub += (o.score < e.score && o.layer == e.layer);
         }
@@ -1104,7 +1104,7 @@ namespace mkfit {
   // items; from there it is a worklist, not recursion: each flush harvests
   // nodes into m_deep_queue, rk_pump() turns them into deeper items, and so on
   // to max_sec_depth. Items in a batch that is not yet full wait for a later
-  // layer batch or rk_drain(). Nodes live in m_sec_arena until their
+  // layer batch or rk_drain(). Nodes live in m_node_arena until their
   // CombCandidate is selected. See doc/MkFinderV2p2-DesignNotes.md,
   // "In-layer combinatorial search".
   //----------------------------------------------------------------------------
@@ -1112,14 +1112,14 @@ namespace mkfit {
   void MkFinderV2p2::expand_in_layer(LayerBatch& b) {
     rk_setup(m_koa_d0, false);
     rk_setup(m_koa_deep, true);
-    m_sec_out.clear();
+    m_kalman_out.clear();
     for (int i = 0; i < b.N_proc; ++i) {
-      PrimTCandRep& ptc = *b.ptc[i];
-      if (Policy::use_wsr && ptc.m_wsr.m_wsr == WSR_Outside)
+      CandIncoming& cand = *b.cand[i];
+      if (Policy::use_wsr && cand.m_wsr.m_wsr == WSR_Outside)
         continue;
-      const int nlh = (int)ptc.m_layer_hits.size();
+      const int nlh = (int)cand.m_layer_hits.size();
       for (int lh = 0; lh < nlh; ++lh)
-        rk_add_item(m_koa_d0, ptc, ptc.m_layer_hits[lh], -1, lh);
+        rk_add_item(m_koa_d0, cand, cand.m_layer_hits[lh], -1, lh);
       rk_pump();
     }
   }
@@ -1133,7 +1133,7 @@ namespace mkfit {
 
   void MkFinderV2p2::rk_setup(KalmanOpArgs& koa, bool solve_plane) {
     koa.prop_config = &mp_job->m_trk_info.prop_config();
-    koa.mp_out = &m_sec_out;
+    koa.mp_out = &m_kalman_out;
     koa.m_solve_plane = solve_plane;
 #ifdef MKFIT_TRACE
     koa.mp_event = mp_event;
@@ -1141,17 +1141,17 @@ namespace mkfit {
   }
 
   void MkFinderV2p2::rk_add_item(
-      KalmanOpArgs& koa, PrimTCandRep& ptc, const PrimTCandRep::PQE& pqe, int parent_idx, int hit_pos) {
-    koa.item_begin(&ptc, {(int)pqe.hit_orig_index, pqe.layer}, parent_idx, hit_pos);
+      KalmanOpArgs& koa, CandIncoming& cand, const CandIncoming::PQE& pqe, int parent_idx, int hit_pos) {
+    koa.item_begin(&cand, {(int)pqe.hit_orig_index, pqe.layer}, parent_idx, hit_pos);
     if (parent_idx < 0)
-      koa.load_state_err_chg(pqe.mixed_state, ptc.tcand().state());
+      koa.load_state_err_chg(pqe.mixed_state, cand.tcand().state());
     else
-      koa.load_state_err_chg(m_sec_arena[parent_idx].m_state);
+      koa.load_state_err_chg(m_node_arena[parent_idx].m_state);
 #ifdef MKFIT_TRACE
     koa.set_tr_hitmatch_id(pqe.tr_hitmatch_id);
 #endif
     load_hit_module(koa, pqe);
-    ++ptc.mp_ccrep->m_n_inflight;
+    ++cand.mp_ccrep->m_n_inflight;
     if (koa.item_finished())
       rk_flush(koa);
   }
@@ -1170,14 +1170,14 @@ namespace mkfit {
     koa.reset();
 
     m_ccrep_touched.clear();
-    for (const auto& o : m_sec_out)
-      m_ccrep_touched.push_back(o.ptc->mp_ccrep);
-    harvest_sec_nodes();
-    for (const int ni : m_sec_harvested) {
-      const SecTCandRep& n = m_sec_arena[ni];
+    for (const auto& o : m_kalman_out)
+      m_ccrep_touched.push_back(o.cand->mp_ccrep);
+    harvest_nodes();
+    for (const int ni : m_nodes_harvested) {
+      const CandNode& n = m_node_arena[ni];
       if (n.m_feat.n_hits < mp_job->v2p2().max_sec_depth) {
         m_deep_queue.push_back(ni);
-        ++n.m_ptc->mp_ccrep->m_n_inflight;
+        ++n.m_cand->mp_ccrep->m_n_inflight;
       }
     }
     // Items retire after their children are queued, so a count never passes
@@ -1190,16 +1190,16 @@ namespace mkfit {
   void MkFinderV2p2::rk_expand_node(int ni) {
     // By index throughout: a flush inside this loop may grow the arena. The node
     // itself cannot be freed meanwhile, its expansion still counts as in flight.
-    PrimTCandRep& ptc = *m_sec_arena[ni].m_ptc;
-    const int nlh = (int)ptc.m_layer_hits.size();
-    for (int lh = m_sec_arena[ni].m_hit_pos + 1; lh < nlh; ++lh) {
-      const PrimTCandRep::PQE& pqe = ptc.m_layer_hits[lh];
+    CandIncoming& cand = *m_node_arena[ni].m_cand;
+    const int nlh = (int)cand.m_layer_hits.size();
+    for (int lh = m_node_arena[ni].m_hit_pos + 1; lh < nlh; ++lh) {
+      const CandIncoming::PQE& pqe = cand.m_layer_hits[lh];
       // A second hit from a module already on this path is a split cluster or
       // another track's hit, not an overlap: skip it. The walk back is at most
       // V2p2Params::max_sec_depth long.
       bool same_module = false;
-      for (int ci = ni; ci >= 0 && !same_module; ci = m_sec_arena[ci].m_parent_idx) {
-        const SecTCandRep& an = m_sec_arena[ci];
+      for (int ci = ni; ci >= 0 && !same_module; ci = m_node_arena[ci].m_parent_idx) {
+        const CandNode& an = m_node_arena[ci];
         if (an.m_hot.layer != pqe.layer)
           continue;
         const auto& La = mp_job->m_event_of_hits[an.m_hot.layer];
@@ -1209,7 +1209,7 @@ namespace mkfit {
         V2P2_COUNT(n_same_module_vetoed);
         continue;
       }
-      rk_add_item(m_koa_deep, ptc, pqe, ni, lh);
+      rk_add_item(m_koa_deep, cand, pqe, ni, lh);
     }
   }
 
@@ -1217,7 +1217,7 @@ namespace mkfit {
     while (!m_deep_queue.empty()) {
       const int ni = m_deep_queue.back();
       m_deep_queue.pop_back();
-      CCandRep* c = m_sec_arena[ni].m_ptc->mp_ccrep;
+      CCandRep* c = m_node_arena[ni].m_cand->mp_ccrep;
       rk_expand_node(ni);
       if (--c->m_n_inflight == 0 && c->m_n_queued == 0)
         m_ccrep_ready.push_back(c);
@@ -1236,19 +1236,19 @@ namespace mkfit {
     m_ccrep_ready.clear();  // end_layer() selects everything not yet selected
   }
 
-  void MkFinderV2p2::load_hit_module(KalmanOpArgs& koa, const PrimTCandRep::PQE& pqe) const {
+  void MkFinderV2p2::load_hit_module(KalmanOpArgs& koa, const CandIncoming::PQE& pqe) const {
     const auto& L = mp_job->m_event_of_hits[pqe.layer];
     const Hit& hit = L.refHit(pqe.hit_orig_index);
     koa.load_hit_module(hit, L.layer_info().module_info(hit.detIDinLayer()));
   }
 
-  void MkFinderV2p2::harvest_sec_nodes() {
-    m_sec_harvested.clear();
-    for (const auto& o : m_sec_out) {
+  void MkFinderV2p2::harvest_nodes() {
+    m_nodes_harvested.clear();
+    for (const auto& o : m_kalman_out) {
       if (!(o.chi2_acc < mp_job->v2p2().hit_chi2_cut))  // also rejects NaN
         continue;
-      SecTCandRep n;
-      n.m_ptc = o.ptc;
+      CandNode n;
+      n.m_cand = o.cand;
       n.m_parent_idx = o.parent_idx;
       n.m_hit_pos = o.hit_pos;
       n.m_hot = o.hot;
@@ -1257,14 +1257,14 @@ namespace mkfit {
 
       // Features accumulate parent -> child. The parent is always already in the
       // arena: a node's children are queued only after it has been harvested.
-      const LayerStepFeatures* pf = (o.parent_idx >= 0) ? &m_sec_arena[o.parent_idx].m_feat : nullptr;
+      const LayerStepFeatures* pf = (o.parent_idx >= 0) ? &m_node_arena[o.parent_idx].m_feat : nullptr;
       LayerStepFeatures& f = n.m_feat;
       if (pf)
         f = *pf;
       else
-        fill_step_geometry(f, o.ptc->m_log_rho);
+        fill_step_geometry(f, o.cand->m_log_rho);
       if (pf)
-        V2P2_COUNT(n_sec_deep);
+        V2P2_COUNT(n_nodes_deep);
       f.n_hits = (pf ? pf->n_hits : 0) + 1;
       f.n_overlap = f.n_hits - 1;
       f.hole_kind = V2P2_NoHole;
@@ -1273,22 +1273,22 @@ namespace mkfit {
 #ifdef MKFIT_TRACE
       n.m_tr_hitmatch_id = o.tr_hitmatch_id;
 #endif
-      const int slot = sec_node_slot();  // may grow the arena: pf is dead by now
-      m_sec_arena[slot] = n;             // a reused slot is overwritten whole
-      o.ptc->mp_ccrep->m_sec_nodes.push_back(slot);
-      m_sec_harvested.push_back(slot);
+      const int slot = node_slot();  // may grow the arena: pf is dead by now
+      m_node_arena[slot] = n;        // a reused slot is overwritten whole
+      o.cand->mp_ccrep->m_nodes.push_back(slot);
+      m_nodes_harvested.push_back(slot);
     }
-    m_sec_out.clear();
-    V2P2_COUNT_ADD(n_sec_nodes, (long)m_sec_harvested.size());
+    m_kalman_out.clear();
+    V2P2_COUNT_ADD(n_nodes, (long)m_nodes_harvested.size());
   }
 
-  int MkFinderV2p2::sec_node_slot() {
-    if (m_sec_free.empty()) {
-      m_sec_arena.emplace_back();
-      return (int)m_sec_arena.size() - 1;
+  int MkFinderV2p2::node_slot() {
+    if (m_node_free.empty()) {
+      m_node_arena.emplace_back();
+      return (int)m_node_arena.size() - 1;
     }
-    const int slot = m_sec_free.back();
-    m_sec_free.pop_back();
+    const int slot = m_node_free.back();
+    m_node_free.pop_back();
     return slot;
   }
 
@@ -1313,19 +1313,19 @@ namespace mkfit {
   //----------------------------------------------------------------------------
 
   void MkFinderV2p2::select_completed_ccreps(const LayerBatch& b) {
-    // The batch's PrimTCandReps stay alive: end_layer() clears m_primTCs.
+    // The batch's incoming candidates stay alive: end_layer() clears m_cands.
     auto try_select = [this](CCandRep& ccrep) {
       if (ccrep.m_n_queued > 0 || ccrep.m_n_inflight > 0 || ccrep.m_selected)
         return;
       select_and_materialise(ccrep);
       ccrep.m_selected = true;
       V2P2_COUNT(n_early_selections);
-      for (const int ni : ccrep.m_sec_nodes)
-        m_sec_free.push_back(ni);
-      ccrep.m_sec_nodes.clear();
+      for (const int ni : ccrep.m_nodes)
+        m_node_free.push_back(ni);
+      ccrep.m_nodes.clear();
     };
     for (int i = 0; i < b.N_proc; ++i)
-      try_select(*b.ptc[i]->mp_ccrep);
+      try_select(*b.cand[i]->mp_ccrep);
     for (CCandRep* c : m_ccrep_ready)
       try_select(*c);
     m_ccrep_ready.clear();
@@ -1337,40 +1337,40 @@ namespace mkfit {
 
     m_sel.clear();
 
-    // Which TrackCands got a PrimTCandRep this layer. The rest are entered
+    // Which TrackCands got a CandIncoming this layer. The rest are entered
     // unchanged below.
     bool has_ptc[64] = {false};
     const int n_tc = (int)ccand.size();
 
-    for (auto& ptc : ccrep.m_primTCs) {
-      if (ptc.m_origin_tcand_index < 64)
-        has_ptc[ptc.m_origin_tcand_index] = true;
+    for (auto& cand : ccrep.m_cands) {
+      if (cand.m_origin_tcand_index < 64)
+        has_ptc[cand.m_origin_tcand_index] = true;
 
-      TrackCand& tc = ptc.tcand();
+      TrackCand& tc = cand.tcand();
 
-      // Every PrimTCandRep also competes as the hole it would record, including
+      // Every CandIncoming also competes as the hole it would record, including
       // those that found paths.
       // WSR_Outside is not a hole: the candidate competes unchanged.
-      if (Policy::use_wsr && ptc.m_wsr.m_wsr == WSR_Outside) {
+      if (Policy::use_wsr && cand.m_wsr.m_wsr == WSR_Outside) {
         V2P2_COUNT(n_layer_skipped);
-        m_sel.push_back({ptc.m_origin_tcand_index, -1, 0, false, tc.score()});
+        m_sel.push_back({cand.m_origin_tcand_index, -1, 0, false, tc.score()});
       } else {
-        const int fake = fake_hit_index(tc, ptc.m_wsr);
+        const int fake = fake_hit_index(tc, cand.m_wsr);
         LayerStepFeatures f;
         fill_step_geometry(f, 0.0f);
         f.hole_kind = v2p2_hole_kind(fake);
         m_sel.push_back(
-            {ptc.m_origin_tcand_index, -1, fake, true, tc.score() + v2p2_layer_step_score(f, mp_job->v2p2())});
+            {cand.m_origin_tcand_index, -1, fake, true, tc.score() + v2p2_layer_step_score(f, mp_job->v2p2())});
       }
     }
 
-    for (const int ni : ccrep.m_sec_nodes) {
-      const SecTCandRep& n = m_sec_arena[ni];
-      m_sel.push_back({n.m_ptc->m_origin_tcand_index,
+    for (const int ni : ccrep.m_nodes) {
+      const CandNode& n = m_node_arena[ni];
+      m_sel.push_back({n.m_cand->m_origin_tcand_index,
                        ni,
                        0,
                        false,
-                       n.m_ptc->tcand().score() + v2p2_layer_step_score(n.m_feat, mp_job->v2p2())});
+                       n.m_cand->tcand().score() + v2p2_layer_step_score(n.m_feat, mp_job->v2p2())});
     }
 
     // Stopped or pull-in-skipped TrackCands, unchanged, at their own score. With
@@ -1433,10 +1433,10 @@ namespace mkfit {
       if (e.node_idx >= 0) {
         int chain[InLayer::max_sec_depth_limit];
         int n_chain = 0;
-        for (int ci = e.node_idx; ci >= 0; ci = m_sec_arena[ci].m_parent_idx)
+        for (int ci = e.node_idx; ci >= 0; ci = m_node_arena[ci].m_parent_idx)
           chain[n_chain++] = ci;
         for (int c = n_chain - 1; c >= 0; --c) {
-          const SecTCandRep& n = m_sec_arena[chain[c]];
+          const CandNode& n = m_node_arena[chain[c]];
           nc.addHitIdx(n.m_hot.index, n.m_hot.layer, n.m_chi2);
           if (c != n_chain - 1) {
             nc.incOverlapCount();  // a second hit in one layer: an overlap, or the sister sensor of a paired entry
@@ -1452,7 +1452,7 @@ namespace mkfit {
           nc.m_trace_state_id = id;
 #endif
         }
-        nc.setState(m_sec_arena[e.node_idx].m_state);
+        nc.setState(m_node_arena[e.node_idx].m_state);
         V2P2_COUNT(n_path_taken);
         if (n_chain > 1)
           V2P2_COUNT_ADD(n_extra_hits, n_chain - 1);
@@ -1531,9 +1531,9 @@ namespace mkfit {
             if (f.node_idx < 0 || f.tcand_idx != e.tcand_idx)
               continue;
             int root = f.node_idx;
-            while (m_sec_arena[root].m_parent_idx >= 0)
-              root = m_sec_arena[root].m_parent_idx;
-            const SecTCandRep& r = m_sec_arena[root];
+            while (m_node_arena[root].m_parent_idx >= 0)
+              root = m_node_arena[root].m_parent_idx;
+            const CandNode& r = m_node_arena[root];
             if (InLayer::sister_hole_chi2 > 0.0f && !(r.m_chi2 < InLayer::sister_hole_chi2))
               continue;
             const unsigned int d_this = detid_of(r.m_hot.layer, r.m_hot.index);

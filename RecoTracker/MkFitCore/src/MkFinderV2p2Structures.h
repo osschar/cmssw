@@ -21,7 +21,7 @@ namespace mkfit {
 #endif
 
   struct CCandRep;
-  struct PrimTCandRep;
+  struct CandIncoming;
 
   //----------------------------------------------------------------------------
 
@@ -58,14 +58,14 @@ namespace mkfit {
 
   // One node of the in-layer combinatorial tree: a candidate that has taken a
   // particular sequence of hits within this layer, with the Kalman updates
-  // applied. Nodes live in MkFinderV2p2::m_sec_arena, are reached by index and
+  // applied. Nodes live in MkFinderV2p2::m_node_arena, are reached by index and
   // link only to their parent. See doc/MkFinderV2p2-DesignNotes.md,
   // "In-layer combinatorial search".
-  struct SecTCandRep {
-    PrimTCandRep* m_ptc;  // the candidate this path extends
-    int m_parent_idx;     // arena index of the predecessor; -1 = the PrimTCandRep itself
-    int m_hit_pos;        // position of this hit in m_ptc->m_layer_hits; the next
-                          // hit a child may take is at m_hit_pos + 1
+  struct CandNode {
+    CandIncoming* m_cand;  // the candidate this path extends
+    int m_parent_idx;      // arena index of the predecessor; -1 = the CandIncoming itself
+    int m_hit_pos;         // position of this hit in m_cand->m_layer_hits; the next
+                           // hit a child may take is at m_hit_pos + 1
     HitOnTrack m_hot;
     TrackState m_state;  // AFTER the update at m_hot
     float m_chi2;        // of this hit alone
@@ -82,8 +82,8 @@ namespace mkfit {
   // One TrackCand of a CombCandidate entering the layer. Its state stays in the
   // TrackCand (tcand()); this carries the layer's work for it: the pre-selection
   // queues per sub-layer, the path-ordered hits, the WSR verdict and the local
-  // hit density. Lives in CCandRep::m_primTCs for one layer.
-  struct PrimTCandRep {
+  // hit density. Lives in CCandRep::m_cands for one layer.
+  struct CandIncoming {
     CCandRep* mp_ccrep;
     int m_origin_tcand_index;  // TrackCand index in CombCandidate
 
@@ -126,7 +126,7 @@ namespace mkfit {
 
     float m_log_rho = 0.0f;  // local hit density, ln(hits / cm^2), for the score
 
-    PrimTCandRep(CCandRep* ccr, int orig_idx) {
+    CandIncoming(CCandRep* ccr, int orig_idx) {
       mp_ccrep = ccr;
       m_origin_tcand_index = orig_idx;
     }
@@ -143,24 +143,24 @@ namespace mkfit {
     CombCandidate& ccand();
     TrackCand& tcand();
     const TrackCand& tcand() const;
-  };  // end struct PrimTCandRep
+  };  // end struct CandIncoming
 
   //----------------------------------------------------------------------------
 
-  // One CombCandidate (one seed) in the search: its PrimTCandReps in this layer,
+  // One CombCandidate (one seed) in the search: its incoming candidates in this layer,
   // the arena indices of all their in-layer paths, and the counts that say when
   // it can be selected. Lives in MkFinderV2p2::m_active_ccreps from pickup until
   // all its TrackCands have stopped.
   struct CCandRep {
     CombCandidate& m_ccand;
 
-    std::vector<PrimTCandRep> m_primTCs;
+    std::vector<CandIncoming> m_cands;
 
     // Arena indices of every in-layer path of this CombCandidate, across all its
-    // PrimTCandReps, for the end-of-layer selection.
-    std::vector<int> m_sec_nodes;
+    // incoming candidates, for the end-of-layer selection.
+    std::vector<int> m_nodes;
 
-    // PrimTCandReps of this layer still in MkFinderV2p2::m_cand_queue. They are
+    // Incoming candidates of this layer still in MkFinderV2p2::m_cand_queue. They are
     // queued together, so at zero all of them have been through pre-selection.
     int m_n_queued = 0;
     // Kalman items in flight plus nodes waiting to be expanded. Selection needs
@@ -171,14 +171,14 @@ namespace mkfit {
     // CombCandidate's capacity. See InLayer::late_max_cands.
     int m_max_cands = 0;
 
-    // m_cand_queue holds pointers into m_primTCs, so it must never reallocate:
+    // m_cand_queue holds pointers into m_cands, so it must never reallocate:
     // a CombCandidate never has more TrackCands than its capacity.
-    CCandRep(CombCandidate& ccand) : m_ccand(ccand) { m_primTCs.reserve(ccand.capacity()); }
+    CCandRep(CombCandidate& ccand) : m_ccand(ccand) { m_cands.reserve(ccand.capacity()); }
   };  // end struct CCandRep
 
-  inline CombCandidate& PrimTCandRep::ccand() { return mp_ccrep->m_ccand; }
-  inline TrackCand& PrimTCandRep::tcand() { return mp_ccrep->m_ccand[m_origin_tcand_index]; }
-  inline const TrackCand& PrimTCandRep::tcand() const { return mp_ccrep->m_ccand[m_origin_tcand_index]; }
+  inline CombCandidate& CandIncoming::ccand() { return mp_ccrep->m_ccand; }
+  inline TrackCand& CandIncoming::tcand() { return mp_ccrep->m_ccand[m_origin_tcand_index]; }
+  inline const TrackCand& CandIncoming::tcand() const { return mp_ccrep->m_ccand[m_origin_tcand_index]; }
 
   //----------------------------------------------------------------------------
 
@@ -208,10 +208,10 @@ namespace mkfit {
   // and module planes, where each lane came from, and the outcomes, appended to
   // *mp_out by do_kalman_stuff().
   struct KalmanOpArgs : public BaseArgs {
-    PrimTCandRep* ptcp[NN];
+    CandIncoming* candp[NN];
     HitOnTrack hot[NN];
     // Provenance of each lane, for the in-layer expansion: which arena node this
-    // extension grew from (-1 = the PrimTCandRep's own incoming state) and which
+    // extension grew from (-1 = the CandIncoming's own incoming state) and which
     // entry of m_layer_hits it takes.
     int parent_idx[NN];
     int hit_pos[NN];
@@ -234,7 +234,7 @@ namespace mkfit {
 
     // One result per lane, appended to *mp_out.
     struct ItemOut {
-      PrimTCandRep* ptc;
+      CandIncoming* cand;
       int parent_idx;
       int hit_pos;
       HitOnTrack hot;
@@ -255,8 +255,8 @@ namespace mkfit {
 
     void reset() { N_filled = 0; }
 
-    void item_begin(PrimTCandRep* ptc, HitOnTrack ht, int par_idx = -1, int hpos = -1) {
-      ptcp[N_filled] = ptc;
+    void item_begin(CandIncoming* cand, HitOnTrack ht, int par_idx = -1, int hpos = -1) {
+      candp[N_filled] = cand;
       hot[N_filled] = ht;
       parent_idx[N_filled] = par_idx;
       hit_pos[N_filled] = hpos;

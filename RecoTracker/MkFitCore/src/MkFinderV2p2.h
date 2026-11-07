@@ -110,10 +110,10 @@ namespace mkfit {
     //--------------------------------------------------------------------------
     // Per-pass state of process_layer_batch(). LayerBatch is NN candidates wide
     // and indexed by i; HitBatch is NN (candidate, hit) pairs wide and indexed by
-    // h, with prim_idcs[h] naming the candidate.
+    // h, with cand_idcs[h] naming the candidate.
     struct LayerBatch {
       int N_proc = 0;
-      PrimTCandRep* ptc[NN];          // the candidates in this pass
+      CandIncoming* cand[NN];         // the candidates in this pass
       MkBins B{0};                    // isp + the two bounding-surface crossings
       MkBinTrackCovExtract TCE;       // position block of the window covariance
       MkBinLimits BL_p, BL_s;         // binnor ranges, primary / secondary layer
@@ -130,7 +130,7 @@ namespace mkfit {
 
     struct HitBatch {
       int fill_pos = 0;
-      MPlexQI prim_idcs;       // -> LayerBatch::ptc
+      MPlexQI cand_idcs;       // -> LayerBatch::cand
       MPlexQUI hit_idcs;       // index within the LayerOfHits
       MPlexQUI hit_orig_idcs;  // index in the layer's hit vector, as HitOnTrack::index
       mini_propagators::InitialStatePlex is_plex;
@@ -185,24 +185,24 @@ namespace mkfit {
     void prepare_kalman_workload(LayerBatch& b);
 
     //--------------------------------------------------------------------------
-    // The in-layer combinatorial search: expand_in_layer() grows the SecTCandRep
+    // The in-layer combinatorial search: expand_in_layer() grows the CandNode
     // tree. Depth 0 (the Hermite crossing is known, sPerp path) and deeper steps
     // (the plane is solved) need different propagation, so there are two Kalman
     // batches. Each fires only when full; rk_drain() empties both at end of layer.
     // rk_ = running Kalman: these batches and the functions that run them.
     void expand_in_layer(LayerBatch& b);
     void rk_setup(KalmanOpArgs& koa, bool solve_plane);
-    void rk_add_item(KalmanOpArgs& koa, PrimTCandRep& ptc, const PrimTCandRep::PQE& pqe, int parent_idx, int hit_pos);
+    void rk_add_item(KalmanOpArgs& koa, CandIncoming& cand, const CandIncoming::PQE& pqe, int parent_idx, int hit_pos);
     void rk_flush(KalmanOpArgs& koa);
     void rk_expand_node(int ni);
     void rk_pump();
     void rk_drain();
-    void load_hit_module(KalmanOpArgs& koa, const PrimTCandRep::PQE& pqe) const;
-    // Turn the Kalman results accumulated in m_sec_out into arena nodes, keeping
-    // those that pass the chi2 cut. Their indices go to m_sec_harvested.
-    void harvest_sec_nodes();
+    void load_hit_module(KalmanOpArgs& koa, const CandIncoming::PQE& pqe) const;
+    // Turn the Kalman results accumulated in m_kalman_out into arena nodes, keeping
+    // those that pass the chi2 cut. Their indices go to m_nodes_harvested.
+    void harvest_nodes();
     // A slot for one node: from the free list if it has any, else appended.
-    int sec_node_slot();
+    int node_slot();
     // The direction- and layer-dependent part of a layer step, filled once per
     // path root and carried down the tree, and once per hole entry.
     void fill_step_geometry(LayerStepFeatures& f, float log_rho) const;
@@ -234,29 +234,29 @@ namespace mkfit {
     std::list<CCandRep> m_active_ccreps;
     // Next CombCandidate to be pulled into the layer by begin_next_Ccrep_in_layer().
     std::list<CCandRep>::iterator m_active_ccreps_pos;
-    // Pre-selection queue: the PrimTCandReps waiting for propagation, binnor fetch
+    // Pre-selection queue: the incoming candidates waiting for propagation, binnor fetch
     // and hit pre-selection. A FIFO as a vector and a read position, reset when it
     // drains, so it keeps its capacity.
-    std::vector<PrimTCandRep*> m_cand_queue;
+    std::vector<CandIncoming*> m_cand_queue;
     int m_cand_queue_head = 0;
     MkRZLimits m_rz_limits;
 
     // The in-layer combinatorial tree: one arena per finder, reached by index,
     // cleared with capacity kept at end of layer.
-    std::vector<SecTCandRep> m_sec_arena;
+    std::vector<CandNode> m_node_arena;
     // Slots of nodes whose CombCandidate has been selected, reused before the
     // arena grows. A node is freed only with its whole CombCandidate, so no live
     // node can have a freed parent.
-    std::vector<int> m_sec_free;
-    // Arena indices appended by the last harvest_sec_nodes().
-    std::vector<int> m_sec_harvested;
+    std::vector<int> m_node_free;
+    // Arena indices appended by the last harvest_nodes().
+    std::vector<int> m_nodes_harvested;
     // The two Kalman batches of expand_in_layer(), and the nodes whose children
     // are not yet queued.
     KalmanOpArgs m_koa_d0, m_koa_deep;
     std::vector<int> m_deep_queue;
     // Kalman outcomes of the last flush, drained into the arena by
-    // harvest_sec_nodes().
-    std::vector<KalmanOpArgs::ItemOut> m_sec_out;
+    // harvest_nodes().
+    std::vector<KalmanOpArgs::ItemOut> m_kalman_out;
     // CombCandidates whose last in-flight work has finished, for
     // select_completed_ccreps(); m_ccrep_touched is rk_flush()'s scratch list.
     std::vector<CCandRep*> m_ccrep_ready;

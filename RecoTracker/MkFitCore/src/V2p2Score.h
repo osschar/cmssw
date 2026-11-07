@@ -31,7 +31,7 @@ namespace mkfit {
   // go into the trace unchanged. A term that needs a new input adds a member: a
   // fact of the step or of the candidate is filled in
   // MkFinderV2p2::fill_step_geometry(), a per-hit one accumulated in
-  // MkFinderV2p2::harvest_sec_nodes().
+  // MkFinderV2p2::harvest_nodes().
   struct LayerStepFeatures {
     // What was taken.
     float chi2_sum = 0.0f;  // over the hits of this step

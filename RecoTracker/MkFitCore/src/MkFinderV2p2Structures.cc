@@ -115,7 +115,7 @@ namespace mkfit {
 
       if (mp_out) {
         ItemOut o;
-        o.ptc = ptcp[i];
+        o.cand = candp[i];
         o.parent_idx = parent_idx[i];
         o.hit_pos = hit_pos[i];
         o.hot = hot[i];
