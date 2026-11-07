@@ -34,7 +34,7 @@ namespace mkfit {
     n_layer_skipped = 0;
     n_hole = 0; n_hot_edge = 0; n_hot_gap = 0; n_stop_holes = 0;
     n_ccand_retired = 0;
-    n_sec_nodes = 0; n_sec_deep = 0; n_path_taken = 0; n_extra_hits = 0;
+    n_nodes = 0; n_nodes_deep = 0; n_path_taken = 0; n_extra_hits = 0;
     n_sel_entries = 0; n_sel_kept = 0; n_selections = 0;
     n_same_module_vetoed = 0;
     n_hole_slot_reserved = 0; n_best_short_offered = 0; n_best_short_taken = 0;
@@ -105,7 +105,7 @@ namespace mkfit {
            n_hole.load(), n_hot_edge.load(), n_hot_gap.load(), n_stop_holes.load(),
            n_layer_skipped.load(),
            n_ccand_retired.load(),
-           n_sec_nodes.load(), n_sec_deep.load(), n_path_taken.load(), n_extra_hits.load(),
+           n_nodes.load(), n_nodes_deep.load(), n_path_taken.load(), n_extra_hits.load(),
            n_selections.load(), n_sel_entries.load(), n_sel_kept.load(),
            n_selections > 0 ? (double) n_sel_entries / n_selections : 0.0,
            n_selections > 0 ? (double) n_sel_kept / n_selections : 0.0,
@@ -148,7 +148,7 @@ namespace mkfit {
         for (int j = 0; j < n_keep && !sub; ++j) {
           if (j == k || m_sel[j].node_idx < 0 || m_sel[j].tcand_idx != e.tcand_idx)
             continue;
-          for (int ci = m_sec_arena[m_sel[j].node_idx].m_parent_idx; ci >= 0; ci = m_sec_arena[ci].m_parent_idx)
+          for (int ci = m_node_arena[m_sel[j].node_idx].m_parent_idx; ci >= 0; ci = m_node_arena[ci].m_parent_idx)
             if (ci == e.node_idx) {
               sub = true;
               break;
@@ -164,9 +164,9 @@ namespace mkfit {
           if (pi < 0 || pl != lay - 1 || (lay & 1) == 0 || lay < 4 || (lay > 15 && lay < 28))
             continue;
           int root = m_sel[j].node_idx;
-          while (m_sec_arena[root].m_parent_idx >= 0)
-            root = m_sec_arena[root].m_parent_idx;
-          const auto &hot = m_sec_arena[root].m_hot;
+          while (m_node_arena[root].m_parent_idx >= 0)
+            root = m_node_arena[root].m_parent_idx;
+          const auto &hot = m_node_arena[root].m_hot;
           sister = detid_of(hot.layer, hot.index) == detid_of(pl, pi) + 1;
         }
       }

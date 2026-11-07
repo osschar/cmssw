@@ -33,8 +33,8 @@ namespace mkfit {
     std::atomic<long> n_hot_gap{0};        // kHitInGapIdx -- not counted
     std::atomic<long> n_stop_holes{0};     // kHitStopIdx -- out of hole budget
     std::atomic<long> n_ccand_retired{0};  // every TrackCand under it stopped
-    std::atomic<long> n_sec_nodes{0};      // in-layer tree nodes built
-    std::atomic<long> n_sec_deep{0};       // ... of those, at depth 2 or more
+    std::atomic<long> n_nodes{0};          // in-layer tree nodes built
+    std::atomic<long> n_nodes_deep{0};     // ... of those, at depth 2 or more
     std::atomic<long> n_path_taken{0};     // layers where a path was registered
     std::atomic<long> n_extra_hits{0};     // hits taken beyond the first in one layer
     std::atomic<long> n_sel_entries{0};    // competitors entering the end-of-layer selection
@@ -50,7 +50,7 @@ namespace mkfit {
     std::atomic<long> n_kalman_lanes{0};
     std::atomic<long> n_kalman_calls_d0{0};   // depth 0 only
     std::atomic<long> n_kalman_lanes_d0{0};
-    // SecTCandRep arena size at end of layer, which is its high water in that
+    // CandNode arena size at end of layer, which is its high water in that
     // layer: summed over layers, with the largest seen.
     std::atomic<long> n_arena_layers{0};
     std::atomic<long> n_arena_hw_sum{0};
