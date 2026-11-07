@@ -29,9 +29,13 @@
 //                 until all its TrackCands have stopped.
 //   CandIncoming  one of its TrackCands entering this layer: the search window,
 //                 the pre-selected hits, those hits in path order. One layer.
-//   CandNode      one path through this layer: the candidate after taking a
-//                 sequence of those hits, each Kalman-updated. In m_node_arena
-//                 until its CombCandidate has been selected.
+//   CandNode      one hit taken in this layer and the state after its Kalman
+//                 update, with a pointer to its CandIncoming and the index of
+//                 the node before it on the path (-1 for the first hit).
+//                 Following the links back from any node gives one path; the
+//                 nodes of one CandIncoming form a tree, its paths sharing their
+//                 beginnings. All nodes sit in one vector, m_node_arena, linked
+//                 by index, until their CombCandidate has been selected.
 //   PQE           one pre-selected hit, with its plane crossing. Its dalpha (the
 //                 turning angle at the crossing) orders the hits along the path.
 //   layer step    what one candidate does in one layer, scored as one additive
