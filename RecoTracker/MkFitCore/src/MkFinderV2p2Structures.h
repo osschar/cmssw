@@ -87,8 +87,10 @@ namespace mkfit {
     CCandRep* mp_ccrep;
     int m_origin_tcand_index;  // TrackCand index in CombCandidate
 
-    // A pre-selected hit (Priority-Queue Entry).
-    struct PQE {
+    // A hit that passed pre-selection for this candidate: a hit compatible with
+    // it, not a truth match. The trace records it as a TrHitMatch with
+    // passed_pqueue set. Held in m_pqueue, then in m_layer_hits.
+    struct PassedHitMatch {
       float ddphi;  // the pre-selection's ranking: phi distance to the hit, lower is better
       unsigned int hit_orig_index;
       unsigned int hit_index;
@@ -104,28 +106,28 @@ namespace mkfit {
       mini_propagators::InitialState mixed_state;
 
       // Worst (largest ddphi) on top, so it is the one replaced.
-      bool operator<(const PQE& o) const { return ddphi < o.ddphi; }
+      bool operator<(const PassedHitMatch& o) const { return ddphi < o.ddphi; }
     };
     // One bounded pqueue per sub-layer, [0] primary and [1] secondary, so each
     // sensor has its own reduction budget. See doc/MkFinderV2p2-DesignNotes.md,
     // "Reduction and hit ordering".
     // Max-heaps on ddphi, worst on top, run with std::push_heap / pop_heap
-    // exactly as std::priority_queue<PQE> does, in inline storage.
+    // exactly as std::priority_queue<PassedHitMatch> does, in inline storage.
     static constexpr int kPqCap = Config::V2p2::InLayer::max_presel_hits_limit;
-    InlineVec<PQE, kPqCap> m_pqueue[2];
+    InlineVec<PassedHitMatch, kPqCap> m_pqueue[2];
 
-    void pq_push(int sl, const PQE& e) {
+    void pq_push(int sl, const PassedHitMatch& e) {
       m_pqueue[sl].push_back(e);
       std::push_heap(m_pqueue[sl].begin(), m_pqueue[sl].end());
     }
-    const PQE& pq_top(int sl) { return m_pqueue[sl].front(); }
+    const PassedHitMatch& pq_top(int sl) { return m_pqueue[sl].front(); }
     void pq_pop(int sl) {
       std::pop_heap(m_pqueue[sl].begin(), m_pqueue[sl].end());
       m_pqueue[sl].pop_back();
     }
 
     // Survivors of both queues, in path order (sorted by dir * dalpha).
-    InlineVec<PQE, 2 * kPqCap> m_layer_hits;
+    InlineVec<PassedHitMatch, 2 * kPqCap> m_layer_hits;
 
     float m_log_rho = 0.0f;  // local hit density, ln(hits / cm^2), for the score
 

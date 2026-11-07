@@ -192,12 +192,13 @@ namespace mkfit {
     // rk_ = running Kalman: these batches and the functions that run them.
     void expand_in_layer(LayerBatch& b);
     void rk_setup(KalmanOpArgs& koa, bool solve_plane);
-    void rk_add_item(KalmanOpArgs& koa, CandIncoming& cand, const CandIncoming::PQE& pqe, int parent_idx, int hit_pos);
+    void rk_add_item(
+        KalmanOpArgs& koa, CandIncoming& cand, const CandIncoming::PassedHitMatch& phm, int parent_idx, int hit_pos);
     void rk_flush(KalmanOpArgs& koa);
     void rk_expand_node(int ni);
     void rk_pump();
     void rk_drain();
-    void load_hit_module(KalmanOpArgs& koa, const CandIncoming::PQE& pqe) const;
+    void load_hit_module(KalmanOpArgs& koa, const CandIncoming::PassedHitMatch& phm) const;
     // Turn the Kalman results accumulated in m_kalman_out into arena nodes, keeping
     // those that pass the chi2 cut. Their indices go to m_nodes_harvested.
     void harvest_nodes();

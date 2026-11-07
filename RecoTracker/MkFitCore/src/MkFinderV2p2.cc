@@ -25,21 +25,24 @@
 // two sensors of a PS / 2S module.
 //
 // The objects, per layer:
-//   CCandRep      one CombCandidate (one seed) while it is finding, from pickup
-//                 until all its TrackCands have stopped.
-//   CandIncoming  one of its TrackCands entering this layer: the search window,
-//                 the pre-selected hits, those hits in path order. One layer.
-//   CandNode      one hit taken in this layer and the state after its Kalman
-//                 update, with a pointer to its CandIncoming and the index of
-//                 the node before it on the path (-1 for the first hit).
-//                 Following the links back from any node gives one path; the
-//                 nodes of one CandIncoming form a tree, its paths sharing their
-//                 beginnings. All nodes sit in one vector, m_node_arena, linked
-//                 by index, until their CombCandidate has been selected.
-//   PQE           one pre-selected hit, with its plane crossing. Its dalpha (the
-//                 turning angle at the crossing) orders the hits along the path.
-//   layer step    what one candidate does in one layer, scored as one additive
-//                 term (V2p2Score.h).
+//   CCandRep        one CombCandidate (one seed) while it is finding, from
+//                   pickup until all its TrackCands have stopped.
+//   CandIncoming    one of its TrackCands entering this layer: the search
+//                   window, the pre-selected hits, those hits in path order.
+//                   One layer.
+//   PassedHitMatch  one hit that passed pre-selection for a CandIncoming, with
+//                   the candidate's state at the crossing with the hit's module
+//                   plane (mixed_state). Its dalpha, the turning angle there,
+//                   orders the hits along the path.
+//   CandNode        one hit taken in this layer and the state after its Kalman
+//                   update, with a pointer to its CandIncoming and the index of
+//                   the node before it on the path (-1 for the first hit).
+//                   Following the links back from any node gives one path; the
+//                   nodes of one CandIncoming form a tree, its paths sharing
+//                   their beginnings. All nodes sit in one vector, m_node_arena,
+//                   linked by index, until their CombCandidate has been selected.
+//   layer step      what one candidate does in one layer, scored as one additive
+//                   term (V2p2Score.h).
 //
 // One CombCandidate in one layer, as if it were alone:
 //   for each TrackCand not stopped and not past the layer      begin_next_Ccrep_in_layer()
@@ -1127,7 +1130,7 @@ namespace mkfit {
       const float dir = b.B.m_sp2.dalpha[i] >= b.B.m_sp1.dalpha[i] ? 1.0f : -1.0f;
       std::sort(cand.m_layer_hits.begin(),
                 cand.m_layer_hits.end(),
-                [dir](const CandIncoming::PQE& a, const CandIncoming::PQE& b) {
+                [dir](const CandIncoming::PassedHitMatch& a, const CandIncoming::PassedHitMatch& b) {
                   const float ka = dir * a.mixed_state.dalpha, kb = dir * b.mixed_state.dalpha;
                   if (ka != kb)
                     return ka < kb;
@@ -1204,16 +1207,16 @@ namespace mkfit {
   }
 
   void MkFinderV2p2::rk_add_item(
-      KalmanOpArgs& koa, CandIncoming& cand, const CandIncoming::PQE& pqe, int parent_idx, int hit_pos) {
-    koa.item_begin(&cand, {(int)pqe.hit_orig_index, pqe.layer}, parent_idx, hit_pos);
+      KalmanOpArgs& koa, CandIncoming& cand, const CandIncoming::PassedHitMatch& phm, int parent_idx, int hit_pos) {
+    koa.item_begin(&cand, {(int)phm.hit_orig_index, phm.layer}, parent_idx, hit_pos);
     if (parent_idx < 0)
-      koa.load_state_err_chg(pqe.mixed_state, cand.tcand().state());
+      koa.load_state_err_chg(phm.mixed_state, cand.tcand().state());
     else
       koa.load_state_err_chg(m_node_arena[parent_idx].m_state);
 #ifdef MKFIT_TRACE
-    koa.set_tr_hitmatch_id(pqe.tr_hitmatch_id);
+    koa.set_tr_hitmatch_id(phm.tr_hitmatch_id);
 #endif
-    load_hit_module(koa, pqe);
+    load_hit_module(koa, phm);
     ++cand.mp_ccrep->m_n_inflight;
     if (koa.item_finished())
       rk_flush(koa);
@@ -1256,23 +1259,23 @@ namespace mkfit {
     CandIncoming& cand = *m_node_arena[ni].m_cand;
     const int nlh = (int)cand.m_layer_hits.size();
     for (int lh = m_node_arena[ni].m_hit_pos + 1; lh < nlh; ++lh) {
-      const CandIncoming::PQE& pqe = cand.m_layer_hits[lh];
+      const CandIncoming::PassedHitMatch& phm = cand.m_layer_hits[lh];
       // A second hit from a module already on this path is a split cluster or
       // another track's hit, not an overlap: skip it. The walk back is at most
       // V2p2Params::max_sec_depth long.
       bool same_module = false;
       for (int ci = ni; ci >= 0 && !same_module; ci = m_node_arena[ci].m_parent_idx) {
         const CandNode& an = m_node_arena[ci];
-        if (an.m_hot.layer != pqe.layer)
+        if (an.m_hot.layer != phm.layer)
           continue;
         const auto& La = mp_job->m_event_of_hits[an.m_hot.layer];
-        same_module = La.refHit(an.m_hot.index).detIDinLayer() == La.refHit(pqe.hit_orig_index).detIDinLayer();
+        same_module = La.refHit(an.m_hot.index).detIDinLayer() == La.refHit(phm.hit_orig_index).detIDinLayer();
       }
       if (same_module) {
         V2P2_COUNT(n_same_module_vetoed);
         continue;
       }
-      rk_add_item(m_koa_deep, cand, pqe, ni, lh);
+      rk_add_item(m_koa_deep, cand, phm, ni, lh);
     }
   }
 
@@ -1299,9 +1302,9 @@ namespace mkfit {
     m_ccrep_ready.clear();  // end_layer() selects everything not yet selected
   }
 
-  void MkFinderV2p2::load_hit_module(KalmanOpArgs& koa, const CandIncoming::PQE& pqe) const {
-    const auto& L = mp_job->m_event_of_hits[pqe.layer];
-    const Hit& hit = L.refHit(pqe.hit_orig_index);
+  void MkFinderV2p2::load_hit_module(KalmanOpArgs& koa, const CandIncoming::PassedHitMatch& phm) const {
+    const auto& L = mp_job->m_event_of_hits[phm.layer];
+    const Hit& hit = L.refHit(phm.hit_orig_index);
     koa.load_hit_module(hit, L.layer_info().module_info(hit.detIDinLayer()));
   }
 
