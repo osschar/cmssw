@@ -91,7 +91,7 @@ the module plane found in pre-selection; a later one has to find the crossing
 from the state after the previous hit. Lanes are independent, so the result is
 the same as running each step of each batch on its own, up to rounding.
 
-Measured on T100 (phi3): the filled lanes went from 6.19 to 7.70 of 8 for first
+Measured on T100, on a Xeon Gold 6130 (Skylake-SP): the filled lanes went from 6.19 to 7.70 of 8 for first
 hits and from 4.38 to 6.99 of 8 for later hits. The forward search became
 5.3 % faster with `-mavx`, 4.6 % with AVX2 and 3.8 % with AVX-512.
 
@@ -665,7 +665,7 @@ recovered tracks 39167 to 39798 (90.3 % to 91.8 %). True pixel-barrel hits on
 barrel-only tracks go from 96.6 % to 97.3 %, which is the one-hit-per-layer
 ceiling.
 
-**Time.** T100 on phi3 (Skylake-SP, `-mavx`), forward search, with F30 against
+**Time.** T100 on a Xeon Gold 6130 (Skylake-SP, `-mavx`), forward search, with F30 against
 the plain chi2 < 30:
 
 | cut | chi2_trk_fac | d found | d fakes | s | |
@@ -840,7 +840,7 @@ and v2p2's own backward fit, the mode 0 row is before both:
 What is left of the fake excess is in the barrel (1.15 % against 0.93 %) and at
 0.9 < |eta| < 1.7 (2.87 % against 2.36 %).
 
-**The working point since.** A joint tuning (condor scans and CMSSW MTV, 2026-10)
+**The working point since.** A joint tuning (parameter scans and CMSSW MTV, 2026-10)
 set the outward hit efficiency to 0.10, with 0.14 in the OT PS barrel and 0.20 in
 the OT 2S barrel (`V2p2ScoreParams::hit_eff_grp`); inward it stays 0.90. It is
 conditional on the seeds, the duplicate cleaner and the final fit, and is to be
