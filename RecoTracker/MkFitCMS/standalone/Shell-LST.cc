@@ -11,6 +11,7 @@
 #include "RecoTracker/MkFitCMS/standalone/MkStandaloneSeqs.h"
 
 #include "RecoTracker/MkFitCore/interface/Config.h"
+#include "RecoTracker/MkFitCore/interface/IterationConfig.h"
 #include "RecoTracker/MkFitCore/standalone/ConfigStandalone.h"
 
 #include "RecoTracker/MkFitCore/standalone/Event.h"
@@ -38,6 +39,26 @@ namespace mkfit {
   Shell::HltSeedKind_e Shell::s_hlt_seed_kind = Shell::HSK_T5;
   bool                 Shell::s_hlt_chop_pixels = false;
   std::map<int, std::vector<HitOnTrack>> Shell::s_chopped_hits;
+
+  namespace {
+    // Track scorer "phase2:LstIntoPix", for LST T5 tracks extended into the pixels:
+    // a found hit is worth more than the largest chi2 (30), and tail holes cost as
+    // much as inside holes. Select it with val_track_scorer("phase2:LstIntoPix").
+    float trackScoreLstIntoPixels(const TrackScoreInput &in) {
+      const int ntailholes = in.penalize_tail_holes ? in.n_tail_holes : 0;
+      float bonus = 30;
+      float penalty = Config::missingHitPenalty_;
+      float tailPenalty = Config::missingHitPenalty_;
+      float score = bonus * in.n_found_hits - penalty * in.n_inside_holes - tailPenalty * ntailholes - in.chi2;
+      return score;
+    }
+
+    struct register_lst_track_scorer {
+      register_lst_track_scorer() {
+        IterationConfig::register_track_scorer("phase2:LstIntoPix", trackScoreLstIntoPixels);
+      }
+    } rlts_instance;
+  }  // namespace
 
 
   //===========================================================================
