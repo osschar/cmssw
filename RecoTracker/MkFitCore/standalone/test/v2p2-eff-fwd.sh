@@ -39,7 +39,7 @@ CFG=("1    6   0    0.99    depth1_c6"
 
 for c in "${CFG[@]}"; do
   set -- $c
-  CMD+=(--shell-command "val_max_sec_depth($1)"
+  CMD+=(--shell-command "val_max_path_hits($1)"
         --shell-command "val_max_cands($2)"
         --shell-command "val_score_mode($3, $4)")
   for ((i=1;i<=N;i++)); do

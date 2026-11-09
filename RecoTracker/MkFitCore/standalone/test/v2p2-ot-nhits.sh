@@ -23,8 +23,8 @@ CMD=(./mkFit --geom CMS-phase2 --seed-input cmssw --read-cmssw-tracks --input-fi
 for ((i=1;i<=N;i++)); do
   CMD+=(--shell-command "s.GoToEvent($i)" --shell-command 's.ProcessEventStd()' --shell-command 'ot_nh_ev(s.event(), 0)')
 done
-# second pass: one hit per layer (max_sec_depth 1), same cap
-CMD+=(--shell-command 'val_max_sec_depth(1)')
+# second pass: one hit per layer (max_path_hits 1), same cap
+CMD+=(--shell-command 'val_max_path_hits(1)')
 for ((i=1;i<=N;i++)); do
   CMD+=(--shell-command "s.GoToEvent($i)" --shell-command 's.ProcessEventStd()' --shell-command 'ot_nh_ev(s.event(), 1)')
 done

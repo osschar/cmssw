@@ -6,7 +6,7 @@
 # whether any REGION prefers a wider beam, which a summed counter cannot.
 #
 # The reference row is a single greedy path, cap 1 and one hit per layer
-# (max_sec_depth 1), the lower end of the scan.
+# (max_path_hits 1), the lower end of the scan.
 #
 #   usage:  v2p2-eff-cap.sh [n_events] [sample] [out_prefix]
 set -e
@@ -44,7 +44,7 @@ CFG=("1    1    greedy_c1"
 
 for c in "${CFG[@]}"; do
   set -- $c
-  CMD+=(--shell-command "val_max_sec_depth($1)"
+  CMD+=(--shell-command "val_max_path_hits($1)"
         --shell-command "val_max_cands($2)")
   for ((i=1;i<=N;i++)); do
     CMD+=(--shell-command "s.GoToEvent($i)"

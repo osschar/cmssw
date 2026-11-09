@@ -122,7 +122,7 @@ namespace mkfit {
   void val_surf_q_hit(bool on);
   // MkFinderV2p2 in-layer combinatorial search and its score, so a scan costs one
   // build and every configuration sees identical events and seeds in one process.
-  void val_max_sec_depth(int n);
+  void val_max_path_hits(int n);
   void val_layer_policy(bool wsr, bool hole_limits, bool stop_cuts);
   void val_late_max_cands(int max_cands, int hits, float step_cm = 0.0f);
   void val_sister_hole(bool on, float chi2 = 0.0f);

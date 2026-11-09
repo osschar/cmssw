@@ -14,7 +14,7 @@
 //   v2p2       v2p2's final tracks (Event::candidateTracks_), all hits, with
 //              the in-layer search (the production configuration).
 //   v2p2_true  the same tracks, only hits whose mcTrackID is the track's label.
-//   besthit    v2p2 with max_sec_depth 1: at most one hit per layer (the series
+//   besthit    v2p2 with max_path_hits 1: at most one hit per layer (the series
 //              name is from the removed best-hit path, which it replaces).
 //   besthit_true  the same, truth-matched hits only.
 //   prod       the production tracks in the sample (Event::cmsswTracks_; needs
@@ -29,7 +29,7 @@
 // Output: one TH2F per series, OT layer (x) vs hits in that layer (y).
 //
 //   ot_nh_reset(); per event: ot_nh_ev(s.event(), mode); ot_nh_write("out.root");
-//   mode 0: the default search (fills sim, v2p2, prod); mode 1: max_sec_depth 1
+//   mode 0: the default search (fills sim, v2p2, prod); mode 1: max_path_hits 1
 //   (besthit).
 
 #include "RecoTracker/MkFitCMS/standalone/Shell.h"

@@ -671,7 +671,7 @@ int main(int argc, const char* argv[]) {
           "                           same sub-layer pair takes the sister sensor (def: %d)\n"
           "  --v2p2-sister-hole-chi2 <f>    MkFinderV2p2: ... only for a sister hit with chi2 below this;\n"
           "                           0 = any accepted hit (def: %g)\n"
-          "  --v2p2-max-sec-depth <n> MkFinderV2p2: most hits one in-layer path may take (def: %d)\n"
+          "  --v2p2-max-path-hits <n> MkFinderV2p2: most hits one in-layer path may take (def: %d)\n"
           "  --v2p2-max-presel-hits <n>  MkFinderV2p2: pre-selection reduction cap, per sub-layer (def: %d)\n"
           "  --v2p2-hit-bonus <f>     MkFinderV2p2 score: per hit taken (def: %g)\n"
           "  --v2p2-overlap-bonus <f> MkFinderV2p2 score: per hit beyond the first in a layer (def: %g)\n"
@@ -852,7 +852,7 @@ int main(int argc, const char* argv[]) {
           V2p2::InLayer::late_max_cands_step_cm,
           int(V2p2::InLayer::sister_hole_drop),
           V2p2::InLayer::sister_hole_chi2,
-          v2p2d.max_sec_depth,
+          v2p2d.max_path_hits,
           v2p2d.max_presel_hits,
           v2p2d.score_outward.hit_bonus,
           v2p2d.score_outward.overlap_bonus,
@@ -1131,14 +1131,14 @@ int main(int argc, const char* argv[]) {
     } else if (*i == "--v2p2-sister-hole-chi2") {
       next_arg_or_die(mArgs, i);
       V2p2::InLayer::sister_hole_chi2 = atof(i->c_str());
-    } else if (*i == "--v2p2-max-sec-depth") {
+    } else if (*i == "--v2p2-max-path-hits") {
       next_arg_or_die(mArgs, i);
       const int v = atoi(i->c_str());
-      if (v < 1 || v > V2p2Params::max_sec_depth_limit) {
-        fprintf(stderr, "--v2p2-max-sec-depth must be in [1, %d]\n", V2p2Params::max_sec_depth_limit);
+      if (v < 1 || v > V2p2Params::max_path_hits_limit) {
+        fprintf(stderr, "--v2p2-max-path-hits must be in [1, %d]\n", V2p2Params::max_path_hits_limit);
         exit(1);
       }
-      g_v2p2_setters.push_back([v](V2p2Params &p) { p.max_sec_depth = v; });
+      g_v2p2_setters.push_back([v](V2p2Params &p) { p.max_path_hits = v; });
     } else if (*i == "--v2p2-max-presel-hits") {
       next_arg_or_die(mArgs, i);
       const int v = atoi(i->c_str());
