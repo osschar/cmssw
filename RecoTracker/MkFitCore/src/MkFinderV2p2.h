@@ -34,7 +34,8 @@ namespace mkfit {
   // The v2p2 track finder: runs a block of seeds through the layer plan, one
   // layer at a time. MkBuilder::findTracksStandardv2p2() drives it: setup(),
   // awaken_candidates(), then begin_layer() / process_layer() / end_layer() per
-  // plan entry, and release(). See doc/MkFinderV2p2-DesignNotes.md.
+  // plan entry, and release(). How the pieces fit together: the overview at the
+  // top of MkFinderV2p2.cc. See doc/MkFinderV2p2-DesignNotes.md.
   class MkFinderV2p2 {
   public:
     MkFinderV2p2() = default;
