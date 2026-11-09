@@ -31,6 +31,20 @@ namespace mkfit {
   inline EBiVec3 track2bivec3(const TrackBase &s) { return {track2pos(s), track2mom(s)}; }
   inline EBiVec3 state2bivec3(const TrackState &s) { return {{s.x(), s.y(), s.z()}, {s.px(), s.py(), s.pz()}}; }
 
+  // A hash of a track's hits, to tell whether two runs ended a seed on the same hits.
+  // FNV-1a (64-bit offset basis and prime) over one key per hit, layer * 1000003 +
+  // index; 1000003 is a prime above any hit index in a layer.
+  inline unsigned long long hits_hash(const Track &t) {
+    constexpr unsigned long long kFnvOffsetBasis = 1469598103934665603ull;
+    constexpr unsigned long long kFnvPrime = 1099511628211ull;
+    unsigned long long h = kFnvOffsetBasis;
+    for (int ih = 0; ih < t.nTotalHits(); ++ih) {
+      const HitOnTrack hot = t.getHitOnTrack(ih);
+      h = (h ^ (unsigned long long)(hot.layer * 1000003 + hot.index)) * kFnvPrime;
+    }
+    return h;
+  }
+
   // TrLayerSearch from MkFinderV2p2::determine_search_windows(), lane i.
   inline void fill_layer(TrLayerSearch &ls, const LayerControl &lc, const MkRZLimits &rz) {
     ls.layer = lc.m_layer;

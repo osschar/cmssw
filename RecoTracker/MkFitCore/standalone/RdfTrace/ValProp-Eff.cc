@@ -19,6 +19,7 @@
 #include <array>
 #include "RecoTracker/MkFitCore/standalone/RdfTrace/ValProp.h"
 #include "RecoTracker/MkFitCore/standalone/DataFormats/ValStructs.h"
+#include "RecoTracker/MkFitCore/standalone/DataFormats/RntConversions.h"
 #include "RecoTracker/MkFitCore/standalone/ConfigStandalone.h"
 
 #include "RecoTracker/MkFitCore/interface/Config.h"
@@ -601,12 +602,7 @@ namespace mkfit {
       const int reg = ae < 0.9f ? 0 : ae < 1.7f ? 1 : 2;
       ++C->reg[cls][reg][0];
       if (rb > 0) ++C->reg[cls][reg][1];
-      size_t h = 1469598103934665603ull;
-      for (int ih = 0; ih < c.nTotalHits(); ++ih) {
-        const HitOnTrack hot = c.getHitOnTrack(ih);
-        h = (h ^ (size_t)(hot.layer * 1000003 + hot.index)) * 1099511628211ull;
-      }
-      fin[cm.seed] = {cls, h, cm.fwd_rank_max, cm.fwd_hits_hash};
+      fin[cm.seed] = {cls, hits_hash(c), cm.fwd_rank_max, cm.fwd_hits_hash};
     }
   }
 
