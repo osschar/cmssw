@@ -39,11 +39,11 @@ namespace mkfit {
     // not use IterationParams::chi2Cut_min.
     float hit_chi2_cut = 9.21f;
 
-    int max_presel_hits = 6;  // reduction cap per sub-layer
-    int max_path_hits = 4;    // most hits one path may take in a layer
+    int max_presel_hits = 6;     // reduction cap per sub-layer
+    int max_hits_per_layer = 4;  // most hits one candidate may take in one plan entry (its in-layer path)
 
-    static constexpr int max_presel_hits_limit = 12;  // inline storage
-    static constexpr int max_path_hits_limit = 8;     // array size
+    static constexpr int max_presel_hits_limit = 12;    // inline storage
+    static constexpr int max_hits_per_layer_limit = 8;  // array size
 
     const V2p2ScoreParams& score(bool is_outward) const { return is_outward ? score_outward : score_inward; }
   };

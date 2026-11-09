@@ -64,14 +64,15 @@ namespace {
     p.score_inward = readScore(ps.getParameter<edm::ParameterSet>("scoreInward"), p.score_inward, "scoreInward");
     p.hit_chi2_cut = ps.getParameter<double>("hitChi2Cut");
     p.max_presel_hits = ps.getParameter<int>("maxPreselHits");
-    p.max_path_hits = ps.getParameter<int>("maxPathHits");
+    p.max_hits_per_layer = ps.getParameter<int>("maxHitsPerLayer");
     if (p.max_presel_hits < 1 || p.max_presel_hits > mkfit::V2p2Params::max_presel_hits_limit)
       throw cms::Exception("Configuration")
           << "v2p2.maxPreselHits must be in [1, " << mkfit::V2p2Params::max_presel_hits_limit << "], got "
           << p.max_presel_hits;
-    if (p.max_path_hits < 1 || p.max_path_hits > mkfit::V2p2Params::max_path_hits_limit)
-      throw cms::Exception("Configuration") << "v2p2.maxPathHits must be in [1, "
-                                            << mkfit::V2p2Params::max_path_hits_limit << "], got " << p.max_path_hits;
+    if (p.max_hits_per_layer < 1 || p.max_hits_per_layer > mkfit::V2p2Params::max_hits_per_layer_limit)
+      throw cms::Exception("Configuration")
+          << "v2p2.maxHitsPerLayer must be in [1, " << mkfit::V2p2Params::max_hits_per_layer_limit << "], got "
+          << p.max_hits_per_layer;
     return p;
   }
 }  // namespace
@@ -129,7 +130,8 @@ void MkFitIterationConfigESProducer::fillDescriptions(edm::ConfigurationDescript
           "JSON's chi2Cut_min");
   v2p2.add<int>("maxPreselHits", v2p2Defaults.max_presel_hits)
       ->setComment("hits kept per candidate and sub-layer after the pre-selection");
-  v2p2.add<int>("maxPathHits", v2p2Defaults.max_path_hits)->setComment("most hits one path may take in a layer");
+  v2p2.add<int>("maxHitsPerLayer", v2p2Defaults.max_hits_per_layer)
+      ->setComment("most hits one candidate may take in one layer");
   desc.add<edm::ParameterSetDescription>("v2p2", v2p2)->setComment("MkFinderV2p2 tunings (buildingRoutine 'v2p2')");
 
   descriptions.addWithDefaultLabel(desc);
