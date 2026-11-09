@@ -55,7 +55,7 @@ namespace mkfit {
   // and the term switches are in V2p2Config.h, Config::V2p2::Score.
 
   // Layer group of V2p2ScoreParams::hit_eff_grp. The barrel strip split at layer 10 is the
-  // phase-2 TBPS / TB2S boundary (layers 4-9 TBPS, 10-15 TB2S); it means nothing for phase 1,
+  // phase-2 boundary between the OT PS and 2S barrel (layers 4-9 and 10-15); it means nothing for phase 1,
   // where the outward defaults of V2p2Params, a phase-2 tuning, then apply to the
   // TIB / TOB layers below and above layer 10.
   inline int v2p2_hit_eff_group(const LayerStepFeatures& f) {

@@ -41,7 +41,7 @@ namespace mkfit {
       // Config::Bfield, 1 Config::bFieldFromZR() at each candidate's state, sampled once per
       // layer step at its start, as the Kalman propagation does with PF_use_param_b_field
       // (PropagationMPlexPlane.cc), 2 as 1 when the Kalman's finding_inter_layer_pflags has
-      // use_param_b_field, else as 0. In TEDD the uniform field is 4-7 % above the parametrised.
+      // use_param_b_field, else as 0. In the OT endcap the uniform field is 4-7 % above the parametrised.
       MKFIT_V2P2_KNOB(int, mini_prop_param_b, 2);
       MKFIT_V2P2_KNOB(float, dq_trk_fac, 1.5f);  // on dq_track
       MKFIT_V2P2_KNOB(float, dq_hit_fac, 1.2f);  // on hit_q_half_length; 1.0 just contains the hit

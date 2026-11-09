@@ -17,7 +17,7 @@ namespace mkfit {
     float hit_eff = 0.90f;       // per-layer hit efficiency, likelihood mode only
     // Per layer group, likelihood mode only; a negative value takes hit_eff. Groups, see
     // v2p2_hit_eff_group(): 0 pixel barrel, 1 pixel endcap, 2 strip barrel below layer 10
-    // (phase-2 TBPS), 3 strip barrel from layer 10 (TB2S), 4 strip endcap (TEDD).
+    // (phase-2 OT PS barrel), 3 strip barrel from layer 10 (OT 2S barrel), 4 strip endcap.
     static constexpr int n_hit_eff_grp = 5;
     float hit_eff_grp[n_hit_eff_grp] = {-1.0f, -1.0f, -1.0f, -1.0f, -1.0f};
   };
@@ -30,7 +30,7 @@ namespace mkfit {
   // Config::ItrInfo. The values below are the defaults of both.
   struct V2p2Params {
     // Outward: a phase-2 tuning (CMSSW MTV, initialStep with the offline seeds, cleaner and
-    // refit, 2026-10): eps 0.10, TBPS 0.14, TB2S 0.20. It will move with the seeds and the
+    // refit, 2026-10): eps 0.10, OT PS barrel 0.14, OT 2S barrel 0.20. It will move with the seeds and the
     // final fit.
     V2p2ScoreParams score_outward{.hit_eff = 0.10f, .hit_eff_grp = {-1.0f, -1.0f, 0.14f, 0.20f, -1.0f}};
     V2p2ScoreParams score_inward{};

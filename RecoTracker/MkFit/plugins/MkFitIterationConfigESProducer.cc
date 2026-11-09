@@ -43,7 +43,7 @@ namespace {
     d.add<std::vector<double>>("hitEffByGroup", hitEffGroupDefaults(p))
         ->setComment(
             "hit efficiency per layer group, phase-2 layers (pixel barrel, pixel endcap, strip barrel below layer 10 "
-            "= TBPS, strip barrel from layer 10 = TB2S, strip endcap); negative takes hitEff");
+            "= OT PS barrel, strip barrel from layer 10 = OT 2S barrel, strip endcap); negative takes hitEff");
   }
 
   mkfit::V2p2ScoreParams readScore(const edm::ParameterSet &ps, const mkfit::V2p2ScoreParams &base, const char *name) {

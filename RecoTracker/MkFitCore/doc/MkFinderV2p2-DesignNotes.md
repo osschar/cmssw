@@ -2,8 +2,13 @@
 
 Design decisions behind `MkFinderV2p2` and the classes it uses (`MkBins`,
 `LayerOfHits::HitInfo`, `V2p2Score.h`, `V2p2Config.h`). The code comments say
-what a piece of code does and point to a section here for why. Each
-measurement quoted here names its sample, its size and what was counted.
+what a piece of code does and point to a section here for why. For what the
+code does as a whole, read the overview at the top of `MkFinderV2p2.cc` first.
+Each measurement quoted here names its sample, its size and what was counted.
+
+Phase-2 layer names: the OT PS barrel is OT layers 1-3 (mkFit layers 4-9, one
+mkFit layer per sensor of a module), the OT 2S barrel is OT layers 4-6 (mkFit
+10-15), and the OT endcap has PS modules at small radius and 2S at large.
 
 Contents:
 
@@ -12,15 +17,17 @@ Contents:
 3. [Layer processing](#layer-processing)
 4. [Candidate pickup and stopping cuts](#candidate-pickup-and-stopping-cuts)
 5. [Layer crossings and the Hermite cubic](#layer-crossings-and-the-hermite-cubic)
-6. [Within-sensitive-region verdict](#within-sensitive-region-verdict)
-7. [Search window](#search-window)
-8. [Hit extents](#hit-extents)
-9. [Line pre-cut](#line-pre-cut)
-10. [Reduction and hit ordering](#reduction-and-hit-ordering)
-11. [In-layer combinatorial search](#in-layer-combinatorial-search)
-12. [End-of-layer selection](#end-of-layer-selection)
-13. [Layer-step score](#layer-step-score)
-14. [V2 compatibility](#v2-compatibility)
+6. [Reachability](#reachability)
+7. [Within-sensitive-region verdict](#within-sensitive-region-verdict)
+8. [Search window](#search-window)
+9. [Hit extents](#hit-extents)
+10. [Line pre-cut](#line-pre-cut)
+11. [Reduction and hit ordering](#reduction-and-hit-ordering)
+12. [In-layer combinatorial search](#in-layer-combinatorial-search)
+13. [Kalman hit acceptance](#kalman-hit-acceptance)
+14. [End-of-layer selection](#end-of-layer-selection)
+15. [Layer-step score](#layer-step-score)
+16. [V2 compatibility](#v2-compatibility)
 
 ## Samples
 
@@ -320,7 +327,8 @@ block costs 0.23 s against 0.68 s over those 20 events in a trace build, about
 
 **Two factors per coordinate.** Which term binds is a property of the layer.
 The median `hit_q_half_length` (H50) is 0.0075 cm in the pixel barrel, 0.042 cm
-on the P sensors and 0.80 cm on the S sensors of TBPS, and 2.51 cm in TB2S,
+on the P sensors and 0.80 cm on the S sensors of the OT PS barrel, and 2.51 cm
+in the OT 2S barrel,
 while the track term does not vary like that. Strips are containment-dominated
 and pixels are covariance-dominated. One factor over both terms could not sit
 in the right place for both, and a scan of it could not say which term it was
@@ -345,7 +353,7 @@ dx_s = (I - p^ n^T / (n^.p^)) dx
 so the q variance becomes v^T C v with v = e_q - ((e_q.p^)/(n^.p^)) n^.
 `surface_referenced_dq()` applies it with n^ the hit's own module normal. For a
 radial track and a cylinder normal this amplifies sigma_q by 1/sin^2(theta).
-With the module normal, TBPS modules, which face the interaction point, get
+With the module normal, the OT PS barrel modules, which face the interaction point, get
 almost no correction, and tilted and flat layers use the same formula with no
 branch. Measured on 20 events of chopped pT5, pixel barrel, as the ratio of the
 measured residual core to the quoted sigma_q:
@@ -366,7 +374,7 @@ ratio rout/rin is 1.33 at pixel layer 0.
 
 **Per-hit phi extent and `dphi_trk_fac` = 2.** The hit term is the hit's own phi
 extent from its covariance ([Hit extents](#hit-extents)), about 4e-5 rad in
-TB2S. The cut is therefore carried by the track term, and the track term needs
+the OT 2S barrel. The cut is therefore carried by the track term, and the track term needs
 a factor 2:
 
 | `dphi_trk_fac` | F30 found | F30 fakes | I50 fully recovered tracks |
@@ -428,14 +436,14 @@ along a segment of half-length L has sigma = L/sqrt(3).
 
 - `q_half_length`: `hl_fac * sqrt(ezz)` in the barrel. For a strip along unit
   vector u the covariance is (L^2/3) u u^T, so this is L |u_z|, the strip's
-  projection onto z. Module tilt is therefore already included. In TB2S, where
+  projection onto z. Module tilt is therefore already included. In the OT 2S barrel, where
   modules are flat, the H50 median is 2.5125 cm against a nominal 2.5. In the endcap
   it is `hl_fac * sqrt(exx + eyy)`, which is sigma_r^2 + r^2 sigma_phi^2. That is
   right for radial strips and a factor sqrt(2) too large for endcap pixels,
   where sigma_x and sigma_y are similar.
 - `phi_half_extent`: from sigma_phi^2 = (y^2 exx - 2xy exy + x^2 eyy) / r^4, the
   across-strip error seen from the origin. It needs no barrel/endcap branch. For
-  a TB2S strip it is expected to be `hl_fac * pitch / sqrt(12)` / r, i.e.
+  a 2S strip it is expected to be `hl_fac * pitch / sqrt(12)` / r, i.e.
   45 um / r for a 90 um pitch.
 - `qbar_half_extent`: `hl_fac * sigma_r` in the barrel, 0 in the endcap. It is
   used by the line pre-cut for tilted strips.
@@ -497,8 +505,8 @@ and the pre-cut drops. Production window, trace build:
 Forward is 5 events of `ttbar-PU200-D121-C22-100ev.bin` with CMSSW seeds.
 Inward is 10 events of `trackingNtuple_HLT_2026_March.bin` with pT5 seeds whose
 pixel hits were removed. The real cut accepts 8.2 % and 7.6 % of the pairs. All
-the q false rejects without the qbar term are in the tilted TBPS layers. The
-phi false rejects sit mostly in TB2S.
+the q false rejects without the qbar term are in the tilted OT PS barrel layers.
+The phi false rejects sit mostly in the OT 2S barrel.
 
 **Physics, with the pre-cut in the finder.** Paired against the same
 configuration with the pre-cut off, production window: F30 found tracks, fakes,
@@ -523,7 +531,7 @@ ddphi, one queue per sub-layer, capped at `V2p2Params::max_presel_hits`. One que
 per sub-layer gives each sensor of a pair its own budget, so a busy sensor
 cannot crowd out the other. The cap sits upstream of the in-layer search and
 bounds what it can see. The queues and `m_layer_hits` use inline storage
-(`InlineVec`) sized by `InLayer::max_presel_hits_limit`, because a
+(`InlineVec`) sized by `V2p2Params::max_presel_hits_limit`, because a
 `CandIncoming` lives for one layer and a `std::vector` there allocated and freed
 on every layer. The heaps run `std::push_heap` / `std::pop_heap` exactly as
 `std::priority_queue` does. Overlap availability varies strongly across the
@@ -538,10 +546,12 @@ of its change from `m_sp1` (the near bounding surface in the search direction) t
 search direction. Until 2026-10-01 `dir` was the search direction alone, so for
 one charge every layer's hits were walked in reverse path order. ddphi
 decides which hits survive; path order decides the order the search walks them.
-The sort is done once per candidate. A Kalman update moves the trajectory by
+The queues are copied out and sorted once per candidate. Two hits on one module
+share the crossing with its plane and so have equal keys; they go larger ddphi
+first, then by hit index, so the order does not depend on the heap layout. A Kalman update moves the trajectory by
 about the hit resolution, so it can only swap hits that are already that close.
 
-The sub-layers of a TBPS pair are radially interleaved (the tilted modules make
+The sub-layers of an OT PS barrel pair are radially interleaved (the tilted modules make
 the partner sensor sit at larger or smaller r module by module), so path order
 cannot be assumed from the layer index. Per-hit precision is not an ordering
 key: `q_half_length` already distinguishes a P macro-pixel from an S strip,
@@ -558,8 +568,8 @@ The trace records `sub_rank` (rank by ddphi within the sub-layer) and
 **What it replaced.** The first version of v2p2 ran one Kalman update per
 pre-selected hit, all from the candidate's incoming state, and kept the lowest
 chi2. That takes at most one hit per layer. The best-hit path was removed once
-the search replaced it. On H50 a track crossing a TBPS, TB2S or TEDD
-layer pair leaves both sensors' hits in 91-94 % of crossings, and 26-28 % of
+the search replaced it. On H50 a track crossing an OT layer pair, barrel or
+endcap, leaves both sensors' hits in 91-94 % of crossings, and 26-28 % of
 crossings carry three or more hits, because an overlapping module is itself a
 stack.
 
@@ -769,8 +779,9 @@ other.
 
 **Code:** `V2p2Score.h`, `LayerStepFeatures`, `Config::V2p2::Score`.
 
-This score is separate from `track_score_func`, which stays as it is for V1/V2
-and for the final output. It differs in three ways.
+This score is separate from `track_score_func`, which stays as it is for V1/V2.
+v2p2's final pick of a candidate per seed uses a track scorer built on it, see
+"The final pick" below. It differs from `track_score_func` in three ways.
 
 1. **Additive over layer steps.** A candidate's score is the sum of one term per
    layer. That is what makes the end-of-layer selection a single flat sort.
@@ -785,8 +796,8 @@ and for the final output. It differs in three ways.
    large radius where a track may leave the detector; inward, they are at small
    radius, where the track must have come from. The score has separate outward
    and inward parameter sets (`V2p2Params::score_outward`, `score_inward`) for
-   this; today they differ in the hit efficiency (0.10 with the TBPS / TB2S
-   groups outward, 0.90 inward).
+   this; today they differ in the hit efficiency (outward 0.10, with 0.14 in the
+   OT PS barrel and 0.20 in the OT 2S barrel; inward 0.90).
 3. **A feature struct.** `LayerStepFeatures` carries what the scores read of a
    layer step: hits taken, the chi2 sum, ln det V of the residual covariance,
    local hit density, hole kind, the layer and direction. A new term adds a
@@ -860,6 +871,25 @@ and v2p2's own backward fit, the mode 0 row is before both:
 
 What is left of the fake excess is in the barrel (1.15 % against 0.93 %) and at
 0.9 < |eta| < 1.7 (2.87 % against 2.36 %).
+
+**The working point since.** A joint tuning (condor scans and CMSSW MTV, 2026-10)
+set the outward hit efficiency to 0.10, with 0.14 in the OT PS barrel and 0.20 in
+the OT 2S barrel (`V2p2ScoreParams::hit_eff_grp`); inward it stays 0.90. It is
+conditional on the seeds, the duplicate cleaner and the final fit, and is to be
+redone when any of them changes.
+
+**The final pick.** At the end of the forward search each seed keeps one
+candidate. The scorer that picks it is named per iteration
+(`IterationConfig::m_final_pick_track_scorer_name`, default the search scorer).
+`v2p2:llh` takes the summed layer-step score of the search and subtracts
+`Policy::final_pick_hole_penalty` (8) per inside hole and
+`final_pick_tail_penalty` (3) per tail hole, so the pick sees the holes the
+layer steps scored as 0. CMSSW MTV, `TrackBuilding/initialStep`, D121 ttbar
+PU200, 100 events, CMSSW_20_1_0_pre2, on this code as of 2026-10-30:
+
+| | efficiency | fake rate | duplicates | mean hits |
+|---|---|---|---|---|
+| v2p2, working point, final pick `v2p2:llh` | 67.13 % | 1.72 % | 0.13 % | 14.37 |
 
 ## V2 compatibility
 
