@@ -34,30 +34,28 @@ Contents:
 The measurements below use four samples. They are named once here and by tag
 afterwards.
 
-- **F30**: forward search, 30 events of `ttbar-PU200-D121-C22-100ev-rt.bin`,
-  CMSSW initialStep seeds, efficiency against the MTV-like denominator (29759
+- **F30**: forward search, 30 ttbar events with pileup 200 (phase-2 geometry
+  D121), CMSSW initialStep seeds, efficiency against the MTV-like denominator (29759
   selected sim tracks). Comparisons are paired: same events, same seeds, one
   process.
-- **I50**: inward search, 50 events of `trackingNtuple_HLT_2026_March.bin`, pT5
-  seeds with their pixel hits removed ("chopped pT5"). The search has to find the
+- **I50**: inward search, 50 phase-2 HLT events with pileup, LST pT5 seeds with
+  their pixel hits removed ("chopped pT5"). The search has to find the
   removed hits again. Counted: chopped hits recovered, out of 211435, matched by
   exact (layer, index); and tracks with all their chopped hits recovered, out of
   43358. Neither count uses truth matching.
-- **T100**: timing, 100 events of `ttbar-PU200-D121-C22-100ev.bin`, single
-  thread, build without ROOT and without tracing, minimum of three repetitions.
+- **T100**: timing, 100 ttbar events with pileup 200, single thread, build without ROOT and without tracing, minimum of three repetitions.
   The quoted time brackets `(builder.*FindTracks)(IT_FwdSearch)` only.
-- **H50**: 50 events of `trackingNtuple_HLT_2026_March.bin`, used for detector
-  properties such as hit multiplicities per layer crossing.
+- **H50**: the 50 HLT events of I50, used for detector properties such as hit multiplicities per layer crossing.
 
 ## Configuration
 
 **Code:** `V2p2Config.h`, namespace `Config::V2p2`, groups `Window`, `PreCut`,
 `InLayer`, `Policy`, `Score` and `Diag`.
 
-Each knob is declared once, with its default, through `MKFIT_V2P2_KNOB`. The
-CMSSW build gets a `constexpr`, so there is no mutable global state and branches
-on the switches fold away. The standalone build gets a mutable variable,
-defined in `V2p2Config.cc`, so that `mkFit` options and the shell drivers can
+Each knob is declared once, with its default, through `MKFIT_V2P2_KNOB`. It is
+a `constexpr` in the CMSSW build, so there is no mutable global state and
+branches on the switches fold away. In the standalone build it is a mutable
+variable, defined in `V2p2Config.cc`, so that `mkFit` options and the shell drivers can
 scan a knob without a rebuild.
 
 **Per iteration** (`interface/V2p2Params.h`, `IterationConfig::m_v2p2`): the
@@ -168,8 +166,8 @@ are of interest downstream (the phase-2 timing layer and HGCal). The trace
 carries it for the final candidate of the forward search,
 `TrCandMeta::fwd_stop_reason`; the export to CMSSW is not done yet.
 
-**Holes.** A candidate that takes no hit in a layer gets a fake HoT chosen by
-`fake_hit_index()`, in V1's order: the hole limits (`maxHolesPerCand`,
+**Holes.** A candidate that takes no hit in a layer records a hole HoT, chosen by
+`fake_hit_index()` in V1's order: the hole limits (`maxHolesPerCand`,
 `maxConsecHoles`) decide between a miss and a stop, and then the WSR overrides
 with an edge or gap HoT, which do not count against the limits.
 
@@ -208,7 +206,7 @@ distance d_c from the beam line, so it reaches only radii in
 cylinder (dr/ds = 0) and the crossing solve degenerates. The target radius is
 therefore kept `kReachMargin` = 0.1 cm inside the band. A target outside it is
 clamped to the band edge, which returns the point of closest approach on the
-trajectory, and the lane gets `fail_flag` = 2. `fail_flag` = 1 means the solve
+trajectory, and sets the lane's `fail_flag` to 2. `fail_flag` = 1 means the solve
 landed further than `kReachTolerance` from the target, which only round-off
 should cause.
 
@@ -247,8 +245,7 @@ tests one propagated point; v2p2 has both crossings and tests the segment.
 A candidate outside the layer is skipped: no bins are walked and no HoT is
 added. The layer plans are deliberately inclusive (a transition plan is the
 union over tracks), and without this every one of those layers would record a
-hole. Measured on 20 events of the forward search on
-`ttbar-PU200-D121-C22-100ev.bin`: the verdict declines 64.5 % of OT-barrel
+hole. Measured on 20 ttbar PU200 events, forward search: the verdict declines 64.5 % of OT-barrel
 layer searches and 23.8 % of forward ones, and the sim track has a hit in the
 declined layer in 0.05 % and 0.30 % of those.
 
@@ -320,8 +317,7 @@ six elements were read. Against that call with uniform B, over 200508 lanes,
 the sigmas agree to 7e-5 and the correlations to 1.6e-4 at the worst lane.
 Against it with the parametric field at the starting point they differ by
 0.4 % at p99. The transport uses the same uniform B as `m_sp1`, `m_sp2` and the
-Hermite cubic. On 20 events of `ttbar-PU200-D121-C22-100ev.bin` the quality-val
-track counts were identical in the default and two varied configurations. The
+Hermite cubic. On 20 ttbar PU200 events the quality-val track counts were identical in the default and two varied configurations. The
 block costs 0.23 s against 0.68 s over those 20 events in a trace build, about
 5 % of the build time.
 
@@ -353,8 +349,8 @@ dx_s = (I - p^ n^T / (n^.p^)) dx
 so the q variance becomes v^T C v with v = e_q - ((e_q.p^)/(n^.p^)) n^.
 `surface_referenced_dq()` applies it with n^ the hit's own module normal. For a
 radial track and a cylinder normal this amplifies sigma_q by 1/sin^2(theta).
-With the module normal, the OT PS barrel modules, which face the interaction point, get
-almost no correction, and tilted and flat layers use the same formula with no
+With the module normal, the correction is almost nil for the OT PS barrel
+modules, which face the interaction point, and tilted and flat layers use the same formula with no
 branch. Measured on 20 events of chopped pT5, pixel barrel, as the ratio of the
 measured residual core to the quoted sigma_q:
 
@@ -389,7 +385,7 @@ replaced. It is still available with `Window::phi_per_hit` off, as
 
 Above |eta| 0.8 the factor also compensates a phi covariance that is too small.
 The ratio of the measured phi residual core to the quoted `sigma_phi`, 10
-events of the forward search on `ttbar-PU200-D121-C22-100ev.bin`, is 1.25 at
+ttbar PU200 events, forward search, is 1.25 at
 |eta| < 0.8, 2.20 at 0.8-1.6, 3.40 at 1.6-2.0 and 2.66 above. The cause is the
 material description in the transition and forward regions. When that is
 fixed, `dphi_trk_fac` should come down.
@@ -502,9 +498,8 @@ and the pre-cut drops. Production window, trace build:
 | q, slack 1 | 11.9 M | 82.2 % | 2278 | 1.83 M | 89.7 % | 554 |
 | q, slack 1, without the qbar term | 11.9 M | 84.3 % | 87659 | 1.83 M | 90.1 % | 3364 |
 
-Forward is 5 events of `ttbar-PU200-D121-C22-100ev.bin` with CMSSW seeds.
-Inward is 10 events of `trackingNtuple_HLT_2026_March.bin` with pT5 seeds whose
-pixel hits were removed. The real cut accepts 8.2 % and 7.6 % of the pairs. All
+Forward is 5 ttbar PU200 events with CMSSW seeds. Inward is 10 of the HLT
+events with pT5 seeds whose pixel hits were removed. The real cut accepts 8.2 % and 7.6 % of the pairs. All
 the q false rejects without the qbar term are in the tilted OT PS barrel layers.
 The phi false rejects sit mostly in the OT 2S barrel.
 
@@ -604,8 +599,8 @@ A second hit from the same module as an earlier hit of the path is not taken.
 That is a split cluster or another track's hit, and a split cluster is one
 measurement: taking it twice shrinks the covariance without adding information.
 
-`V2p2Params::max_hits_per_layer` (4) caps the hits per path. Forward, 10 events of
-`ttbar-PU200-D121-C22-100ev.bin`, found tracks stop changing at depth 3. Inward
+`V2p2Params::max_hits_per_layer` (4) caps the hits per path. Forward, 10 ttbar
+PU200 events, found tracks stop changing at depth 3. Inward
 on 20 events of chopped pT5, fully recovered tracks go from 82.4 % at depth 2
 to 90.8 % at depth 4.
 
