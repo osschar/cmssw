@@ -51,87 +51,57 @@ repeatedly are named here and by tag afterwards.
 
 ## Configuration
 
-**Code:** `V2p2Config.h`, namespace `Config::V2p2`, groups `Window`, `PreCut`,
-`InLayer`, `Policy`, `Score` and `Diag`.
+v2p2 has two kinds of parameters.
 
-Each knob is declared once, with its default, through `MKFIT_V2P2_KNOB`. It is
-a `constexpr` in the CMSSW build, so there is no mutable global state and
-branches on the switches fold away. In the standalone build it is a mutable
-variable, defined in `V2p2Config.cc`, so that `mkFit` options and the shell drivers can
-scan a knob without a rebuild.
+| | where | in CMSSW | in the standalone |
+|---|---|---|---|
+| global knobs: search window, pre-cut, in-layer search, stopping policy, score form | `src/V2p2Config.h`, namespace `Config::V2p2` | constants, fixed at compile time | variables, set by `mkFit` options and the shell setters |
+| per-iteration tunings: the two score sets, the hit-acceptance cut, the hit caps | `interface/V2p2Params.h`, `IterationConfig::m_v2p2` | set from the python parameter set `v2p2` of `MkFitIterationConfigESProducer`; not in the JSON | set per iteration by the same options |
 
-**Per iteration** (`interface/V2p2Params.h`, `IterationConfig::m_v2p2`): the two
-score sets (outward and inward search), `chi2_trk_fac` and `hit_chi2_cut`,
-`max_presel_hits` and `max_hits_per_layer`. In CMSSW,
-`MkFitIterationConfigESProducer` sets them from its python PSet `v2p2`
-(`scoreOutward` and `scoreInward` with `hitEff` and `hitEffByGroup`,
-`hitChi2TrackFactor`, `hitChi2Cut`, `maxPreselHits`, `maxHitsPerLayer`); they
-are not in the JSON. The score PSets carry only what the log-likelihood score
-reads, since `Score::mode` is 1 in CMSSW. The defaults are those of
-`V2p2Params`, so an unset parameter keeps them. In the standalone the `mkFit`
-options and the shell setters change them in `Config::ItrInfo`. The finder reads
-them through `MkJob::v2p2()`. The other knobs stay compile-time in CMSSW.
+The defaults of both are in the code; the python configuration only overrides
+them. The global knobs are constants in CMSSW so that there is no mutable
+global state and switched-off code compiles away. When an iteration needs its
+own value of a knob, the knob moves to the per-iteration tunings, as the
+hit-acceptance parameters did.
 
-The policy counters (`V2p2PolicyCounters`, printed with `--quality-val`) exist
-in the standalone build only. The finder increments them through
-`V2P2_COUNT()`, which expands to nothing in CMSSW.
+Diagnostics (the `Diag` knobs and the policy counters printed by
+`--quality-val`) exist only in the standalone build.
 
 ## Layer processing
 
-**Code:** `MkFinderV2p2::process_layer()`, `process_layer_batch()`, the
-`LayerBatch` and `HitBatch` structs in `MkFinderV2p2.h`.
+The overview at the top of `MkFinderV2p2.cc` follows one seed through one
+layer. This section explains how the code is organised around that, and why.
 
-`process_layer()` pulls CombCandidates into the layer, one `CandIncoming` per
-live TrackCand, and drains the resulting queue NN candidates at a time. Pulling
-in stops once the queue holds NN entries, so the Matriplex batches run full.
+**Full vector lanes.** The track math runs on Matriplex batches of NN lanes
+(8 with AVX, 16 with AVX-512), one track per lane. One seed rarely brings NN
+candidates into a layer, so candidates from many seeds enter the layer
+together and go through propagation, search window and hit pre-selection NN at
+a time. Pre-selection uses a second batch shape: candidates bring different
+numbers of hits, so it runs one lane per (candidate, hit) pair, filled across
+candidates.
 
-`process_layer_batch()` takes one batch through the layer in phases:
+**Kalman updates across batches.** In the in-layer search each accepted hit can
+be followed by more hits in the same layer, so the number of Kalman updates a
+candidate needs is not known in advance (see "In-layer combinatorial search").
+The updates are therefore queued, and a Kalman batch runs only when NN updates
+are waiting, or at the end of the layer. The first hit of a path in the layer
+and the later ones are queued separately. The first can use the crossing with
+the module plane found in pre-selection; a later one has to find the crossing
+from the state after the previous hit. Lanes are independent, so the result is
+the same as running each step of each batch on its own, up to rounding.
 
-1. `prop_to_layer_edges()`: propagate each candidate to the two bounding
-   surfaces of the layer.
-2. `determine_search_windows()`: build the window covariance, the dphi and dq
-   windows, the WSR verdict, the binnor ranges and the Hermite cubic.
-3. `select_hits()`: walk the bin ranges, apply the line pre-cut, and send the
-   survivors to `preselect_hit_batch()`, which solves the cubic onto each hit's
-   module plane and applies the dq/dphi cut.
-4. `order_hits_along_path()`: drain the per-candidate priority queues into one
-   step-ordered list.
-5. `expand_in_layer()`: the in-layer combinatorial search.
+Measured on T100 (phi3): the filled lanes went from 6.19 to 7.70 of 8 for first
+hits and from 4.38 to 6.99 of 8 for later hits. The forward search became
+5.3 % faster with `-mavx`, 4.6 % with AVX2 and 3.8 % with AVX-512.
 
-Two batch widths are in play. `LayerBatch` is NN candidates wide and indexed by
-`i`. `HitBatch` is NN (candidate, hit) pairs wide and indexed by `h`, with
-`cand_idcs[h]` naming the candidate.
-
-Each phase keeps its own Matriplex batches full: pre-selection batches pairs
-across candidates, and the Kalman stage batches lanes across candidates and
-across expansion nodes. The phases themselves are not pipelined.
-
-**Early selection** (`InLayer::early_select`, `select_completed_ccreps()`). A
-CombCandidate's candidates enter the queue together, and `CCandRep::m_n_queued`
-counts those not yet taken. Once it is zero and no work of the CombCandidate is
-in flight, the CombCandidate is selected right after the layer batch, and its
-tree nodes go back to the arena's free list. `end_layer()` selects whatever is
-left. On its own this changes nothing measurable: the arena's high water per
-layer drops from 50 to 12 nodes on average, at 184 bytes a node.
-
-**Running Kalman batches** (`expand_in_layer()`, the `rk_*` helpers). The
-in-layer Kalman batches stay open across layer batches and fire only when full;
-`rk_drain()` empties them at the end of the layer. There are two, because
-depth 0 is handed the path length from the Hermite while deeper steps solve the
-plane. A harvested node that may still be extended goes to `m_deep_queue` and
-is expanded when popped.
-`CCandRep::m_n_inflight` counts a CombCandidate's Kalman items and queued nodes,
-and an item is retired only after its children are queued, so the count cannot
-pass through zero while work remains. Every Matriplex lane is computed
-independently, so the nodes are the same as with a flush at every depth
-boundary of every layer batch, the first implementation; the results differ
-only in rounding, where a lane goes through vector rather than scalar code. The
-first implementation was removed, and the reference definition of the search
-is in "In-layer combinatorial search".
-
-Measured on phi3, T100: lanes filled at depth 0 go from 6.19 to 7.70 of 8 and
-deeper from 4.38 to 6.99 of 8, and the forward search takes 5.3 % less time at
-`-mavx`, 4.6 % at AVX2 and 3.8 % at AVX-512.
+**Finishing a seed early.** Because batches mix seeds, the work of one seed
+ends at different times. For each seed the finder counts the candidates still
+waiting for pre-selection, and the Kalman updates and paths still pending. When
+both counts are zero, the seed's paths compete and its new candidates are
+chosen right away instead of at the end of the layer, and the memory of its
+paths is reused. This changes neither the result nor the time measurably. It
+lowers the number of path nodes held in memory per layer from 50 to 12 on
+average, at 184 bytes a node.
 
 ## Candidate pickup and stopping cuts
 
