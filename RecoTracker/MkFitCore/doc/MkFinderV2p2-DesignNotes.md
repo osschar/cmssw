@@ -53,19 +53,20 @@ repeatedly are named here and by tag afterwards.
 
 v2p2 has two kinds of parameters.
 
-| | where | in CMSSW | in the standalone |
-|---|---|---|---|
-| global knobs: search window, pre-cut, in-layer search, stopping policy, score form | `src/V2p2Config.h`, namespace `Config::V2p2` | constants, fixed at compile time | variables, set by `mkFit` options and the shell setters |
-| per-iteration tunings: the two score sets, the hit-acceptance cut, the hit caps | `interface/V2p2Params.h`, `IterationConfig::m_v2p2` | set from the python parameter set `v2p2` of `MkFitIterationConfigESProducer`; not in the JSON | set per iteration by the same options |
+| | where | set by |
+|---|---|---|
+| global knobs: search window, pre-cut, in-layer search, stopping policy, score form | `src/V2p2Config.h`, namespace `Config::V2p2` | the code: constants, fixed at compile time |
+| per-iteration tunings: the two score sets, the hit-acceptance cut, the hit caps | `interface/V2p2Params.h`, `IterationConfig::m_v2p2` | the python parameter set `v2p2` of `MkFitIterationConfigESProducer`; not the JSON |
 
 The defaults of both are in the code; the python configuration only overrides
-them. The global knobs are constants in CMSSW so that there is no mutable
-global state and switched-off code compiles away. When an iteration needs its
-own value of a knob, the knob moves to the per-iteration tunings, as the
-hit-acceptance parameters did.
+them. The global knobs are constants so that there is no mutable global state
+and switched-off code compiles away. When an iteration needs its own value of a
+knob, the knob moves to the per-iteration tunings, as the hit-acceptance
+parameters did.
 
-Diagnostics (the `Diag` knobs and the policy counters printed by
-`--quality-val`) exist only in the standalone build.
+Outside CMSSW, in the standalone build, the global knobs are variables, and
+both kinds can be set from the `mkFit` command line for scans. Diagnostics (the
+`Diag` knobs and the policy counters) exist only there.
 
 ## Layer processing
 
