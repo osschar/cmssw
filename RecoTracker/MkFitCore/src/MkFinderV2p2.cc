@@ -1415,8 +1415,10 @@ namespace mkfit {
       m_sel.push_back({ic, -1, 0, false, ccand[ic].score()});
     }
 
-    if (m_sel.empty())
+    if (m_sel.empty()) {
+      ccand.clear();  // every TrackCand was offered to best-short and left the beam
       return;
+    }
 
     if (InLayer::sister_hole_drop)
       drop_sister_dominated_holes(ccand);
