@@ -91,9 +91,10 @@ the module plane found in pre-selection; a later one has to find the crossing
 from the state after the previous hit. Lanes are independent, so the result is
 the same as running each step of each batch on its own, up to rounding.
 
-Measured on T100, on a Xeon Gold 6130 (Skylake-SP): the filled lanes went from 6.19 to 7.70 of 8 for first
-hits and from 4.38 to 6.99 of 8 for later hits. The forward search became
-5.3 % faster with `-mavx`, 4.6 % with AVX2 and 3.8 % with AVX-512.
+Measured on T100, on a Xeon Gold 6130 (Skylake-SP): the filled lanes went from
+6.19 to 7.70 of 8 for first hits and from 4.38 to 6.99 of 8 for later hits. The
+forward search became 5.3 % faster with `-mavx`, 4.6 % with AVX2 and 3.8 % with
+AVX-512.
 
 **Finishing a seed early.** Because batches mix seeds, the work of one seed
 ends at different times. For each seed the finder counts the candidates still
