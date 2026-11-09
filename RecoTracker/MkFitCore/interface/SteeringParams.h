@@ -65,7 +65,7 @@ namespace mkfit {
       bool is_outward() const { return m_type == IT_FwdSearch; }
 
       const LayerControl* operator->() const { return &layer_control(); }
-      const LayerControl& operator*()  const { return layer_control(); }
+      const LayerControl& operator*() const { return layer_control(); }
 
       bool is_pickup_only() const {
         if (m_type == IT_FwdSearch)
@@ -143,17 +143,17 @@ namespace mkfit {
       for (int i = first; i <= last; i += 2) {
         if (as_single_entry) {
           if (swap_pairs) {
-            m_layer_plan.emplace_back(LayerControl(i+1, i));
+            m_layer_plan.emplace_back(LayerControl(i + 1, i));
           } else {
-            m_layer_plan.emplace_back(LayerControl(i, i+1));
+            m_layer_plan.emplace_back(LayerControl(i, i + 1));
           }
         } else {
           if (swap_pairs) {
-            m_layer_plan.emplace_back(LayerControl(i+1));
+            m_layer_plan.emplace_back(LayerControl(i + 1));
             m_layer_plan.emplace_back(LayerControl(i));
           } else {
             m_layer_plan.emplace_back(LayerControl(i));
-            m_layer_plan.emplace_back(LayerControl(i+1));
+            m_layer_plan.emplace_back(LayerControl(i + 1));
           }
         }
       }

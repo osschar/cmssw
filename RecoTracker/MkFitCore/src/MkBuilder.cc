@@ -728,8 +728,7 @@ namespace mkfit {
             if (iteration_dir == SteeringParams::IT_FwdSearch && ccand[ic].pT() < 1.2f) {
               constexpr float kMaxAngPosMom = Const::PIOver2 - 0.2f;
               const float dphi = std::abs(ccand[ic].posPhi() - ccand[ic].momPhi());
-              if (ccand[ic].posRsq() > 625.f && dphi > kMaxAngPosMom &&
-                  dphi < Const::TwoPI - kMaxAngPosMom) {
+              if (ccand[ic].posRsq() > 625.f && dphi > kMaxAngPosMom && dphi < Const::TwoPI - kMaxAngPosMom) {
                 // printf("Stopping cand at r=%f, posPhi=%.1f momPhi=%.2f pt=%.2f emomEta=%.2f\n",
                 //        ccand[ic].posR(), ccand[ic].posPhi(), ccand[ic].momPhi(), ccand[ic].pT(), ccand[ic].momEta());
                 ccand[ic].addHitIdx(-2, layer, 0.0f);
@@ -818,7 +817,6 @@ namespace mkfit {
     }
   }
 
-
   //------------------------------------------------------------------------------
   // findTracksStandardv2p2 -- the MkFinderV2p2 search
   //------------------------------------------------------------------------------
@@ -829,7 +827,7 @@ namespace mkfit {
 
     EventOfCombCandidates &eoccs = m_event_of_comb_cands;
 
-  #ifdef MKFIT_TRACE
+#ifdef MKFIT_TRACE
     // The trace below marks the best candidate of the backward search as final. The gate can replace
     // that candidate afterwards, in the post-search filter, and the trace would describe a track that
     // is not exported.
@@ -843,13 +841,12 @@ namespace mkfit {
       }
       TrackCand &tc = cc.front();
       auto [stage_id, state_id] = m_event->trace_new_cand_stage_and_state(
-        cc.m_trace_meta_id, cc.m_trace_stage_id, iteration_dir,
-        cc.pickupLayer(), track2bivec3(tc), tc.state());
+          cc.m_trace_meta_id, cc.m_trace_stage_id, iteration_dir, cc.pickupLayer(), track2bivec3(tc), tc.state());
       cc.m_trace_stage_id = stage_id;
       tc.m_trace_state_id = state_id;
       m_event->tr_candmeta(cc.m_trace_meta_id).stage_ids[iteration_dir] = stage_id;
     }
-  #endif
+#endif
 
     TBB_PARALLEL_FOR_EACH(m_job->regions_begin(), m_job->regions_end(), [&](int region) {
       if (iteration_dir == SteeringParams::IT_BkwSearch && !m_job->steering_params(region).has_bksearch_plan()) {
@@ -886,20 +883,22 @@ namespace mkfit {
 
         mkfndr->awaken_candidates();
 
+        // clang-format off
         dprintf("\nMkBuilder::FindTracksStandardv2p2 region=%d, seed_pickup_layer=%d/%d, first_layer=%d/%d\n",
                 region,
                 layer_plan_it.layer(), layer_plan_it.layer_sec(),
                 layer_plan_it.next_layer(), layer_plan_it.next_layer_sec());
+        // clang-format on
 
         // Loop over layers, starting from after the initial pickup-only.
         while (++layer_plan_it) {
-
           dprintf("\n* Processing layer %d/%d\n", layer_plan_it.layer(), layer_plan_it.layer_sec());
 
           mkfndr->begin_layer();
 
           dprintf("  Number of candidates to process: %d, nHits in layer: %d\n",
-                   mkfndr->batch_mgr().n_finding(), m_job->m_event_of_hits[layer_plan_it.layer()].nHits());
+                  mkfndr->batch_mgr().n_finding(),
+                  m_job->m_event_of_hits[layer_plan_it.layer()].nHits());
 
           mkfndr->process_layer();
 
@@ -932,10 +931,10 @@ namespace mkfit {
       v2p2_final_beam_diag(m_event, eoccs);
 #endif
 
-  #ifdef MKFIT_TRACE
+#ifdef MKFIT_TRACE
     for (int i = 0; i < eoccs.size(); ++i) {
       CombCandidate &cc = eoccs[i];
-      assert (!cc.empty());
+      assert(!cc.empty());
       const TrackCand &bcand = cc.front();
       auto &cstate = m_event->tr_candstate(bcand.m_trace_state_id);
       auto &cstage = m_event->tr_candstage(cc.m_trace_stage_id);
@@ -951,7 +950,7 @@ namespace mkfit {
         unsigned long long h = 1469598103934665603ull;
         for (int ih = 0; ih < ft.nTotalHits(); ++ih) {
           const HitOnTrack hot = ft.getHitOnTrack(ih);
-          h = (h ^ (unsigned long long) (hot.layer * 1000003 + hot.index)) * 1099511628211ull;
+          h = (h ^ (unsigned long long)(hot.layer * 1000003 + hot.index)) * 1099511628211ull;
         }
         cmeta.fwd_hits_hash = h;
       }
@@ -962,7 +961,7 @@ namespace mkfit {
         pid = pstate.parent_id;
       }
     }
-  #endif
+#endif
 
     // debug = false;
   }

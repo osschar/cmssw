@@ -332,11 +332,11 @@ namespace mkfit {
           m_seed_origin_index(o.m_seed_origin_index),
           m_hots_size(o.m_hots_size),
           m_hots(o.m_hots) {
-          #ifdef MKFIT_TRACE
-            m_trace_meta_id = o.m_trace_meta_id;
-            m_trace_stage_id = o.m_trace_stage_id;
-          #endif
-          }
+#ifdef MKFIT_TRACE
+      m_trace_meta_id = o.m_trace_meta_id;
+      m_trace_stage_id = o.m_trace_stage_id;
+#endif
+    }
 
     // Required for std::swap().
     CombCandidate(CombCandidate&& o)
@@ -355,10 +355,10 @@ namespace mkfit {
       // However, if at some point we start using this for other purposes this needs
       // to be called as well.
       // for (auto &tc : *this) tc.setCombCandidate(this);
-    #ifdef MKFIT_TRACE
+#ifdef MKFIT_TRACE
       m_trace_meta_id = o.m_trace_meta_id;
       m_trace_stage_id = o.m_trace_stage_id;
-    #endif
+#endif
     }
 
     // Required for std::swap when filtering EventOfCombinedCandidates::m_candidates.
@@ -380,10 +380,10 @@ namespace mkfit {
       for (auto& tc : m_trk_cands)
         tc.setCombCandidate(this);
 
-    #ifdef MKFIT_TRACE
+#ifdef MKFIT_TRACE
       m_trace_meta_id = o.m_trace_meta_id;
       m_trace_stage_id = o.m_trace_stage_id;
-    #endif
+#endif
 
       return *this;
     }
@@ -396,7 +396,10 @@ namespace mkfit {
     const TrackCand& operator[](int i) const { return m_trk_cands[i]; }
     TrackCand& front() { return m_trk_cands.front(); }
     const TrackCand& front() const { return m_trk_cands.front(); }
-    trk_cand_vec_type::reference push_back(const TrackCand& tc) { m_trk_cands.push_back(tc); return m_trk_cands.back(); }
+    trk_cand_vec_type::reference push_back(const TrackCand& tc) {
+      m_trk_cands.push_back(tc);
+      return m_trk_cands.back();
+    }
     void clear() { m_trk_cands.clear(); }
 
     int capacity() const { return m_trk_cands.capacity(); }
@@ -422,10 +425,10 @@ namespace mkfit {
       m_nInsideMinusOneHits_before_bkwsearch = -1;
       m_nTailMinusOneHits_before_bkwsearch = -1;
 
-    #ifdef MKFIT_TRACE
+#ifdef MKFIT_TRACE
       m_trace_meta_id = -1;
       m_trace_stage_id = -1;
-    #endif
+#endif
     }
 
     void importSeed(const Track& seed, int seed_idx, const track_score_func& score_func, int region);
@@ -482,8 +485,8 @@ namespace mkfit {
 
 #ifdef MKFIT_TRACE
   public:
-    int m_trace_meta_id = -1;  // global meta (persists across stages)
-    int m_trace_stage_id = -1; // current stage (changes between stages)
+    int m_trace_meta_id = -1;   // global meta (persists across stages)
+    int m_trace_stage_id = -1;  // current stage (changes between stages)
 #endif
   };
 

@@ -176,7 +176,8 @@ namespace mkfit {
     // The last hit fitted per lane, to skip a repeated hit on track (seed-hit
     // merging can put the same hit on twice).
     int fit_lay[NN], fit_idx[NN];
-    for (int i = 0; i < NN; ++i) fit_lay[i] = fit_idx[i] = -1;
+    for (int i = 0; i < NN; ++i)
+      fit_lay[i] = fit_idx[i] = -1;
 
 #ifdef MKFIT_TRACE
     BkFitTracer tracer(m_event, m_TrkCand, m_Par[iC], m_Err[iC], m_Chg, N_proc);
@@ -206,7 +207,6 @@ namespace mkfit {
 
     int done_count = 0;
     while (done_count != N_proc) {
-
       int fit_node[NN];  // HoT node fitted in this step, -1 if none
       std::fill_n(fit_node, NN, -1);
       int here_count = 0;
@@ -271,9 +271,11 @@ namespace mkfit {
 #endif
 #if defined(DEBUG_PROP_UPDATE)
           DSLOT_layer = layer;
+          // clang-format off
           printf("\nbkfit start layer %d, track in slot %d -- fail=%d, hit_xyz = (%g, %g, %g)\n\n",
-             DSLOT_layer, DSLOT, m_FailFlag[DSLOT],
-             m_msPar(DSLOT, 0, 0), m_msPar(DSLOT, 1, 0), m_msPar(DSLOT, 2, 0));
+                 DSLOT_layer, DSLOT, m_FailFlag[DSLOT],
+                 m_msPar(DSLOT, 0, 0), m_msPar(DSLOT, 1, 0), m_msPar(DSLOT, 2, 0));
+          // clang-format on
 #endif
         }
       }

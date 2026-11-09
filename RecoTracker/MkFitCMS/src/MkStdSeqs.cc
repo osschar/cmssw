@@ -715,7 +715,7 @@ namespace mkfit {
               tracks, ctheta, std::min(ord[p], ord[q]), std::max(ord[p], ord[q]), itconf, hk, hasPixel, trk_inf);
         }
       }
-      for (int x = 0; x < (int) nonfin.size(); ++x) {
+      for (int x = 0; x < (int)nonfin.size(); ++x) {
         const int a = nonfin[x];
         for (int b = 0; b < n; ++b) {
           if (b == a || (!isFinite(ctheta[b]) && b < a))
