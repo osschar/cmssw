@@ -67,6 +67,62 @@ namespace mkfit {
 
   CMS_SA_ALLOW ExecutionContext g_exe_ctx;
 
+#ifdef MKFIT_TRACE
+  //==============================================================================
+  // Trace of findTracksStandardv2p2()
+  //==============================================================================
+
+  namespace {
+    // Before the search: a new stage per seed, rooted at the seed's single TrackCand.
+    void trace_begin_v2p2_search(Event *ev, EventOfCombCandidates &eoccs, SteeringParams::IterationType_e dir) {
+      // trace_end_v2p2_search() marks the best candidate of the backward search as final. The gate can
+      // replace that candidate afterwards, in the post-search filter, and the trace would describe a track
+      // that is not exported.
+      if (dir == SteeringParams::IT_BkwSearch && eoccs.hasBkwSearchGate())
+        throw std::runtime_error(
+            "MkBuilder::findTracksStandardv2p2: tracing does not support the backward-search gate");
+      for (int i = 0; i < eoccs.size(); ++i) {
+        CombCandidate &cc = eoccs[i];
+        assert(cc.size() == 1 && "CombCandidate expected to have a single TrackCand at this point");
+        if (cc.m_trace_meta_id == -1)
+          cc.m_trace_meta_id = ev->trace_new_cand_meta(ev->evtID(), cc.seed_origin_index());
+        TrackCand &tc = cc.front();
+        auto [stage_id, state_id] = ev->trace_new_cand_stage_and_state(
+            cc.m_trace_meta_id, cc.m_trace_stage_id, dir, cc.pickupLayer(), track2bivec3(tc), tc.state());
+        cc.m_trace_stage_id = stage_id;
+        tc.m_trace_state_id = state_id;
+        ev->tr_candmeta(cc.m_trace_meta_id).stage_ids[dir] = stage_id;
+      }
+    }
+
+    // After the search: mark each seed's best candidate and its ancestry as the final path; after the
+    // forward search also record the candidate's rank history, stop reason and hits in the meta.
+    void trace_end_v2p2_search(Event *ev, EventOfCombCandidates &eoccs, SteeringParams::IterationType_e dir) {
+      for (int i = 0; i < eoccs.size(); ++i) {
+        CombCandidate &cc = eoccs[i];
+        assert(!cc.empty());
+        const TrackCand &bcand = cc.front();
+        auto &cstate = ev->tr_candstate(bcand.m_trace_state_id);
+        ev->tr_candstage(cc.m_trace_stage_id).final_state_id = cstate.id;
+        cstate.on_final_path = true;
+        if (dir == SteeringParams::IT_FwdSearch) {
+          auto &cmeta = ev->tr_candmeta(cstate.meta_id);
+          cmeta.fwd_rank_max = bcand.m_rank_max;
+          cmeta.fwd_rank_max_layer = bcand.m_rank_max_layer;
+          cmeta.fwd_rank_over_layer = bcand.m_rank_over_layer;
+          cmeta.fwd_stop_reason = bcand.stopReason();
+          cmeta.fwd_hits_hash = hits_hash(bcand.exportTrack());
+        }
+        for (int pid = cstate.parent_id; pid >= 0;) {
+          auto &pstate = ev->tr_candstate(pid);
+          pstate.on_final_path = true;
+          pid = pstate.parent_id;
+        }
+      }
+    }
+  }  // namespace
+#endif
+
   //==============================================================================
   // Track scorers of MkFinderV2p2
   //==============================================================================
@@ -828,24 +884,7 @@ namespace mkfit {
     EventOfCombCandidates &eoccs = m_event_of_comb_cands;
 
 #ifdef MKFIT_TRACE
-    // The trace below marks the best candidate of the backward search as final. The gate can replace
-    // that candidate afterwards, in the post-search filter, and the trace would describe a track that
-    // is not exported.
-    if (iteration_dir == SteeringParams::IT_BkwSearch && eoccs.hasBkwSearchGate())
-      throw std::runtime_error("MkBuilder::findTracksStandardv2p2: tracing does not support the backward-search gate");
-    for (int i = 0; i < eoccs.size(); ++i) {
-      CombCandidate &cc = eoccs[i];
-      assert(cc.size() == 1 && "CombCandidate expected to have a single TrackCand at this point");
-      if (cc.m_trace_meta_id == -1) {
-        cc.m_trace_meta_id = m_event->trace_new_cand_meta(m_event->evtID(), cc.seed_origin_index());
-      }
-      TrackCand &tc = cc.front();
-      auto [stage_id, state_id] = m_event->trace_new_cand_stage_and_state(
-          cc.m_trace_meta_id, cc.m_trace_stage_id, iteration_dir, cc.pickupLayer(), track2bivec3(tc), tc.state());
-      cc.m_trace_stage_id = stage_id;
-      tc.m_trace_state_id = state_id;
-      m_event->tr_candmeta(cc.m_trace_meta_id).stage_ids[iteration_dir] = stage_id;
-    }
+    trace_begin_v2p2_search(m_event, eoccs, iteration_dir);
 #endif
 
     TBB_PARALLEL_FOR_EACH(m_job->regions_begin(), m_job->regions_end(), [&](int region) {
@@ -932,35 +971,7 @@ namespace mkfit {
 #endif
 
 #ifdef MKFIT_TRACE
-    for (int i = 0; i < eoccs.size(); ++i) {
-      CombCandidate &cc = eoccs[i];
-      assert(!cc.empty());
-      const TrackCand &bcand = cc.front();
-      auto &cstate = m_event->tr_candstate(bcand.m_trace_state_id);
-      auto &cstage = m_event->tr_candstage(cc.m_trace_stage_id);
-      cstage.final_state_id = cstate.id;
-      cstate.on_final_path = true;
-      if (iteration_dir == SteeringParams::IT_FwdSearch) {
-        auto &cmeta = m_event->tr_candmeta(cstate.meta_id);
-        cmeta.fwd_rank_max = bcand.m_rank_max;
-        cmeta.fwd_rank_max_layer = bcand.m_rank_max_layer;
-        cmeta.fwd_rank_over_layer = bcand.m_rank_over_layer;
-        cmeta.fwd_stop_reason = bcand.stopReason();
-        const Track ft = bcand.exportTrack();
-        unsigned long long h = 1469598103934665603ull;
-        for (int ih = 0; ih < ft.nTotalHits(); ++ih) {
-          const HitOnTrack hot = ft.getHitOnTrack(ih);
-          h = (h ^ (unsigned long long)(hot.layer * 1000003 + hot.index)) * 1099511628211ull;
-        }
-        cmeta.fwd_hits_hash = h;
-      }
-      int pid = cstate.parent_id;
-      while (pid >= 0) {
-        auto &pstate = m_event->tr_candstate(pid);
-        pstate.on_final_path = true;
-        pid = pstate.parent_id;
-      }
-    }
+    trace_end_v2p2_search(m_event, eoccs, iteration_dir);
 #endif
 
     // debug = false;
