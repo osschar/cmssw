@@ -40,10 +40,10 @@ namespace mkfit {
     float hit_chi2_cut = 9.21f;
 
     int max_presel_hits = 6;  // reduction cap per sub-layer
-    int max_sec_depth = 4;    // most hits one path may take in a layer
+    int max_path_hits = 4;    // most hits one path may take in a layer
 
     static constexpr int max_presel_hits_limit = 12;  // inline storage
-    static constexpr int max_sec_depth_limit = 8;     // array size
+    static constexpr int max_path_hits_limit = 8;     // array size
 
     const V2p2ScoreParams& score(bool is_outward) const { return is_outward ? score_outward : score_inward; }
   };

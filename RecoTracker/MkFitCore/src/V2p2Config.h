@@ -73,7 +73,7 @@ namespace mkfit {
     // "End-of-layer selection".
     namespace InLayer {
       constexpr int max_presel_hits_limit = V2p2Params::max_presel_hits_limit;
-      constexpr int max_sec_depth_limit = V2p2Params::max_sec_depth_limit;
+      constexpr int max_path_hits_limit = V2p2Params::max_path_hits_limit;
       MKFIT_V2P2_KNOB(bool, reserve_hole_slot, false);  // keep one decliner in the beam
       MKFIT_V2P2_KNOB(bool, best_short, false);         // stopped candidates leave the beam (outward)
       // Select a CombCandidate as soon as its last candidate has been through a
