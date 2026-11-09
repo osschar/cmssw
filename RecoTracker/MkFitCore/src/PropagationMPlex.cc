@@ -126,7 +126,6 @@ namespace {
     ASSUME_ALIGNED(c, 64);
 
 #include "MultHelixPropTransp.ah"
-
   }
 
   void MultHelixPropTemp(const MPlexLL& A, const MPlexLL& B, MPlexLL& C, int n) {

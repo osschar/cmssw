@@ -46,7 +46,6 @@ namespace {
     ASSUME_ALIGNED(c, 64);
 
 #include "MultHelixPropTranspEndcap.ah"
-
   }
 
 }  // namespace

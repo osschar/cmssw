@@ -3,6 +3,7 @@
 
 #include "RecoTracker/MkFitCore/interface/Config.h"
 #include "RecoTracker/MkFitCore/interface/MatrixSTypes.h"
+#include "RecoTracker/MkFitCore/interface/MathInlineCore.h"
 
 //==============================================================================
 
