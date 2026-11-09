@@ -96,14 +96,13 @@ namespace mkfit {
       unsigned int hit_index;
       int layer;
 
-#ifdef MKFIT_TRACE
-      int tr_hitmatch_id;
-#endif
-
       // Position and momentum at the crossing with the hit's module plane (the
       // Hermite cubic solved onto it), with inv_pt, inv_k and theta of the state at
       // the previous hit. Its dalpha orders the hits along the path.
       mini_propagators::InitialState mixed_state;
+#ifdef MKFIT_TRACE
+      int tr_hitmatch_id = -1;
+#endif
 
       // Worst (largest ddphi) on top, so it is the one replaced.
       bool operator<(const PassedHitMatch& o) const { return ddphi < o.ddphi; }

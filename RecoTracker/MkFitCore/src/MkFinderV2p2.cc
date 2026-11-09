@@ -16,6 +16,13 @@
 //#define DEBUG
 #include "Debug.h"
 
+// Counters of the current TrLayerSearch, empty without MKFIT_TRACE.
+#ifdef MKFIT_TRACE
+#define V2P2_TR_LS_COUNT(ls_id, field) (++mp_event->tr_layersearch(ls_id).field)
+#else
+#define V2P2_TR_LS_COUNT(ls_id, field) ((void)0)
+#endif
+
 //==============================================================================
 // How MkFinderV2p2 works, a reader's map.
 //
@@ -58,10 +65,10 @@
 //     in / at the edge of / outside the sensitive region       determine_wsr()
 //     each hit in the bins: cross its module plane, cut,       select_hits(), preselect_hit_batch()
 //       keep the best max_presel_hits per sub-layer by dphi
-//     order the kept hits along the path                       prepare_kalman_workload()
+//     order the kept hits along the path                       order_hits_along_path()
 //     paths: the subsequences of those hits in path order,     expand_in_layer(), rk_*()
-//       up to max_path_hits hits, one per module, each hit
-//       Kalman-updated and accepted on its chi2
+//       up to max_hits_per_layer hits, one per module, each
+//       hit Kalman-updated and accepted on its chi2
 //   compete on score: every path, one hole per incoming        select_and_materialise()
 //     candidate, the TrackCands not taken in; the best
 //     m_max_cands become the CombCandidate's TrackCands
@@ -354,7 +361,7 @@ namespace mkfit {
     prop_to_layer_edges(b);       // pop the queue, propagate to the layer edges
     determine_search_windows(b);  // covariance -> dphi/dq windows -> bin ranges
     select_hits(b);               // walk the bins, pre-select, reduce in a pqueue
-    prepare_kalman_workload(b);   // pqueue -> m_layer_hits, step-ordered
+    order_hits_along_path(b);     // pqueue -> m_layer_hits, step-ordered
     // The paths stay in the arena until their CombCandidate is selected in
     // select_and_materialise(): right after the batch with InLayer::early_select,
     // else in end_layer().
@@ -775,18 +782,10 @@ namespace mkfit {
               if (std::abs(squashPhiGeneral(L.hit_phi(hi) - rho_phi_c)) < rho_phi_half && L.hit_q(hi) > rho_q_lo &&
                   L.hit_q(hi) < rho_q_hi)
                 ++b.n_scanned[i];
-#ifdef MKFIT_TRACE
-              ++mp_event->tr_layersearch(tr_layersearch_ids[i]).n_hits_scanned;
-#endif
+              V2P2_TR_LS_COUNT(tr_layersearch_ids[i], n_hits_scanned);
 
               if (iteration_hit_mask && (*iteration_hit_mask)[hi_orig]) {
-                dprintf("Yay, denying masked hit on layer %u, hi %u, orig idx %u\n",
-                        L.layer_info().layer_id(),
-                        hi,
-                        hi_orig);
-#ifdef MKFIT_TRACE
-                ++mp_event->tr_layersearch(tr_layersearch_ids[i]).n_hits_masked;
-#endif
+                V2P2_TR_LS_COUNT(tr_layersearch_ids[i], n_hits_masked);
                 continue;
               }
 
@@ -805,9 +804,7 @@ namespace mkfit {
                   reject = dev > pc_tol_phi + hit_term + std::abs(pc_gphi) * qbar_term;
                 }
                 if (reject) {
-#ifdef MKFIT_TRACE
-                  ++mp_event->tr_layersearch(tr_layersearch_ids[i]).n_hits_precut;
-#endif
+                  V2P2_TR_LS_COUNT(tr_layersearch_ids[i], n_hits_precut);
                   continue;
                 }
               }
@@ -846,14 +843,11 @@ namespace mkfit {
       const float area = std::max(1e-4f, w_phi * r * w_q);
       b.cand[i]->m_log_rho = std::log(std::max(1e-6f, (b.n_scanned[i] + 1.0f) / area));
 #if defined(MKFIT_STANDALONE)
-      // Diag::final_beam_purity: hits in the density region, the expected background
-      // of this layer step, per (seed, layer), forward search only.
-      if (Diag::final_beam_purity && spi.type() == SteeringParams::IT_FwdSearch) {
-        const int seed = b.cand[i]->ccand().seed_origin_index();
-        v2p2_final_beam_bg_record(seed, spi->m_layer, b.n_scanned[i]);
-        if (spi->m_layer_sec >= 0)
-          v2p2_final_beam_bg_record(seed, spi->m_layer_sec, b.n_scanned[i]);
-      }
+      // Diag::final_beam_purity: the hits in the density region are the expected
+      // background of this layer step, per (seed, layer), forward search only.
+      if (Diag::final_beam_purity && spi.is_outward())
+        v2p2_final_beam_bg_record(
+            b.cand[i]->ccand().seed_origin_index(), spi->m_layer, spi->m_layer_sec, b.n_scanned[i]);
 #endif
     }
   }
@@ -940,7 +934,6 @@ namespace mkfit {
 
 #ifdef MKFIT_TRACE
     int tr_hitmatch_ids[NN];
-    MPlex3V module_xdir, module_ydir;
 #endif
 
     // Extract hit / target module data
@@ -954,8 +947,6 @@ namespace mkfit {
       h3d.copyIn(h, H, cand_idcs[h]);
 
 #ifdef MKFIT_TRACE
-      module_xdir.copyIn(h, mi.xdir.Array());
-      module_ydir.copyIn(h, mi.calc_ydir().Array());
       CandIncoming& cand = *cand_ptrs[cand_idcs[h]];
       TrHitMatch hm = make_hitmatch(mp_event, cand.ccand().seed_origin_index(), L, hit_orig_idcs[h], is_sec_layer);
       hm.state_id = cand.tcand().m_trace_state_id;
@@ -970,21 +961,11 @@ namespace mkfit {
 
     mp::Hermite3DOnPlane h3dop;
     h3dop.init_coeffs(h3d, module_pos, module_norm);
-#ifdef DEBUG
-    // Distance-to-plane at the two layer bounding surfaces (d0, d1) and at the
-    // Newton start point (t2, d2) -- debug-only, so keep them inside the ifdef
-    // rather than trusting the optimiser to drop the calls.
-    MPlexQF d0, d1, d2, t2;
-    h3dop.evaluate(0.0f, d0);
-    h3dop.evaluate(1.0f, d1);
-    t2 = h3dop.m_T;
-    h3dop.evaluate(h3dop.m_T, d2);
-#endif
     // NOTE: solve() is a SINGLE Newton step, not an iteration to convergence.
     // d3 below is what says whether that one step was enough, so it goes into
     // the trace and not just into DEBUG.
     h3dop.solve();
-#if defined(MKFIT_TRACE) || defined(DEBUG)
+#ifdef MKFIT_TRACE
     MPlexQF d3;
     h3dop.evaluate(h3dop.m_T, d3);  // residual distance to plane after the solve
 #endif
@@ -1033,73 +1014,46 @@ namespace mkfit {
                 (int) (ddq < dq_cut), (int) (ddphi < dphi_cut));
         dprintf("       ddq=%.3f, dq_track=%.4f, hit_q_half_len=%.4f, dq_cut=%.4f\n",
                 ddq, B.m_dq_track[cand_idcs[h]], L.hit_q_half_length(hit_idcs[h]), dq_cut);
-
-        dprintf("      H3 d0=%.4f d1=%.4f -> d2=%e t2=%e -> d3=%e t3=%e ... dalpha=%6.4f\n",
-               d0[h], d1[h], d2[h], t2[h], d3[h], h3dop.m_T[h],
-               h3_state.dalpha[h]);
-        // The two cheap propagations onto this module plane, side by side.
-        // t3 outside [0,1] means the Hermite is extrapolating past the layer.
-        dprintf("      H3   pos %8.4f %8.4f %8.4f | mom %8.4f %8.4f %8.4f\n",
-                h3_state.x[h], h3_state.y[h], h3_state.z[h],
-                h3_state.px[h], h3_state.py[h], h3_state.pz[h]);
-#ifdef MKFIT_TRACE_PROP_COMPARE
-        dprintf("      LINE pos %8.4f %8.4f %8.4f | mom %8.4f %8.4f %8.4f\n",
-                h_plex.x[h], h_plex.y[h], h_plex.z[h],
-                h_plex.px[h], h_plex.py[h], h_plex.pz[h]);
-        dprintf("      H3 - LINE %+9.6f %+9.6f %+9.6f -- |d| = %.6f\n",
-                h3_state.x[h] - h_plex.x[h], h3_state.y[h] - h_plex.y[h], h3_state.z[h] - h_plex.z[h],
-                hipo(hipo(h3_state.x[h] - h_plex.x[h], h3_state.y[h] - h_plex.y[h]),
-                     h3_state.z[h] - h_plex.z[h]));
-#endif
       // clang-format on
 #endif
 
 #ifdef MKFIT_TRACE
-      auto& tr_hitmatch = mp_event->tr_hitmatch(tr_hitmatch_ids[h]);
-      // h3_state -- the state the cuts just above were taken on.
-      tr_hitmatch.kine_on_plane = statep2bivec3(h3_state, h);
-      tr_hitmatch.t_hermite = h3dop.m_T[h];
-      tr_hitmatch.d_plane_h3 = d3[h];
-      tr_hitmatch.dphi = ddphi;
-      tr_hitmatch.dq = ddq;
-      tr_hitmatch.hit_q_half_len = L.hit_q_half_length(hit_idcs[h]);
-      tr_hitmatch.passed_preselect = dqdphi_presel;
-
-      auto& tr_ls = mp_event->tr_layersearch(tr_layersearch_ids[cand_idcs[h]]);
-      if (dqdphi_presel)
-        ++tr_ls.n_hits_presel;
-
+      // h3_state is the state the cut above was taken on.
+      TrHitMatch& hm = mp_event->tr_hitmatch(tr_hitmatch_ids[h]);
+      fill_hitmatch_presel(hm,
+                           h3_state,
+                           h,
+                           h3dop.m_T[h],
+                           d3[h],
+                           L,
+                           hit_orig_idcs[h],
+                           ddphi,
+                           ddq,
+                           L.hit_q_half_length(hit_idcs[h]),
+                           dqdphi_presel);
 #ifdef MKFIT_TRACE_PROP_COMPARE
-      tr_hitmatch.kine_on_plane_cmp = statep2bivec3(h_plex, h);
+      hm.kine_on_plane_cmp = statep2bivec3(h_plex, h);
 #endif
-
-      // residuals
-      EVec3 res = EVec3(h3_state.x[h], h3_state.y[h], h3_state.z[h]) - hit2pos(L.refHit(hit_orig_idcs[h]));
-      tr_hitmatch.residual_x = res.Dot(EVec3(module_xdir(h, 0, 0), module_xdir(h, 1, 0), module_xdir(h, 2, 0)));
-      tr_hitmatch.residual_y = res.Dot(EVec3(module_ydir(h, 0, 0), module_ydir(h, 1, 0), module_ydir(h, 2, 0)));
-      tr_hitmatch.residual_z = res.Dot(EVec3(module_norm(h, 0, 0), module_norm(h, 1, 0), module_norm(h, 2, 0)));
+      if (dqdphi_presel)
+        V2P2_TR_LS_COUNT(tr_layersearch_ids[cand_idcs[h]], n_hits_presel);
 #endif
 
       if (!dqdphi_presel)
         continue;
 
-      // The reduction is PER SUB-LAYER, so each sensor keeps its own budget.
+      // The reduction is PER SUB-LAYER, so each sensor keeps its own budget. A full
+      // queue takes the hit only in place of its worst one.
       const int sl = is_sec_layer ? 1 : 0;
-      auto do_pqueue_push = [&]() {
-#ifdef MKFIT_TRACE
-        cand.pq_push(
-            sl, {ddphi, hit_orig_idcs[h], hit_idcs[h], L.layer_id(), tr_hitmatch_ids[h], {h3_state, h, is_plex, h}});
-#else
-        cand.pq_push(sl, {ddphi, hit_orig_idcs[h], hit_idcs[h], L.layer_id(), {h3_state, h, is_plex, h}});
-#endif
-      };
-
-      if (cand.m_pqueue[sl].size() < mp_job->v2p2().max_presel_hits) {
-        do_pqueue_push();
-      } else if (ddphi < cand.pq_top(sl).ddphi) {
+      const bool full = cand.m_pqueue[sl].size() >= mp_job->v2p2().max_presel_hits;
+      if (full && !(ddphi < cand.pq_top(sl).ddphi))
+        continue;
+      if (full)
         cand.pq_pop(sl);
-        do_pqueue_push();
-      }
+      CandIncoming::PassedHitMatch phm{ddphi, hit_orig_idcs[h], hit_idcs[h], L.layer_id(), {h3_state, h, is_plex, h}};
+#ifdef MKFIT_TRACE
+      phm.tr_hitmatch_id = tr_hitmatch_ids[h];
+#endif
+      cand.pq_push(sl, phm);
     }
   }
 
@@ -1107,7 +1061,7 @@ namespace mkfit {
   // Phase 4 -- move the pqueue survivors into the per-candidate hit list.
   //----------------------------------------------------------------------------
 
-  void MkFinderV2p2::prepare_kalman_workload(LayerBatch& b) {
+  void MkFinderV2p2::order_hits_along_path(LayerBatch& b) {
     const int N_proc = b.N_proc;
     CandIncoming** cand_ptrs = b.cand;
 #ifdef MKFIT_TRACE
@@ -1177,7 +1131,7 @@ namespace mkfit {
   // over the path-ordered m_layer_hits. expand_in_layer() queues the depth-0
   // items; from there it is a worklist, not recursion: each flush harvests
   // nodes into m_deep_queue, rk_pump() turns them into deeper items, and so on
-  // to max_path_hits. Items in a batch that is not yet full wait for a later
+  // to max_hits_per_layer. Items in a batch that is not yet full wait for a later
   // layer batch or rk_drain(). Nodes live in m_node_arena until their
   // CombCandidate is selected. See doc/MkFinderV2p2-DesignNotes.md,
   // "In-layer combinatorial search".
@@ -1249,7 +1203,7 @@ namespace mkfit {
     harvest_nodes();
     for (const int ni : m_nodes_harvested) {
       const CandNode& n = m_node_arena[ni];
-      if (n.m_feat.n_hits < mp_job->v2p2().max_path_hits) {
+      if (n.m_feat.n_hits < mp_job->v2p2().max_hits_per_layer) {
         m_deep_queue.push_back(ni);
         ++n.m_cand->mp_ccrep->m_n_inflight;
       }
@@ -1270,7 +1224,7 @@ namespace mkfit {
       const CandIncoming::PassedHitMatch& phm = cand.m_layer_hits[lh];
       // A second hit from a module already on this path is a split cluster or
       // another track's hit, not an overlap: skip it. The walk back is at most
-      // V2p2Params::max_path_hits long.
+      // V2p2Params::max_hits_per_layer long.
       bool same_module = false;
       for (int ci = ni; ci >= 0 && !same_module; ci = m_node_arena[ci].m_parent_idx) {
         const CandNode& an = m_node_arena[ci];
@@ -1505,7 +1459,7 @@ namespace mkfit {
       TrackCand& nc = m_new_cands.back();
 
       if (e.node_idx >= 0) {
-        int chain[InLayer::max_path_hits_limit];
+        int chain[InLayer::max_hits_per_layer_limit];
         int n_chain = 0;
         for (int ci = e.node_idx; ci >= 0; ci = m_node_arena[ci].m_parent_idx)
           chain[n_chain++] = ci;

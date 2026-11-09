@@ -184,7 +184,7 @@ namespace mkfit {
                                        int h,
                                        const MPlex3V& module_norm,
                                        bool is_barrel);
-    void prepare_kalman_workload(LayerBatch& b);
+    void order_hits_along_path(LayerBatch& b);
 
     //--------------------------------------------------------------------------
     // The in-layer combinatorial search: expand_in_layer() grows the CandNode
