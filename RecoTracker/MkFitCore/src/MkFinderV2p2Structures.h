@@ -172,8 +172,9 @@ namespace mkfit {
     // both counts at zero.
     int m_n_inflight = 0;
     bool m_selected = false;  // select_and_materialise() already ran this layer
-    // Beam width this layer, set in begin_next_Ccrep_in_layer(); 0 = the
-    // CombCandidate's capacity. See InLayer::late_max_cands.
+    // Beam width this layer, set at pull-in in begin_next_Ccrep_in_layer() (0
+    // before the first pull-in: the CombCandidate's capacity). See
+    // InLayer::late_max_cands.
     int m_max_cands = 0;
 
     // m_cand_queue holds pointers into m_cands, so it must never reallocate:

@@ -169,7 +169,8 @@ namespace mkfit {
     int fake_hit_index(const TrackCand& tc, const WSR_Result& wsr) const;
 
     //--------------------------------------------------------------------------
-    // The phases of process_layer_batch(), in order.
+    // The phases of process_layer_batch(), in order; determine_wsr() is called
+    // from determine_search_windows().
     void prop_to_layer_edges(LayerBatch& b);
     void determine_search_windows(LayerBatch& b);
     void determine_wsr(LayerBatch& b);

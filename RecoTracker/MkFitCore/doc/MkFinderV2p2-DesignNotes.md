@@ -55,9 +55,9 @@ scan a knob without a rebuild.
 
 **Per iteration** (`interface/V2p2Params.h`, `IterationConfig::m_v2p2`): the
 two score sets (outward and inward search), `hit_chi2_cut`, `max_presel_hits`
-and `max_sec_depth`. In CMSSW, `MkFitIterationConfigESProducer` sets them from
+and `max_path_hits`. In CMSSW, `MkFitIterationConfigESProducer` sets them from
 its python PSet `v2p2` (`scoreOutward` and `scoreInward` with `hitEff` and
-`hitEffByGroup`, `hitChi2Cut`, `maxPreselHits`, `maxSecDepth`); they are not in
+`hitEffByGroup`, `hitChi2Cut`, `maxPreselHits`, `maxPathHits`); they are not in
 the JSON. The score PSets carry only what the log-likelihood score reads, since
 `Score::mode` is 1 in CMSSW. The defaults are those of `V2p2Params`, so an unset
 parameter keeps them. In the standalone the `mkFit` options and the shell setters
@@ -568,7 +568,7 @@ positions in `m_layer_hits`. Per candidate, the search is
 
 ```
 frontier = { kalman(state, h) : h in m_layer_hits }               # depth 0
-for depth = 1 .. max_sec_depth - 1, while frontier is not empty:
+for depth = 1 .. max_path_hits - 1, while frontier is not empty:
   next = { kalman(n.state, h) : n in frontier,
            h after n's hit in m_layer_hits, h not on a module of n's path }
   frontier = next
@@ -594,7 +594,7 @@ A second hit from the same module as an earlier hit of the path is not taken.
 That is a split cluster or another track's hit, and a split cluster is one
 measurement: taking it twice shrinks the covariance without adding information.
 
-`V2p2Params::max_sec_depth` (4) caps the hits per path. Forward, 10 events of
+`V2p2Params::max_path_hits` (4) caps the hits per path. Forward, 10 events of
 `ttbar-PU200-D121-C22-100ev.bin`, found tracks stop changing at depth 3. Inward
 on 20 events of chopped pT5, fully recovered tracks go from 82.4 % at depth 2
 to 90.8 % at depth 4.

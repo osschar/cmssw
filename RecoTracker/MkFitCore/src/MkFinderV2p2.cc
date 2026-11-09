@@ -24,6 +24,13 @@
 // plan entry is one layer, or two sub-layers (m_layer, m_layer_sec) such as the
 // two sensors of a PS / 2S module.
 //
+// The default plan is split: each sensor of a module pair is its own plan entry,
+// searched from the state after the previous entry, so a missed sensor gets its
+// own hole. A paired entry, one for both sensors with a shared window and one
+// in-layer search over both, is supported but not used by default; its holes are
+// per entry, not per sensor. The hole, overlap-count and sister-hole code is
+// written for the split plan.
+//
 // The objects, per layer:
 //   CCandRep        one CombCandidate (one seed) while it is finding, from
 //                   pickup until all its TrackCands have stopped.
@@ -53,7 +60,7 @@
 //       keep the best max_presel_hits per sub-layer by dphi
 //     order the kept hits along the path                       prepare_kalman_workload()
 //     paths: the subsequences of those hits in path order,     expand_in_layer(), rk_*()
-//       up to max_sec_depth hits, one per module, each hit
+//       up to max_path_hits hits, one per module, each hit
 //       Kalman-updated and accepted on its chi2
 //   compete on score: every path, one hole per incoming        select_and_materialise()
 //     candidate, the TrackCands not taken in; the best
@@ -1135,8 +1142,9 @@ namespace mkfit {
                   if (ka != kb)
                     return ka < kb;
                   // Equal keys: hits on one module, or on coplanar modules of one layer,
-                  // share the plane crossing. Larger ddphi first, then by hit: an
-                  // order that does not depend on the pqueues'.
+                  // share the plane crossing. Larger ddphi first, the order the
+                  // pqueue drain gave and the results were validated with, then by
+                  // hit: an order that does not depend on the pqueues'.
                   if (a.ddphi != b.ddphi)
                     return a.ddphi > b.ddphi;
                   return a.hit_orig_index < b.hit_orig_index;
@@ -1169,7 +1177,7 @@ namespace mkfit {
   // over the path-ordered m_layer_hits. expand_in_layer() queues the depth-0
   // items; from there it is a worklist, not recursion: each flush harvests
   // nodes into m_deep_queue, rk_pump() turns them into deeper items, and so on
-  // to max_sec_depth. Items in a batch that is not yet full wait for a later
+  // to max_path_hits. Items in a batch that is not yet full wait for a later
   // layer batch or rk_drain(). Nodes live in m_node_arena until their
   // CombCandidate is selected. See doc/MkFinderV2p2-DesignNotes.md,
   // "In-layer combinatorial search".
@@ -1241,7 +1249,7 @@ namespace mkfit {
     harvest_nodes();
     for (const int ni : m_nodes_harvested) {
       const CandNode& n = m_node_arena[ni];
-      if (n.m_feat.n_hits < mp_job->v2p2().max_sec_depth) {
+      if (n.m_feat.n_hits < mp_job->v2p2().max_path_hits) {
         m_deep_queue.push_back(ni);
         ++n.m_cand->mp_ccrep->m_n_inflight;
       }
@@ -1262,7 +1270,7 @@ namespace mkfit {
       const CandIncoming::PassedHitMatch& phm = cand.m_layer_hits[lh];
       // A second hit from a module already on this path is a split cluster or
       // another track's hit, not an overlap: skip it. The walk back is at most
-      // V2p2Params::max_sec_depth long.
+      // V2p2Params::max_path_hits long.
       bool same_module = false;
       for (int ci = ni; ci >= 0 && !same_module; ci = m_node_arena[ci].m_parent_idx) {
         const CandNode& an = m_node_arena[ci];
@@ -1497,7 +1505,7 @@ namespace mkfit {
       TrackCand& nc = m_new_cands.back();
 
       if (e.node_idx >= 0) {
-        int chain[InLayer::max_sec_depth_limit];
+        int chain[InLayer::max_path_hits_limit];
         int n_chain = 0;
         for (int ci = e.node_idx; ci >= 0; ci = m_node_arena[ci].m_parent_idx)
           chain[n_chain++] = ci;
@@ -1578,8 +1586,9 @@ namespace mkfit {
   // upper sensor's detid is the lower one's + 1; either may be crossed first. A
   // track through one sensor of a module crosses the other a few mm away, so
   // when a path took the sister hit, the hole is the worse explanation of the
-  // same crossing. The path's first hit is tested. For the split plan, where the
-  // previous hit is in the sister plan entry.
+  // same crossing. The first hit of the path is the one tested. Written for the
+  // split plan, where the previous hit can be in the sister plan entry; for a
+  // paired entry it drops nothing.
   void MkFinderV2p2::drop_sister_dominated_holes(const CombCandidate& ccand) {
     const int lay = m_rz_limits.layer_info_1().layer_id();
     const TrackerInfo& ti = mp_job->m_trk_info;
