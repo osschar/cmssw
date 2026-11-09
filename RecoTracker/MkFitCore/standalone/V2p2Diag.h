@@ -91,7 +91,8 @@ namespace mkfit {
   // Diag::final_beam_purity: each seed's beam at the end of the v2p2 forward search,
   // against truth. Called from MkFinderV2p2 (bg_record) and from
   // MkBuilder::findTracksStandardv2p2() (diag), single-threaded accumulation.
-  void v2p2_final_beam_bg_record(int seed, int layer, float n_bg);
+  // layer_sec: the second sub-layer of the plan entry, or -1.
+  void v2p2_final_beam_bg_record(int seed, int layer, int layer_sec, float n_bg);
   class CombCandidate;
   void v2p2_final_pick_record(const CombCandidate &cc);
   void v2p2_final_beam_diag(const Event *ev, const EventOfCombCandidates &eoccs);

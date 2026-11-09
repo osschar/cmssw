@@ -36,7 +36,7 @@ CFG=("1    0    0    0.99   BASE__depth1"
 
 for c in "${CFG[@]}"; do
   set -- $c
-  CMD+=(--shell-command "val_max_path_hits($1)"
+  CMD+=(--shell-command "val_max_hits_per_layer($1)"
         --shell-command "val_reserve_hole_slot($2)"
         --shell-command "val_score_mode($3, $4)"
         --shell-command 'val_te_reset()')

@@ -1686,13 +1686,13 @@ namespace mkfit {
 
   // Most hits one path may take in a layer. 1 with val_max_cands(1) is a single
   // greedy path, the closest the search gets to one best hit per layer.
-  void val_max_path_hits(int n) {
-    if (n < 1 || n > V2p2Params::max_path_hits_limit) {
-      printf("val_max_path_hits: %d out of range [1, %d], ignored\n", n, V2p2Params::max_path_hits_limit);
+  void val_max_hits_per_layer(int n) {
+    if (n < 1 || n > V2p2Params::max_hits_per_layer_limit) {
+      printf("val_max_hits_per_layer: %d out of range [1, %d], ignored\n", n, V2p2Params::max_hits_per_layer_limit);
       return;
     }
-    for_each_v2p2_params([n](V2p2Params &p) { p.max_path_hits = n; });
-    printf("val_max_path_hits: %d\n", n);
+    for_each_v2p2_params([n](V2p2Params &p) { p.max_hits_per_layer = n; });
+    printf("val_max_hits_per_layer: %d\n", n);
   }
 
   // miss_fwd / miss_bkw are the head-body asymmetry: outward a trailing hole is

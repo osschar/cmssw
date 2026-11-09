@@ -60,6 +60,38 @@ namespace mkfit {
     }
   }
 
+  // The pre-selection part of a TrHitMatch, from MkFinderV2p2::preselect_hit_batch():
+  // lane h of s is the state on the hit's module plane the cut was taken on, t the
+  // Hermite parameter there and d_plane the distance to the plane left after the
+  // solve. hit_orig_idx is the hit's index in the layer's hit vector. The residuals
+  // are against the hit, in the module frame.
+  inline void fill_hitmatch_presel(TrHitMatch &hm,
+                                   const miprops::StatePlex &s,
+                                   int h,
+                                   float t,
+                                   float d_plane,
+                                   const LayerOfHits &L,
+                                   int hit_orig_idx,
+                                   float ddphi,
+                                   float ddq,
+                                   float q_half_len,
+                                   bool passed) {
+    const Hit &hit = L.refHit(hit_orig_idx);
+    const ModuleInfo &mi = L.layer_info().module_info(hit.detIDinLayer());
+    hm.kine_on_plane = statep2bivec3(s, h);
+    hm.t_hermite = t;
+    hm.d_plane_h3 = d_plane;
+    hm.dphi = ddphi;
+    hm.dq = ddq;
+    hm.hit_q_half_len = q_half_len;
+    hm.passed_preselect = passed;
+    const SVector3 ydir = mi.calc_ydir();
+    const EVec3 res = statep2pos(s, h) - hit2pos(hit);
+    hm.residual_x = res.Dot(EVec3(mi.xdir[0], mi.xdir[1], mi.xdir[2]));
+    hm.residual_y = res.Dot(EVec3(ydir[0], ydir[1], ydir[2]));
+    hm.residual_z = res.Dot(EVec3(mi.zdir[0], mi.zdir[1], mi.zdir[2]));
+  }
+
   // TrHitMatch for a pre-selected hit, without the state and search ids. mc_match:
   // the hit was made by the seed's sim track. layer is L.layer_id(), not the plan
   // entry's layer: with the secondary sub-layer scanned the two differ.

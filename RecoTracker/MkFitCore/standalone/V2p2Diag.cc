@@ -301,10 +301,14 @@ namespace mkfit {
     bool fbd_is_ot(int l) { return (l >= 4 && l < 16) || (l >= 28 && l < 38) || l >= 50; }
   }  // namespace
 
-  void v2p2_final_beam_bg_record(int seed, int layer, float n_bg) {
-    auto &e = g_fbd_bg[{seed, layer}];
-    e.first += n_bg;
-    ++e.second;
+  void v2p2_final_beam_bg_record(int seed, int layer, int layer_sec, float n_bg) {
+    for (int l : {layer, layer_sec}) {
+      if (l < 0)
+        continue;
+      auto &e = g_fbd_bg[{seed, l}];
+      e.first += n_bg;
+      ++e.second;
+    }
   }
 
   //==============================================================================

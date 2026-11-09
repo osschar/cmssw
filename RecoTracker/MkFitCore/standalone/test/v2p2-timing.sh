@@ -1,6 +1,6 @@
 #!/bin/bash
 # Single-threaded build timing: V1/CloneEngine against v2p2 as a single greedy
-# path (cap 1, max_path_hits 1) and at two caps.
+# path (cap 1, max_hits_per_layer 1) and at two caps.
 #
 # TWO NUMBERS PER CONFIGURATION, and they mean different things:
 #   "Iteration 0 build time"  -- runBtpCe_MultiIter brackets ONLY
@@ -45,7 +45,7 @@ BASE=(--geom CMS-phase2 --seed-input cmssw --input-file "$SAMPLE"
 
 #     label            extra flags
 CFG=("V1_ce_c6|--build-mimi --max-cands-per-seed 6"
-     "greedy_c1|--build-mimi --build-mimi-v2p2 --max-cands-per-seed 1 --v2p2-max-path-hits 1"
+     "greedy_c1|--build-mimi --build-mimi-v2p2 --max-cands-per-seed 1 --v2p2-max-hits-per-layer 1"
      "comb_c3|--build-mimi --build-mimi-v2p2 --max-cands-per-seed 3"
      "comb_c4|--build-mimi --build-mimi-v2p2 --max-cands-per-seed 4")
 

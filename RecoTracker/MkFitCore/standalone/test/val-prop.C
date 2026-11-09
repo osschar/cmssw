@@ -70,7 +70,7 @@ void val_sister_hole(bool on, float chi2 = 0) { mkfit::val_sister_hole(on, chi2)
 void val_max_cands_fb(int n_fwd, int n_bkw) { mkfit::val_max_cands_fb(n_fwd, n_bkw); }
 void val_bkfit_outliers(float chi2, int max_outliers, float min_pt) { mkfit::val_bkfit_outliers(chi2, max_outliers, min_pt); }
 void val_dup_drth(float central, float obarrel, float forward) { mkfit::val_dup_drth(central, obarrel, forward); }
-void val_max_path_hits(int n) { mkfit::val_max_path_hits(n); }
+void val_max_hits_per_layer(int n) { mkfit::val_max_hits_per_layer(n); }
 void val_layer_policy(bool w, bool h, bool s) { mkfit::val_layer_policy(w, h, s); }
 void val_reserve_hole_slot(bool on) { mkfit::val_reserve_hole_slot(on); }
 void val_mini_prop_param_b(int on) { mkfit::val_mini_prop_param_b(on); }
