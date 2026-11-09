@@ -62,9 +62,12 @@ namespace {
     mkfit::V2p2Params p;
     p.score_outward = readScore(ps.getParameter<edm::ParameterSet>("scoreOutward"), p.score_outward, "scoreOutward");
     p.score_inward = readScore(ps.getParameter<edm::ParameterSet>("scoreInward"), p.score_inward, "scoreInward");
+    p.chi2_trk_fac = ps.getParameter<double>("hitChi2TrackFactor");
     p.hit_chi2_cut = ps.getParameter<double>("hitChi2Cut");
     p.max_presel_hits = ps.getParameter<int>("maxPreselHits");
     p.max_hits_per_layer = ps.getParameter<int>("maxHitsPerLayer");
+    if (!(p.chi2_trk_fac > 0))
+      throw cms::Exception("Configuration") << "v2p2.hitChi2TrackFactor must be > 0, got " << p.chi2_trk_fac;
     if (p.max_presel_hits < 1 || p.max_presel_hits > mkfit::V2p2Params::max_presel_hits_limit)
       throw cms::Exception("Configuration")
           << "v2p2.maxPreselHits must be in [1, " << mkfit::V2p2Params::max_presel_hits_limit << "], got "
@@ -124,10 +127,14 @@ void MkFitIterationConfigESProducer::fillDescriptions(edm::ConfigurationDescript
       ->setComment("log-likelihood layer-step score, outward search");
   v2p2.add<edm::ParameterSetDescription>("scoreInward", scoreInward)
       ->setComment("log-likelihood layer-step score, inward search");
+  v2p2.add<double>("hitChi2TrackFactor", cfiDefault(v2p2Defaults.chi2_trk_fac))
+      ->setComment(
+          "Kalman hit acceptance: a hit is accepted if r^T (f^2 C_trk + C_hit)^-1 r < hitChi2Cut, with f this "
+          "factor on the track sigma; it carries the deficit of the track covariance, 1 is the plain chi2");
   v2p2.add<double>("hitChi2Cut", cfiDefault(v2p2Defaults.hit_chi2_cut))
       ->setComment(
-          "Kalman hit acceptance: chi2 against the scaled track and the hit covariance; v2p2 uses this, not the "
-          "JSON's chi2Cut_min");
+          "Kalman hit acceptance: cut on that chi2, a quantile (9.21 is the 99 % point with 2 dof); v2p2 uses "
+          "this, not the JSON's chi2Cut_min");
   v2p2.add<int>("maxPreselHits", v2p2Defaults.max_presel_hits)
       ->setComment("hits kept per candidate and sub-layer after the pre-selection");
   v2p2.add<int>("maxHitsPerLayer", v2p2Defaults.max_hits_per_layer)

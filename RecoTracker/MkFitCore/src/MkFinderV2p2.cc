@@ -1163,6 +1163,7 @@ namespace mkfit {
     koa.prop_config = &mp_job->m_trk_info.prop_config();
     koa.mp_out = &m_kalman_out;
     koa.m_solve_plane = solve_plane;
+    koa.m_chi2_trk_fac = mp_job->v2p2().chi2_trk_fac;
 #ifdef MKFIT_TRACE
     koa.mp_event = mp_event;
 #endif

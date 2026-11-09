@@ -122,15 +122,7 @@ namespace mkfit {
       MKFIT_V2P2_KNOB(float, looper_max_angle, Const::PIOver2 - 0.2f);
       MKFIT_V2P2_KNOB(float, looper_max_pt, 1.2f);
       MKFIT_V2P2_KNOB(float, looper_min_r, 25.0f);
-      // Kalman hit acceptance, in harvest_nodes(): chi2_acc < hit_chi2_cut,
-      // where chi2_acc is the residual against chi2_trk_fac^2 * C_trk + C_hit in
-      // the module's local frame. The hit covariance is taken as it is;
-      // chi2_trk_fac carries the track-covariance deficit, so hit_chi2_cut is a
-      // chi2 quantile: 9.21 is the 99 % point of chi2 with 2 dof. The update and
-      // the score keep the plain chi2. chi2_trk_fac = 1 is the plain chi2 and
-      // costs nothing extra.
-      // hit_chi2_cut is V2p2Params::hit_chi2_cut.
-      MKFIT_V2P2_KNOB(float, chi2_trk_fac, 3.0f);
+      // Kalman hit acceptance: V2p2Params::chi2_trk_fac and hit_chi2_cut.
     }  // namespace Policy
 
     //--------------------------------------------------------------------------

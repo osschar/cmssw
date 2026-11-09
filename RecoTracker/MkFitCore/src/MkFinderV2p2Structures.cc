@@ -59,7 +59,7 @@ namespace mkfit {
     const MPlexQI chg_pre_update = tsChg;
 #endif
 
-    const float acc_scale2 = Config::V2p2::Policy::chi2_trk_fac * Config::V2p2::Policy::chi2_trk_fac;
+    const float acc_scale2 = m_chi2_trk_fac * m_chi2_trk_fac;
     const bool acc_separate = acc_scale2 != 1.0f;
 
     const TrackRef pred{propPar, tsChg, N_filled};

@@ -54,10 +54,10 @@ defined in `V2p2Config.cc`, so that `mkFit` options and the shell drivers can
 scan a knob without a rebuild.
 
 **Per iteration** (`interface/V2p2Params.h`, `IterationConfig::m_v2p2`): the
-two score sets (outward and inward search), `hit_chi2_cut`, `max_presel_hits`
-and `max_hits_per_layer`. In CMSSW, `MkFitIterationConfigESProducer` sets them from
+two score sets (outward and inward search), `chi2_trk_fac` and `hit_chi2_cut`,
+`max_presel_hits` and `max_hits_per_layer`. In CMSSW, `MkFitIterationConfigESProducer` sets them from
 its python PSet `v2p2` (`scoreOutward` and `scoreInward` with `hitEff` and
-`hitEffByGroup`, `hitChi2Cut`, `maxPreselHits`, `maxHitsPerLayer`); they are not in
+`hitEffByGroup`, `hitChi2TrackFactor`, `hitChi2Cut`, `maxPreselHits`, `maxHitsPerLayer`); they are not in
 the JSON. The score PSets carry only what the log-likelihood score reads, since
 `Score::mode` is 1 in CMSSW. The defaults are those of `V2p2Params`, so an unset
 parameter keeps them. In the standalone the `mkFit` options and the shell setters
@@ -632,7 +632,7 @@ search on was 60.79 s at cap 3 and 76.45 s at cap 4.
 
 **Code:** `plane::chi2_scaled()` in `KalmanOpArgs::do_kalman_stuff()`,
 `KalmanOpArgs::tsChi2Acc`, `harvest_nodes()`,
-`V2p2Params::hit_chi2_cut`, `Policy::chi2_trk_fac`.
+`V2p2Params::chi2_trk_fac` and `hit_chi2_cut`.
 
 **The cut.** A hit is accepted if
 

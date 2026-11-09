@@ -229,7 +229,7 @@ namespace mkfit {
 
     MPlexQF tsChi2{0.0f};     // output
     MPlexQF tsDetV{0.0f};     // output: det of the 2x2 residual covariance
-    MPlexQF tsChi2Acc{0.0f};  // output: acceptance chi2, Policy::chi2_trk_fac
+    MPlexQF tsChi2Acc{0.0f};  // output: acceptance chi2, V2p2Params::chi2_trk_fac
 
 #ifdef MKFIT_TRACE
     int tr_hitmatch_ids[NN];
@@ -257,6 +257,8 @@ namespace mkfit {
     // propPar from the search. Set for depth >= 1 of the in-layer search, where
     // the Hermite crossings no longer apply.
     bool m_solve_plane = false;
+    // Scale on the track sigma in the acceptance chi2, V2p2Params::chi2_trk_fac.
+    float m_chi2_trk_fac = 1.0f;
 
     void reset() { N_filled = 0; }
 
