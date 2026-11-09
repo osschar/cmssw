@@ -2,6 +2,7 @@
 #define RecoTracker_MkFitCore_standalone_DataFormats_RntConversions_h
 
 #include "RecoTracker/MkFitCore/standalone/DataFormats/RntStructs.h"
+#include "RecoTracker/MkFitCore/standalone/Event.h"
 
 #include "RecoTracker/MkFitCore/interface/HitStructures.h"
 #include "RecoTracker/MkFitCore/interface/SteeringParams.h"
