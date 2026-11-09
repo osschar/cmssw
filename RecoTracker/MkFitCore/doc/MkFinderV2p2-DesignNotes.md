@@ -40,9 +40,9 @@ repeatedly are named here and by tag afterwards.
   denominator (29759 selected sim tracks). Comparisons are paired: same events,
   same seeds, one process.
 - **I50**: inward search, 50 events, T5s from LST. Counted: pixel hits
-  recovered, out of the 211435 that LST had for these tracks, matched by exact
-  (layer, index); and fully recovered tracks, those with all of them, out of
-  43358. Neither count uses truth matching.
+  recovered, out of 211435, matched by exact (layer, index); and fully recovered
+  tracks, those with all of them, out of 43358. Neither count uses truth
+  matching.
 - **T100**: timing of the forward search, 100 events, single thread, build
   without ROOT and without tracing, minimum of three repetitions. The quoted
   time brackets `(builder.*FindTracks)(IT_FwdSearch)` only.
