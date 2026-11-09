@@ -25,6 +25,12 @@ namespace mkfit {
     return {statep2bivec3(s, i), s.dalpha[i], s.fail_flag[i]};
   }
 
+  inline EVec3 hit2pos(const Hit &h) { return {h.x(), h.y(), h.z()}; }
+  inline EVec3 track2pos(const TrackBase &s) { return {s.x(), s.y(), s.z()}; }
+  inline EVec3 track2mom(const TrackBase &s) { return {s.px(), s.py(), s.pz()}; }
+  inline EBiVec3 track2bivec3(const TrackBase &s) { return {track2pos(s), track2mom(s)}; }
+  inline EBiVec3 state2bivec3(const TrackState &s) { return {{s.x(), s.y(), s.z()}, {s.px(), s.py(), s.pz()}}; }
+
   // TrLayerSearch from MkFinderV2p2::determine_search_windows(), lane i.
   inline void fill_layer(TrLayerSearch &ls, const LayerControl &lc, const MkRZLimits &rz) {
     ls.layer = lc.m_layer;
@@ -102,12 +108,6 @@ namespace mkfit {
     hm.is_sec_layer = is_sec;
     return hm;
   }
-
-  inline EVec3 hit2pos(const Hit &h) { return {h.x(), h.y(), h.z()}; }
-  inline EVec3 track2pos(const TrackBase &s) { return {s.x(), s.y(), s.z()}; }
-  inline EVec3 track2mom(const TrackBase &s) { return {s.px(), s.py(), s.pz()}; }
-  inline EBiVec3 track2bivec3(const TrackBase &s) { return {track2pos(s), track2mom(s)}; }
-  inline EBiVec3 state2bivec3(const TrackState &s) { return {{s.x(), s.y(), s.z()}, {s.px(), s.py(), s.pz()}}; }
 
   inline SimSeedInfo evsi2ssinfo(const Event *ev, int seed_idx) {
     SimSeedInfo ssi;
