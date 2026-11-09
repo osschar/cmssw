@@ -1,5 +1,5 @@
 #!/bin/bash
-# Kalman hit acceptance scan: V2p2Params::hit_chi2_cut x Policy::chi2_trk_fac.
+# Kalman hit acceptance scan: V2p2Params::hit_chi2_cut x chi2_trk_fac.
 #
 # The acceptance chi2 is the residual against chi2_trk_fac^2 * C_trk + C_hit in
 # the module's local frame; the hit covariance is taken as it is. The reference

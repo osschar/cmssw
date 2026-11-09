@@ -841,7 +841,7 @@ int main(int argc, const char* argv[]) {
           int(V2p2::Policy::use_hole_limits),
           int(V2p2::Policy::use_stop_cuts),
           v2p2d.hit_chi2_cut,
-          V2p2::Policy::chi2_trk_fac,
+          v2p2d.chi2_trk_fac,
           V2p2::Score::mode,
           v2p2d.score_outward.hit_eff,
           v2p2d.score_inward.hit_eff,
@@ -1096,7 +1096,8 @@ int main(int argc, const char* argv[]) {
       g_v2p2_setters.push_back([v](V2p2Params &p) { p.hit_chi2_cut = v; });
     } else if (*i == "--v2p2-chi2-trk-fac") {
       next_arg_or_die(mArgs, i);
-      V2p2::Policy::chi2_trk_fac = atof(i->c_str());
+      const float v = atof(i->c_str());
+      g_v2p2_setters.push_back([v](V2p2Params &p) { p.chi2_trk_fac = v; });
     } else if (*i == "--v2p2-score-mode") {
       next_arg_or_die(mArgs, i);
       V2p2::Score::mode = atoi(i->c_str());

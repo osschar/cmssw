@@ -1,7 +1,7 @@
 #!/bin/bash
 # Kalman hit acceptance on the INWARD search: chopped pT5 into the pixels.
 # Companion to v2p2-eff-chi2.sh (forward). Production defaults otherwise; only
-# V2p2Params::hit_chi2_cut and Policy::chi2_trk_fac move.
+# V2p2Params::hit_chi2_cut and chi2_trk_fac move.
 # Metrics: val_chop_report, exact (layer, index) match against the chopped hits,
 # no truth; val_te_report, truth-matched candidate hits only.
 #

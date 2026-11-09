@@ -1514,8 +1514,10 @@ namespace mkfit {
   //              used only with the per-hit extent off, see val_phi_per_hit()
   //   extra_bins fetch safety margin beyond the cut, in WHOLE bins
   void val_hit_chi2(float cut, float trk_fac) {
-    for_each_v2p2_params([cut](V2p2Params &p) { p.hit_chi2_cut = cut; });
-    V2p2::Policy::chi2_trk_fac = trk_fac;
+    for_each_v2p2_params([cut, trk_fac](V2p2Params &p) {
+      p.hit_chi2_cut = cut;
+      p.chi2_trk_fac = trk_fac;
+    });
     printf("val_hit_chi2: cut %g, trk_fac %g\n", cut, trk_fac);
   }
 

@@ -418,7 +418,7 @@ struct TrKalmanUpdate {
 
   float   chi2 = -999.99f;
   float   chi2_trk = -999.99f;
-  // The acceptance chi2 (Policy::chi2_trk_fac on the track covariance), which the
+  // The acceptance chi2 (V2p2Params::chi2_trk_fac on the track covariance), which the
   // cut V2p2Params::hit_chi2_cut is applied to. v2p2 only.
   float   chi2_acc = -999.99f;
   // This hit advanced the state. In the in-layer combinatorial search, that is:
