@@ -32,17 +32,17 @@ Contents:
 ## Samples
 
 All measurements use ttbar events with pileup 200 in the phase-2 tracker
-geometry. The forward search runs from the CMSSW initialStep seeds. The inward
-search runs from LST seeds: pT5 seeds with their pixel hits removed ("chopped
-pT5"), whose pixel hits the search has to find again, or T5 seeds. The samples
-used repeatedly are named here and by tag afterwards.
+geometry. The forward search runs from the CMSSW initialStep seeds, the inward
+search from T5s from LST and has to add their pixel hits. The samples used
+repeatedly are named here and by tag afterwards.
 
 - **F30**: forward search, 30 events. Efficiency against the MTV-like
   denominator (29759 selected sim tracks). Comparisons are paired: same events,
   same seeds, one process.
-- **I50**: inward search, 50 events, chopped pT5. Counted: chopped hits
-  recovered, out of 211435, matched by exact (layer, index); and tracks with all
-  their chopped hits recovered, out of 43358. Neither count uses truth matching.
+- **I50**: inward search, 50 events, T5s from LST. Counted: pixel hits
+  recovered, out of the 211435 that LST had for these tracks, matched by exact
+  (layer, index); and fully recovered tracks, those with all of them, out of
+  43358. Neither count uses truth matching.
 - **T100**: timing of the forward search, 100 events, single thread, build
   without ROOT and without tracing, minimum of three repetitions. The quoted
   time brackets `(builder.*FindTracks)(IT_FwdSearch)` only.
@@ -354,7 +354,7 @@ so the q variance becomes v^T C v with v = e_q - ((e_q.p^)/(n^.p^)) n^.
 radial track and a cylinder normal this amplifies sigma_q by 1/sin^2(theta).
 With the module normal, the correction is almost nil for the OT PS barrel
 modules, which face the interaction point, and tilted and flat layers use the same formula with no
-branch. Measured on 20 events of chopped pT5, pixel barrel, as the ratio of the
+branch. Measured on 20 events of the inward search, pixel barrel, as the ratio of the
 measured residual core to the quoted sigma_q:
 
 | \|eta\| | 0-0.8 | 0.8-1.6 | 1.6-2.0 | > 2.0 |
@@ -500,7 +500,7 @@ and the pre-cut drops. Production window, trace build:
 | q, slack 1 | 11.9 M | 82.2 % | 2278 | 1.83 M | 89.7 % | 554 |
 | q, slack 1, without the qbar term | 11.9 M | 84.3 % | 87659 | 1.83 M | 90.1 % | 3364 |
 
-Forward is 5 events, inward 10 events of chopped pT5. The real cut accepts
+Forward is 5 events, inward 10 events. The real cut accepts
 8.2 % and 7.6 % of the pairs. All
 the q false rejects without the qbar term are in the tilted OT PS barrel layers.
 The phi false rejects sit mostly in the OT 2S barrel.
@@ -603,8 +603,8 @@ That is a split cluster or another track's hit, and a split cluster is one
 measurement: taking it twice shrinks the covariance without adding information.
 
 `V2p2Params::max_hits_per_layer` (4) caps the hits per path. Forward, on 10
-events, found tracks stop changing at depth 3. Inward on 20 events of chopped
-pT5, fully recovered tracks go from 82.4 % at depth 2 to 90.8 % at depth 4.
+events, found tracks stop changing at depth 3. Inward on 20 events, fully
+recovered tracks go from 82.4 % at depth 2 to 90.8 % at depth 4.
 
 **Storage.** Nodes live in one `std::vector<CandNode>` per finder, reached by
 index, with a single parent index each. A node exists to be walked back from,
@@ -628,7 +628,7 @@ difference is why the two are separate.
 tracks 18455 to 18846, fakes 3217 to 2765. Truth-matched hits per found track go
 from 10.78 / 11.55 / 11.32 to 12.70 / 14.32 / 14.29 in barrel / transition /
 endcap. Inward on 20
-events of chopped pT5, at depth 2: chopped hits recovered 75.7 % to 92.2 %,
+events, at depth 2: pixel hits recovered 75.7 % to 92.2 %,
 fully recovered tracks 52.8 % to 82.4 %.
 
 `maxCandsPerSeed` 3 is the production value with the search on. From 3 to 6
@@ -689,7 +689,7 @@ MTV's association (a fake is a track matched to no sim track, no minimum length)
 change. The acceptance cut is kept as the first-order replacement of the fixed
 30. What removed v2p2's extra fakes is the hit bonus, see "Layer-step score".
 
-I50: chopped hits recovered 198340 to 200841 (93.8 % to 95.0 %), fully
+I50: pixel hits recovered 198340 to 200841 (93.8 % to 95.0 %), fully
 recovered tracks 39167 to 39798 (90.3 % to 91.8 %). True pixel-barrel hits on
 barrel-only tracks go from 96.6 % to 97.3 %, which is the one-hit-per-layer
 ceiling.
