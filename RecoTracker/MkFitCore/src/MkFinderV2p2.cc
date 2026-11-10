@@ -41,16 +41,15 @@
 // searched from the state after the previous entry, so a missed sensor gets its
 // own hole. A paired entry, one for both sensors with a shared window and one
 // in-layer search over both, is supported but not used by default; its holes are
-// per entry, not per sensor. The hole and overlap-count code, and the dropping
-// of a hole whose path continues on the sister sensor, are written for the split
-// plan.
+// per entry, not per sensor. The hole and overlap-count code, and an option off
+// by default (InLayer::sister_hole_drop), are written for the split plan.
 //
 // The objects, per layer:
 //   CCandRep        one CombCandidate (one seed) while it is finding, from
 //                   pickup until all its TrackCands have stopped.
 //   CandIncoming    one of its TrackCands entering this layer: the search
 //                   window, the pre-selected hits, those hits in path order.
-//                   One layer.
+//                   It lives for one layer.
 //   PassedHitMatch  one hit that passed pre-selection for a CandIncoming, with
 //                   the candidate's state at the crossing with the hit's module
 //                   plane (mixed_state). Its dalpha, the turning angle there,
@@ -66,11 +65,12 @@
 //                   term (V2p2Score.h).
 //
 // One CombCandidate in one layer, as if it were alone:
-//   for each TrackCand not stopped and not past the layer      begin_next_Ccrep_in_layer()
+//   for each TrackCand not stopped, after the stopping cuts    begin_next_Ccrep_in_layer()
 //     propagate to the layer's two bounding surfaces           prop_to_layer_edges()
 //     window from the covariance, binnor bin ranges            determine_search_windows()
 //     in / at the edge of / outside the sensitive region       determine_wsr()
-//     each hit in the bins: cross its module plane, cut,       select_hits(), preselect_hit_batch()
+//     each hit in the bins: line pre-cut, then cross its       select_hits(), preselect_hit_batch()
+//       module plane and cut
 //       keep the best max_presel_hits per sub-layer by dphi
 //     order the kept hits along the path                       order_hits_along_path()
 //     paths: the subsequences of those hits in path order,     expand_in_layer(), rk_*()
@@ -95,8 +95,9 @@
 //     not yet through pre-selection) and m_n_inflight (Kalman items not yet run,
 //     plus nodes not yet expanded; a child is counted before its parent is
 //     released, so the count cannot pass through zero early). With both at zero
-//     it can be selected: right after the batch with InLayer::early_select, its
-//     nodes then reused through m_node_free, otherwise in end_layer().
+//     it can be selected right after the batch (InLayer::early_select, on by
+//     default), and its nodes reused through m_node_free; otherwise it is
+//     selected in end_layer().
 //     m_ccrep_ready is only a hint; the counts are checked again before selecting.
 //   Storage. m_node_arena is rewound at end_layer() and keeps its capacity, so
 //     after a few layers it no longer allocates.
