@@ -26,6 +26,12 @@
 //==============================================================================
 // How MkFinderV2p2 works, a reader's map.
 //
+// Words: a seed starts a CombCandidate, which holds up to maxCandsPerSeed
+// TrackCands, the candidate tracks grown from that seed. The layer plan is the
+// ordered list of layers searched, one per eta region; a seed is picked up at the
+// plan entry of its last hit. The design notes, doc/MkFinderV2p2-DesignNotes.md,
+// start with a list of the other words used here.
+//
 // MkBuilder::findTracksStandardv2p2() runs one finder over a block of seeds and
 // the layer plan: begin_layer(), process_layer(), end_layer() per plan entry. A
 // plan entry is one layer, or two sub-layers (m_layer, m_layer_sec) such as the
