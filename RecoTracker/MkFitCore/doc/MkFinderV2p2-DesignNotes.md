@@ -2,10 +2,10 @@
 
 ## What v2p2 is
 
-mkFit finds tracks by following each seed through an ordered list of layers. In each layer it propagates every candidate track to the layer, looks
-for compatible hits, updates the candidate with a Kalman filter, and keeps the
-best few candidates of the seed. There are three implementations of that layer
-step:
+mkFit finds tracks by following each seed through an ordered list of layers. In
+each layer it propagates every candidate track to the layer, looks for
+compatible hits, updates the candidate with a Kalman filter, and keeps the best
+few candidates of the seed. There are three implementations of that layer step:
 
 - **V1**, the original: a search window from the propagated state, one Kalman
   update per hit from the incoming state, and at most one more hit per layer,
@@ -147,19 +147,20 @@ the module plane found in pre-selection; a later one has to find the crossing
 from the state after the previous hit. Lanes are independent, so the result is
 the same as running each step of each batch on its own, up to rounding.
 
-Measured on T100, on a Xeon Gold 6130 (Skylake-SP): the filled lanes went from
-6.19 to 7.70 of 8 for first hits and from 4.38 to 6.99 of 8 for later hits. The
+Measured on T100, on a Xeon Gold 6130 (Skylake-SP), against Kalman batches run
+as soon as each layer batch had produced them: the filled lanes went from 6.19
+to 7.70 of 8 for first hits and from 4.38 to 6.99 of 8 for later hits. The
 forward search became 5.3 % faster with `-mavx`, 4.6 % with AVX2 and 3.8 % with
 AVX-512.
 
-**Finishing a seed early** (on by default). Because batches mix seeds, the work of one seed
-ends at different times. For each seed the finder counts the candidates still
-waiting for pre-selection, and the Kalman updates and paths still pending. When
-both counts are zero, the seed's paths compete and its new candidates are
-chosen right away instead of at the end of the layer, and the memory of its
-paths is reused. This changes neither the result nor the time measurably. It
-lowers the number of path nodes held in memory per layer from 50 to 12 on
-average, at 184 bytes a node.
+**Finishing a seed early** (on by default). Because batches mix seeds, the work
+of one seed ends at different times. For each seed the finder counts the
+candidates still waiting for pre-selection, and the Kalman updates and paths
+still pending. When both counts are zero, the seed's paths compete and its new
+candidates are chosen right away instead of at the end of the layer, and the
+memory of its paths is reused. This changes neither the result nor the time
+measurably. It lowers the number of path nodes held in memory per layer from 50
+to 12 on average, at 184 bytes a node.
 
 ## Candidate pickup and stopping cuts
 
@@ -203,22 +204,18 @@ stopped.
 **Code:** `MkBins::prop_to_limits_in_order()`, `prop_to_layer_edges()`,
 `preselect_hit_batch()`, `mini_propagators::Hermite3D` and `Hermite3DOnPlane`.
 
-The candidate is propagated to the layer's two bounding surfaces in the order
-the track meets them: `m_sp1` is the entry crossing and `m_sp2` the exit. These
-are parameter-only propagations (`mini_propagators`), closed form in both r and
-z. `m_isp` is left at `m_sp1`.
+Each candidate is propagated to the layer's two bounding surfaces (cylinders in
+the barrel, planes in z in the endcap) in the order the track meets them: the
+entry crossing and the exit crossing. These propagations carry only the track
+parameters, not the covariance, and are in closed form.
 
-A cubic Hermite curve through the two crossings, with their momenta as
-tangents, is the trajectory model inside the layer. For each scanned hit,
-`Hermite3DOnPlane` solves the cubic onto the hit's own module plane with one
-Newton step, and the dq/dphi cut and the state handed to the Kalman update are
-both taken from that point (`h3_state`). The full helix-plane intersection is
-transcendental for a tilted module, and the cubic is what makes a per-hit plane
-solve affordable. The residual distance to the plane after the step is recorded
-in the trace as `d_plane_h3`.
-
-`MKFIT_TRACE_PROP_COMPARE` keeps a straight-line step onto the same plane as a
-cross-check.
+Inside the layer the trajectory is modelled by a cubic Hermite curve through
+the two crossings, with their momenta as tangents. For each hit read from the
+window the cubic is solved onto the hit's own module plane with one Newton step,
+and both the cut and the state handed to the Kalman update are taken at that
+point. The exact helix-plane intersection is transcendental for a tilted module;
+the cubic is what makes a crossing per hit affordable. After the one step the
+point lies within 10 nm of the module plane for 97 % of hits.
 
 ## Reachability
 
@@ -235,8 +232,10 @@ landed further than `kReachTolerance` from the target, which only round-off
 should cause.
 
 The margin is provisional. It was chosen on 10 events of the inward search
-from T5 seeds: 0.1 cm catches 138 of 148 real failures and vetoes
-none of 2087 healthy searches, 0.25 cm vetoes 7 and 1 cm vetoes 47. One length
+from T5 seeds, counting real failures (searches whose crossing solve broke down)
+and healthy searches that the margin would wrongly veto: 0.1 cm catches 138 of
+148 real failures and vetoes none of 2087 healthy searches, 0.25 cm vetoes 7
+and 1 cm vetoes 47. One length
 for the whole detector is probably the wrong shape. Whether a track reaches a
 layer is a statement about a track with an error, so the band should rather
 scale with the track's expected dq, per layer. A retuning needs outward
@@ -246,56 +245,60 @@ searches, pixel seeds and the full pT range.
 
 **Code:** `MkFinderV2p2::determine_wsr()`, `CandIncoming::m_wsr`.
 
-The verdict is per candidate and per layer, and asks whether the segment the
-track cuts through the layer's bounding shell lies in sensitive material. V1
-tests one propagated point; v2p2 has both crossings and tests the segment.
+Before any hit is looked at, each candidate gets a verdict on whether its track
+crosses the layer's sensitive area: **inside**; **edge**, it may have passed
+beside the modules; **outside**, it does not reach the layer; or **gap**, it
+passes through a hole in a disc. An edge or gap hole does not count against the
+hole limits, and a candidate outside the layer skips it. V1 tests one
+propagated point; v2p2 has both crossings of the layer's bounding surfaces and
+tests the segment between them.
 
-- The two mini-propagator fail flags answer the radial half. Both failing means
-  the track turns around before the layer: outside. Only the exit failing means
-  it enters and turns around inside: at best an edge. Only the entry failing
-  cannot happen, because the entry surface is the near one. In the endcap
-  `propagate_to_z()` cannot fail, and the q test below carries the whole
-  decision.
-- `m_q_min` and `m_q_max` are the q extent of the segment. They are compared with
-  the layer's q limits, widened by `Policy::wsr_n_sigma` sigma of the track's q
-  error. Inside requires the whole widened segment to be inside. Erring towards
-  edge is the safe side: an edge that was really inside loses one hole count,
-  while an inside that was really an edge charges a hole against a candidate
-  that crossed nothing.
-- An endcap disc with an r hole gives a gap verdict when the segment touches the
-  hole. No phase-2 layer sets `set_r_hole_range()` today, so this branch does not
-  fire.
+- In radius: if the propagation reaches neither surface, the track turns back
+  before the layer: outside. If it reaches the near one but not the far one,
+  the track enters and turns back inside the layer: at best edge. In the endcap
+  the surfaces are planes in z, which the track always reaches, and the q test
+  below decides alone.
+- In q: the q range the segment covers is compared with the layer's q limits,
+  widened by 5 sigma of the track's q error (`Policy::wsr_n_sigma`). Inside
+  requires the whole widened segment to be inside. Erring towards edge is the
+  safe side: a real miss recorded as edge is not counted against the limits,
+  while an inside that should have been edge charges a hole to a candidate that
+  crossed nothing.
+- A disc with an inner hole in r gives the gap verdict when the segment touches
+  the hole. No phase-2 layer declares one today.
 
-A candidate outside the layer is skipped: no bins are walked and no HoT is
-added. The layer plans are deliberately inclusive (a transition plan is the
-union over tracks), and without this every one of those layers would record a
-hole. Measured on 20 events of the forward search: the verdict declines 64.5 %
-of OT-barrel layer searches and 23.8 % of forward ones, and the sim track has a hit in the
-declined layer in 0.05 % and 0.30 % of those.
+Skipping layers the track does not reach matters because the plans are
+inclusive: a plan for the transition region lists every layer any track there
+may cross. Without the verdict each of those layers would record a hole.
+Measured on 20 events of the forward search: the verdict declines 64.5 % of
+layer searches in the OT barrel and 23.8 % in the forward region, and the sim
+track has a hit in the declined layer in 0.05 % and 0.30 % of those.
 
 ## Hit extents
 
 **Code:** `LayerOfHits::HitInfo`, `hit_phi_half_extent_of()` and
 `hit_r_half_extent_of()` in `HitStructures.cc`.
 
-`HitInfo` caches, per hit, the extents the window and the pre-cut use. All are
-`hl_fac` times a sigma from the hit's own covariance, with `hl_fac` = 3 for
-pixels (a Gaussian 3 sigma) and sqrt(3) for strips, where a crossing uniform
+For each hit the layer caches the extents that the window and the pre-cut use.
+All are `hl_fac` times a sigma from the hit's own covariance, with `hl_fac` = 3
+for pixels (a Gaussian 3 sigma) and sqrt(3) for strips, where a crossing uniform
 along a segment of half-length L has sigma = L/sqrt(3).
 
-- `q_half_length`: `hl_fac * sqrt(ezz)` in the barrel. For a strip along unit
-  vector u the covariance is (L^2/3) u u^T, so this is L |u_z|, the strip's
-  projection onto z. Module tilt is therefore already included. In the OT 2S barrel, where
-  modules are flat, the median on the I50 events is 2.5125 cm against a nominal 2.5. In the endcap
-  it is `hl_fac * sqrt(exx + eyy)`, with exx + eyy = sigma_r^2 + r^2 sigma_phi^2. That is
-  right for radial strips and a factor sqrt(2) too large for endcap pixels,
-  where sigma_x and sigma_y are similar.
-- `phi_half_extent`: from sigma_phi^2 = (y^2 exx - 2xy exy + x^2 eyy) / r^4, the
-  across-strip error seen from the origin. It needs no barrel/endcap branch. For
-  a 2S strip it is expected to be `hl_fac * pitch / sqrt(12)` / r, i.e.
-  45 um / r for a 90 um pitch.
-- `qbar_half_extent`: `hl_fac * sigma_r` in the barrel, 0 in the endcap. It is
-  used by the line pre-cut for tilted strips.
+- **q half-length**: `hl_fac * sqrt(ezz)` in the barrel. For a strip along the
+  unit vector u the covariance is (L^2/3) u u^T, so this is L |u_z|, the strip's
+  projection onto z, and the module tilt is already included. In the OT 2S
+  barrel, where the modules are flat, the median on the I50 events is 2.5125 cm
+  against a nominal 2.5. In the endcap it is `hl_fac * sqrt(exx + eyy)`, with
+  exx + eyy = sigma_r^2 + r^2 sigma_phi^2. That is right for radial strips and a
+  factor sqrt(2) too large for endcap pixels, where sigma_x and sigma_y are
+  similar; their q window is wider than needed, which costs scanned hits, not
+  found ones.
+- **phi half-extent**: from sigma_phi^2 = (y^2 exx - 2xy exy + x^2 eyy) / r^4,
+  the across-strip error seen from the beam line. It needs no barrel/endcap
+  branch. For a 2S strip it should be `hl_fac * pitch / sqrt(12)` / r, 45 um / r
+  for a 90 um pitch, which is the 4e-5 rad seen in the OT 2S barrel.
+- **qbar half-extent**: `hl_fac * sigma_r` in the barrel, 0 in the endcap, used
+  by the line pre-cut for tilted strips.
 
 ## Search window
 
@@ -418,49 +421,49 @@ Whole spare bins can be added beyond the cut:
 
 ## Line pre-cut
 
-**Code:** `MkFinderV2p2::select_hits()`, the per-candidate `pc_*` block and the
-per-hit test before the prefetch. Switches and slack factors in
-`Config::V2p2::PreCut`, per-hit input `LayerOfHits::hit_qbar_half_extent()`.
+**Code:** `MkFinderV2p2::select_hits()`; switches and slack factors in
+`Config::V2p2::PreCut`; the per-hit input `LayerOfHits::hit_qbar_half_extent()`.
 
-**What it does.** Every hit fetched from the binnor used to go straight into the
-pre-selection batch, where it costs a Hermite solve onto its module plane and a
-lookup of the module geometry. Only then is the real dq/dphi cut applied. The
-pre-cut rejects most of those hits earlier, using only the cached `HitInfo`
-array and four numbers per candidate.
+**What it does.** Every hit read from the window's bins costs a crossing with
+its own module plane and a lookup of the module geometry before the real cut
+can be applied. The pre-cut rejects most of them earlier, from a cached array
+of hit positions and extents and four numbers per candidate.
 
-Between its two layer crossings `m_sp1` and `m_sp2` the track is taken as a
-straight line in (qbar, q) and in (qbar, phi). Here qbar is r in the barrel and
-z in the endcap. The line is evaluated at the hit's own qbar, and the hit is
-dropped when its q or phi is further from the line than a tolerance that is
+Between its two crossings of the layer's bounding surfaces the track is taken
+as a straight line in (qbar, q) and in (qbar, phi), with qbar the radius in the
+barrel and z in the endcap. The line is evaluated at the hit's own qbar, and the
+hit is dropped when its q or phi is further from the line than a tolerance
 looser than the real cut.
 
-**Tolerances**, with g the slope of the line:
+**Tolerances**, with g the slope of the line in q and g_phi in phi:
 
-- q: `dq_slack * dq_trk_fac * dq_track * (1 + g^2) + dq_hit_fac * hit_q_half_length + qbar_fac * |g| * hit_qbar_half_extent`
-- phi: `dphi_slack * dphi_trk_fac * dphi_track + hit term of the real cut + qbar_fac * |g_phi| * hit_qbar_half_extent`
+```
+q:   dq_slack   * dq_trk_fac * dq_track * (1 + g^2) + dq_hit_fac * hit_q_half_length
+       + qbar_fac * |g| * hit_qbar_half_extent
+phi: dphi_slack * dphi_trk_fac * dphi_track + (hit term of the real cut)
+       + qbar_fac * |g_phi| * hit_qbar_half_extent
+```
 
-The tolerances are written in terms of the real cut's own factors, so the
-pre-cut stays looser when those factors change.
+with `dq_slack` 2, `dphi_slack` 1.5 and `qbar_fac` 1.2. The tolerances are
+written in terms of the real cut's own factors, so the pre-cut stays looser
+when those change.
 
 **Why each term.**
 
-- `(1 + g^2)` equals 1/sin^2(theta) for a track from the origin. It references
-  the track's q error to the layer surface. The real cut does the same per hit
-  (`surface_referenced_dq()`). Without it the pre-cut would drop hits that the
-  real cut accepts at high |eta|.
-- `hit_qbar_half_extent` is `hl_fac * sigma_r` of the hit, in the barrel. The
-  qbar of a hit is its centroid radius. For a strip on a tilted module the true
-  crossing lies somewhere along the strip, and the strip direction has a radial
-  component, so the centroid radius is uncertain by up to L sin(tilt). Through
-  the slope of the line that becomes a shift in q and in phi. In the endcap
-  qbar is z, and the same term is not needed, so it is skipped there on a
-  per-layer branch.
+- `(1 + g^2)` equals 1/sin^2(theta) for a track from the origin. It refers the
+  track's q error to the layer surface, as the real cut does per hit. Without it
+  the pre-cut would drop hits that the real cut accepts at high |eta|.
+- `hit_qbar_half_extent` covers tilted strips. A hit's qbar is its centroid
+  radius, but on a tilted module the track crosses the strip somewhere along
+  its length, and the strip has a radial component, so the radius is uncertain
+  by up to L sin(tilt). Through the slope of the line that becomes a shift in q
+  and in phi. In the endcap qbar is z, where this does not arise, and the term
+  is skipped.
 
-**Offline estimate that justified it.** `val_qprecut_*` in
-`standalone/RdfTrace/ValProp.cc` replays the pre-cut over the trace. It counts,
-for each scanned candidate-hit pair, whether the pre-cut would reject it and
-whether the real cut accepts it. A false reject is a pair the real cut accepts
-and the pre-cut drops. Production window, trace build:
+**Offline estimate.** Replaying the pre-cut over recorded searches counts, for
+each candidate-hit pair, whether the pre-cut would drop it and whether the real
+cut accepts it. A false reject is a pair the real cut accepts and the pre-cut
+drops. Forward 5 events, inward 10 events:
 
 | | forward: pairs | rejected | false rejects | inward: pairs | rejected | false rejects |
 |---|---|---|---|---|---|---|
@@ -470,61 +473,55 @@ and the pre-cut drops. Production window, trace build:
 | q, slack 1 | 11.9 M | 82.2 % | 2278 | 1.83 M | 89.7 % | 554 |
 | q, slack 1, without the qbar term | 11.9 M | 84.3 % | 87659 | 1.83 M | 90.1 % | 3364 |
 
-Forward is 5 events, inward 10 events. The real cut accepts
-8.2 % and 7.6 % of the pairs. All
-the q false rejects without the qbar term are in the tilted OT PS barrel layers.
-The phi false rejects sit mostly in the OT 2S barrel.
+The real cut accepts 8.2 % and 7.6 % of the pairs. All the q false rejects
+without the qbar term are in the tilted OT PS barrel layers. The phi false
+rejects sit mostly in the OT 2S barrel.
 
-**Physics, with the pre-cut in the finder.** Paired against the same
-configuration with the pre-cut off, production window: F30 found tracks, fakes,
-duplicates and the momentum-resolution width are identical to the unit, and so
-are the I50 counts and truth-matched hit efficiencies, with q alone and with q
-and phi.
+**Physics.** Against the same configuration with the pre-cut off, F30 found
+tracks, fakes, duplicates and the momentum-resolution width are identical to
+the unit, and so are the I50 counts and the truth-matched hit efficiencies, with
+q alone and with q and phi. So none of the falsely rejected hits was one a final
+track would have taken.
 
 **Time.** T100: 47.95 s without the pre-cut, 35.36 s with q, 33.81 s with q and
-phi. V2 (`selectHitIndicesV2`) takes 62.95 s on the same events.
-
-In one forward event the pre-cut rejects 2.87 M of 3.18 M scanned pairs
-(90.4 %). The 306 k pairs left go through the plane solve, and 79 % of them
-pass the real cut.
+phi; V2 took 62.95 s on the same events. In one forward event the pre-cut
+rejects 2.87 M of 3.18 M scanned pairs (90.4 %); of the 306 k left, 79 % pass
+the real cut.
 
 ## Reduction and hit ordering
 
 **Code:** `CandIncoming::m_pqueue`, `preselect_hit_batch()`,
 `order_hits_along_path()`.
 
-**Reduction.** Hits that pass the cut go into a bounded priority queue keyed on
-ddphi, one queue per sub-layer, capped at `V2p2Params::max_presel_hits`. One queue
-per sub-layer gives each sensor of a pair its own budget, so a busy sensor
-cannot crowd out the other. The cap sits upstream of the in-layer search and
-bounds what it can see. The queues and `m_layer_hits` use inline storage
-(`InlineVec`) sized by `V2p2Params::max_presel_hits_limit`, because a
-`CandIncoming` lives for one layer and a `std::vector` there allocated and freed
-on every layer. The heaps run `std::push_heap` / `std::pop_heap` exactly as
-`std::priority_queue` does. Overlap availability varies strongly across the
-detector, so the cap should become per layer.
+**Reduction.** Of the hits that pass the cut, a candidate keeps the
+`max_presel_hits` (6) with the smallest phi residual, per sub-layer. One budget
+per sub-layer gives each sensor of a pair its own, so a busy sensor cannot crowd
+out the other. The cap bounds what the in-layer search can see. The storage is
+fixed-size and lives in the candidate, since a candidate lives for one layer
+and a heap allocation there would be made and freed on every layer.
 
-**Ordering.** The queues drain into one list per candidate, `m_layer_hits`,
-sorted by `dir * dalpha`. dalpha is monotone in path length for all hits of one
-candidate, since they are reached from the same state with the same curvature.
-It is a signed turning angle, so its sign goes with the charge; `dir` is the
-sign of its change from `m_sp1` (the near bounding surface in the search
-direction) to `m_sp2` (the far one), which makes the key path order for both
-charges and either search direction. ddphi decides which hits survive; path order decides the order the
-search walks them. The queues are copied out and sorted once per candidate. Two
-hits on one module share the crossing with its plane and so have equal keys;
-they go larger ddphi first, then by hit index, so the order does not depend on
-the heap layout. A Kalman update moves the trajectory by about the hit
-resolution, so it can only swap hits that are already that close.
+**Ordering.** The kept hits are then put in the order the track meets them,
+which is the order the in-layer search walks them in. The key is the turning
+angle dalpha from the candidate's state to the hit's crossing. For all hits of
+one candidate it grows with the path length, since they are reached from the
+same state with the same curvature. dalpha is signed, and its sign depends on
+the charge, so the key is dalpha times the sign of its change from the layer's
+entry crossing to its exit crossing; that gives path order for both charges and
+both search directions. The phi residual decides which hits survive; path order
+decides the order they are walked in.
 
-The sub-layers of an OT PS barrel pair are radially interleaved (the tilted modules make
-the partner sensor sit at larger or smaller r module by module), so path order
-cannot be assumed from the layer index. Per-hit precision is not an ordering
-key: `q_half_length` already distinguishes a P macro-pixel from an S strip,
-and it enters the score.
+Two hits on one module share the crossing with its plane and so have equal
+keys. Which comes first does not change which paths exist, since a path takes
+at most one hit per module; a fixed order (larger phi residual first, then by
+hit index) only makes the result reproducible. A Kalman update moves the
+trajectory by about the hit resolution, so it could only swap hits that are
+already that close.
 
-The trace records `sub_rank` (rank by ddphi within the sub-layer) and
-`full_rank` (across both), for measuring pre-selection against truth.
+The sub-layers of an OT PS barrel pair are radially interleaved (the tilted
+modules put the partner sensor at larger or smaller r, module by module), so
+path order cannot be read from the layer index. Hit precision is not an
+ordering key: the q half-length already tells a P macro-pixel from an S strip,
+and it enters the score through the residual covariance.
 
 ## In-layer combinatorial search
 
@@ -536,96 +533,92 @@ leaves hits on both sensors in 91-94 % of crossings, and 26-28 % of crossings
 carry three or more hits, because an overlapping module is itself a stack. One
 hit per layer throws most of that away.
 
-**What it does.** A path through the layer is an increasing sequence of
-positions in `m_layer_hits`. Per candidate, the search is
+**What it does.** A path through the layer is a subsequence of the candidate's
+kept hits, in path order. Per candidate, the search is
 
 ```
-frontier = { kalman(state, h) : h in m_layer_hits }               # depth 0
+frontier = { kalman(state, h) : h in hits }                       # depth 0
 for depth = 1 .. max_hits_per_layer - 1, while frontier is not empty:
   next = { kalman(n.state, h) : n in frontier,
-           h after n's hit in m_layer_hits, h not on a module of n's path }
+           h after n's hit in hits, h not on a module of n's path }
   frontier = next
 ```
 
-where `kalman()` keeps an outcome only if its acceptance chi2 passes
-`hit_chi2_cut`. Every node of every depth enters the end-of-layer selection.
-The code computes the same nodes in a different order, to keep the Matriplex
-lanes full (see "Kalman updates across batches" in "Layer processing").
+where `kalman()` keeps an outcome only if the hit passes the acceptance cut
+([Kalman hit acceptance](#kalman-hit-acceptance)). Every path of every depth
+enters the end-of-layer selection. The code computes the same paths in a
+different order, to keep the vector lanes full (see "Kalman updates across
+batches" in [Layer processing](#layer-processing)).
 
-Depth 0 starts from the candidate's state, and the Hermite has already solved
-each crossing, so the propagation is handed the path length. Deeper nodes start
-from an updated state, for which no crossing is known, and propagate-to-plane
-solves it. The one-point Hermite (`Hermite3D::calculate_coeffs(sp, inv_k,
-dalpha)`) would be cheaper there and is not yet used.
+The first hit of a path starts from the candidate's state, at the crossing the
+Hermite cubic has already found, so the propagation is handed the path length.
+Later hits start from an updated state, for which no crossing is known, and the
+propagation to the module plane solves for it.
 
-Forward-only traversal of an ordered list reaches every subset of the hits
-exactly once. Taking both hits of an overlap therefore needs no special case,
-and there is nothing to de-duplicate. Path order also puts the Kalman updates
-in the order the track meets the hits.
+Walking an ordered list forward only reaches every subset of the hits exactly
+once. Taking both hits of an overlap therefore needs no special case, and there
+is nothing to de-duplicate. Path order also puts the Kalman updates in the
+order the track meets the hits.
 
-A second hit from the same module as an earlier hit of the path is not taken.
-That is a split cluster or another track's hit, and a split cluster is one
-measurement: taking it twice shrinks the covariance without adding information.
+A second hit on a module the path already has a hit on is not taken. It is a
+split cluster or another track's hit, and a split cluster is one measurement:
+taking it twice shrinks the covariance without adding information.
 
-`V2p2Params::max_hits_per_layer` (4) caps the hits per path. Forward, on 10
-events, found tracks stop changing at depth 3. Inward on 20 events, fully
-recovered tracks go from 82.4 % at depth 2 to 90.8 % at depth 4.
+`max_hits_per_layer` (4) caps the hits per path. Forward, on 10 events, found
+tracks stop changing at 3. Inward on 20 events, fully recovered tracks go from
+82.4 % at 2 to 90.8 % at 4.
 
-**Storage.** Nodes live in one `std::vector<CandNode>` per finder, reached by
-index, with a single parent index each. A node exists to be walked back from,
-so a surviving leaf can register its hits into the CombCandidate; nothing needs
-to walk forward. `end_layer()` clears the vector and keeps its capacity. Slots
-of a selected CombCandidate go to a free list, `m_node_free`, reused last in,
-first out. A node with live children must not be reused, so slots are only ever
-freed a whole CombCandidate at a time, after it has materialised.
+**Effect.** F30, beam width (`maxCandsPerSeed`) 3, against the first version's
+one best hit per layer: found tracks 18455 to 18846, fakes 3217 to 2765.
+Truth-matched hits per found track go from 10.78 / 11.55 / 11.32 to 12.70 /
+14.32 / 14.29 in barrel / transition / endcap. Inward on 20 events, at most 2
+hits per path: pixel hits recovered 75.7 % to 92.2 %, fully recovered tracks
+52.8 % to 82.4 %. A beam width of 3 is the production value with the search on;
+from 3 to 6 F30 gains 39 found tracks.
 
-The arena is per finder and not per CombCandidate because one Kalman batch
-draws lanes from several candidates and CombCandidates. Breadth-first by depth
-means a parent is always in the arena before its children are created. Nothing
-depends on parents having lower indices: each depth's harvest is handed on as a
-list of indices.
-
-A `CandNode` carries a full `TrackState` and lives for one layer. A
-`HoTNode` in `CombCandidate::m_hots` is 12 bytes and lives for the event. That
-difference is why the two are separate.
-
-**Effect.** F30, cap 3, against the first version's one best hit per layer: found
-tracks 18455 to 18846, fakes 3217 to 2765. Truth-matched hits per found track go
-from 10.78 / 11.55 / 11.32 to 12.70 / 14.32 / 14.29 in barrel / transition /
-endcap. Inward on 20
-events, at depth 2: pixel hits recovered 75.7 % to 92.2 %,
-fully recovered tracks 52.8 % to 82.4 %.
-
-`maxCandsPerSeed` 3 is the production value with the search on. From 3 to 6
-F30 gains 39 found tracks.
+**Storage.** A path is stored as a chain of nodes, one per hit, each with the
+state after its update and the index of the node before it; a surviving path is
+read by walking back from its last node, and nothing walks forward. All nodes of
+a finder sit in one vector, because one Kalman batch draws lanes from many
+seeds. The vector is cleared at the end of each layer and keeps its capacity. A
+seed's nodes are reused only once the seed has been selected, never earlier,
+since a node may still have children waiting. A node carries a full track state
+and lives for one layer; the hits a track keeps for the event are stored
+separately, at 12 bytes each.
 
 ## Kalman hit acceptance
 
 **Code:** `plane::chi2_scaled()` in `KalmanOpArgs::do_kalman_stuff()`,
-`KalmanOpArgs::tsChi2Acc`, `harvest_nodes()`,
-`V2p2Params::chi2_trk_fac` and `hit_chi2_cut`.
+`harvest_nodes()`, `V2p2Params::chi2_trk_fac` and `hit_chi2_cut`.
 
-**The cut.** A hit is accepted if
+**The cut.** A hit is accepted onto a path if
 
 ```
-chi2_acc = r^T (chi2_trk_fac^2 * C_trk + C_hit)^-1 r  <  hit_chi2_cut
+chi2_acc = r^T (f^2 * C_trk + C_hit)^-1 r  <  hit_chi2_cut
 ```
 
-with r the residual and C_trk, C_hit the track and hit covariances, all in the
-module's local 2-D frame. Defaults: `chi2_trk_fac` 3, `hit_chi2_cut` 9.21, the
-99 % point of chi2 with 2 degrees of freedom. The Kalman update and the
-layer-step score use the plain chi2 with the unscaled covariance; only the
-accept/reject decision uses `chi2_acc`.
+with r the residual, C_trk and C_hit the track and hit covariances, all in the
+module's local 2-D frame, and f = `chi2_trk_fac`. The defaults are f = 3 and a
+cut of 9.21, the 99 % point of chi2 with 2 degrees of freedom. Only this
+accept/reject decision uses the scaled covariance; the Kalman update and the
+score use the plain chi2.
 
 **Why two factors.** The cut used to be the plain chi2 below a constant 30.
 That one number stood for two things: a probability, and compensation for a
-track covariance that is known to be too small, by 1.2-2x in sigma on the
-inward search and more above |eta| 1.6. The hit covariance comes from the
-cluster and matches the sensor pitch, so it is taken as it is. The factor on
-the track covariance carries the deficit, and the cut is left as a probability.
-The q window is split the same way, see "Search window".
+track covariance that is too small, by 1.2-2x in sigma on the inward search and
+more above |eta| 1.6. The hit covariance comes from the cluster and matches the
+sensor pitch, so it is taken as it is. The factor f on the track covariance
+carries the deficit, and the cut is left as a probability. The deficit is on
+the track side: the gain is flat in pT above 0.9 GeV, so it is not multiple
+scattering, and scaling the hit covariance instead loses badly (below). The
+search window is split the same way, see [Search window](#search-window).
 
-**Measured.** F30, paired against the plain chi2 < 30:
+**What it changes.** With MTV's association, 20 events, f = 3 and 9.21 against
+the plain chi2 < 30 give -32 found tracks and -4 fakes: no measurable change.
+The cut is kept as the principled replacement of the fixed 30, not for a gain;
+what removed v2p2's extra fakes is the score (see
+[Layer-step score](#layer-step-score)). The scan on F30, against the plain
+chi2 < 30, in quality-val's counts, which reward track length:
 
 | cut | chi2_trk_fac | d found | d fakes |
 |---|---|---|---|
@@ -639,27 +632,17 @@ The q window is split the same way, see "Search window".
 | 13.8 | 3 | +118 | -242 |
 | **9.21** | **3** | **+115** (8.3 sigma) | **-231** (12.3 sigma) |
 
-Lowering the plain chi2 cut loses tracks and adds fakes at every value, so the
-30 was compensating the covariance, not merely generous. With the track factor
-the gain saturates at 2-3. It sits at |eta| 1.5-2.5, where the phi pull is
-furthest from 1. The common-subset d(pT)/pT width does not move (0.02078 to
-0.02085).
+Lowering the plain cut loses tracks and adds fakes at every value, so the 30
+was compensating the covariance, not merely generous. With the track factor the
+gain saturates at f = 2-3. It sits at |eta| 1.5-2.5, where the phi pull is
+furthest from 1. The width of d(pT)/pT on the tracks found in both does not move
+(0.02078 to 0.02085). On I50: pixel hits recovered 198340 to 200841 (93.8 % to
+95.0 %), fully recovered tracks 39167 to 39798 (90.3 % to 91.8 %). True
+pixel-barrel hits on barrel-only tracks go from 96.6 % to 97.3 %, which is the
+one-hit-per-layer ceiling.
 
-**These counts reward track length.** They use quality-val's association, in
-which a correctly matched track with fewer than `nMinFoundHits` (10) hits is not
-found and counts as a fake, as does a track on an unseeded pileup particle. With
-MTV's association (a fake is a track matched to no sim track, no minimum length),
-20 events, 9.21 / 3 against chi2 < 30 is -32 found and -4 fakes: no measurable
-change. The acceptance cut is kept as the first-order replacement of the fixed
-30. What removed v2p2's extra fakes is the hit bonus, see "Layer-step score".
-
-I50: pixel hits recovered 198340 to 200841 (93.8 % to 95.0 %), fully
-recovered tracks 39167 to 39798 (90.3 % to 91.8 %). True pixel-barrel hits on
-barrel-only tracks go from 96.6 % to 97.3 %, which is the one-hit-per-layer
-ceiling.
-
-**Time.** T100 on a Xeon Gold 6130 (Skylake-SP, `-mavx`), forward search, with F30 against
-the plain chi2 < 30:
+**Time.** T100 on a Xeon Gold 6130 (Skylake-SP, `-mavx`), with F30 against the
+plain chi2 < 30:
 
 | cut | chi2_trk_fac | d found | d fakes | s | |
 |---|---|---|---|---|---|
@@ -673,68 +656,72 @@ the plain chi2 < 30:
 The second 2x2 chi2 costs 0.2 %. At the old physics the time is the old time:
 every pre-selected hit goes through the Kalman update either way, and the cut
 only decides which results become nodes. Time grows with the true hits kept.
-What reaches the Kalman is set upstream, by the window and the line pre-cut.
+What reaches the Kalman update is set upstream, by the window and the line
+pre-cut.
 
 **Tried and not taken.**
-- f a function of |eta| (a ramp from f_lo below 0.8 to 3 above 1.6): central
-  f_lo 1 / 1.5 / 2 costs -245 / -76 / -24 F30 found and -2240 / -538 / -164 I50
-  fully recovered tracks. The central region needs the full factor at the chi2
-  level, although the phi pull there is 1.25.
-- A separate f for the second and later hits within a layer: f 1.5 is a null
-  forward and -53 on I50, and it saves no time, since the cost is set by what
-  the first hit in the layer accepts.
-- The gain is flat in pT above 0.9 GeV, so it is not multiple scattering.
-- The hit covariance short instead of the track's
-  (h^2 C_hit, as f = 1/h at cut h^2 * 9.21): h 2 costs -776 F30 found and -6601
-  I50 fully recovered tracks. The deficit is on the track side.
-- f 4 and 5: within noise of 3 in both directions, so one value serves forward
-  and inward.
 
-The factor 3 is a compensation and should come down when the track covariance
-is fixed (the forward material model), as `Window::dphi_trk_fac` should.
+- f as a function of |eta|, a ramp from f_lo below 0.8 to 3 above 1.6. f_lo of
+  1 / 1.5 / 2 costs -245 / -76 / -24 F30 found tracks and -2240 / -538 / -164
+  I50 fully recovered tracks. The central region needs the full factor, although
+  its phi pull is 1.25.
+- A separate f for the second and later hits of a path: f 1.5 changes nothing
+  forward and costs 53 on I50, and saves no time, since the cost is set by what
+  the first hit accepts.
+- Scaling the hit covariance instead, h^2 C_hit (equivalent to f = 1/h at a cut
+  of h^2 * 9.21): h = 2 costs -776 F30 found tracks and -6601 I50 fully
+  recovered tracks.
+- f of 4 and 5: within noise of 3 in both directions, so one value serves
+  forward and inward.
+
+f = 3 is a compensation and should come down when the track covariance is
+fixed, by the forward material model, as `Window::dphi_trk_fac` should.
 
 ## End-of-layer selection
 
 **Code:** `select_and_materialise()`, `offer_best_short()`, `SelEntry`.
 
-Everything that could continue a CombCandidate competes in one list on one
-score:
+At the end of a layer everything that could continue a CombCandidate competes
+in one list, on one score:
 
-- every in-layer path of every `CandIncoming`;
-- every `CandIncoming` as the hole it would record, including those that did
-  find paths;
-- every TrackCand that did not become a `CandIncoming` (stopped, or skipped
-  when entering the layer), at its unchanged score.
+- every path of every candidate that searched the layer;
+- every such candidate again, as the hole it would record, also when it found
+  paths;
+- every candidate that did not search the layer (stopped, or skipped when
+  entering it), at its unchanged score.
 
-The list is partially sorted and the top `maxCandsPerSeed` survive. One sort is
-possible because the score is additive over layer steps
-([Layer-step score](#layer-step-score)): paths from different candidates are on
-one scale. It runs at the end of the layer because one CombCandidate's
-candidates can be spread over several batches.
+The best `maxCandsPerSeed` survive. One list is possible because the score adds
+up over layer steps ([Layer-step score](#layer-step-score)), so paths from
+different candidates are on one scale. It runs at the end of the layer, or as
+soon as all of the seed's work in the layer is done (see
+[Layer processing](#layer-processing)), because one seed's candidates can be
+spread over several batches.
 
 **The hole competes with the hits.** A candidate may prefer a well-fitting wrong
 hit to a hole, and no score of a single hit can tell. Offering the hole as a
 competitor defers the decision until the paths can be compared. A candidate
-outside the layer (WSR) is not a hole and competes unchanged.
+outside the layer has no hole and competes unchanged.
 
 **Reserve a hole slot** (`InLayer::reserve_hole_slot`, off by default). Taking a
-hit always shrinks the covariance. When every survivor took a hit, no branch
-remains that allows an earlier hit to have been wrong. This option keeps the
-best decliner in the last slot. It is a beam policy, not a score term.
+hit always shrinks the covariance, so when every survivor took a hit, no
+surviving branch allows an earlier hit to have been wrong. This option keeps the
+best candidate without a hit in the last slot. It is a beam policy, not a score
+term.
 
-**Best short** (`InLayer::best_short`, off by default, outward only). A stopped
-candidate cannot be extended, so it leaves the beam and the best one is kept on
-the CombCandidate, the way V1's `CandCloner` does; `mergeCandsAndBestShortOne`
-re-inserts it at the end if it still wins. Inward the trailing end of the track
-is its head, and a truncated candidate is not a shorter track.
+**Best short** (`InLayer::best_short`, off by default, outward search only). A
+stopped candidate cannot be extended, so it leaves the beam, and the best one is
+kept aside, as V1 does; it is put back at the end of the search if it still
+wins. Inward, a candidate that stops early lacks the part of the track nearest
+the beam, which is what the inward search is for, so it is not kept.
 
-Survivors are built as copies before the CombCandidate is touched, because
-several survivors can descend from one TrackCand.
+Survivors are built as copies before the CombCandidate is changed, because
+several survivors can descend from one candidate.
 
-`TrackCand::score_` holds the layer-step score during finding. At the end of the
-search it is overwritten by `track_score_func`, which is what output and
-cross-seed duplicate removal use. The two scores are never compared with each
-other.
+At the end of the search each seed's candidates are rescored with a whole-track
+scorer, the final-pick scorer outward and the search scorer inward, which picks
+the seed's best candidate. That score is what the output and the duplicate
+removal see. With `v2p2:llh` it is built from the layer-step score, see
+"The final pick" in [Layer-step score](#layer-step-score).
 
 ## Layer-step score
 
@@ -820,22 +807,22 @@ missed a layer steps across two.
 
 **Code:** `MkFinder::selectHitIndicesV2()`.
 
-V2 is the production hit selection in CMSSW. It keeps its own window code, the
-local `Bins` struct, as in upstream CMSSW, and does not use `MkBins`, so the
-v2p2 window work does not move it. Its text differs from upstream in two
-places only, both following interface changes on this branch: the
-`propagate_to_plane()` call takes the module position and normal instead of a
-`ModuleInfo`, and three renamed helpers inside `RNT_DUMP_MkF_SelHitIdcs`.
+V2 keeps its own window code, as in upstream CMSSW, and does not use the v2p2
+window classes (`MkBins`), so the v2p2 window work does not change it. Its text
+differs from upstream only where an interface changed: the propagation to a
+module plane takes the module's position and normal, and three helpers of a
+debug dump were renamed.
 
-V2 does run on this branch's mini-propagators. `propagate_to_r()` is closed
-form, where upstream iterates `Config::Niter` times without a convergence test,
-and it clamps the target radius when the layer cannot be reached. The two agree
-where the iteration converges.
+V2 does run on the new mini-propagators. The propagation to a radius is in
+closed form, where upstream iterates a fixed number of times without a
+convergence test, and it clamps the target radius when the layer cannot be
+reached (see [Reachability](#reachability)). The two agree where the iteration
+converges.
 
-The upstream window keeps two properties that the v2p2 fetch does not: the upper
-phi edge of the bin range has no "+1", so the bin holding it is not scanned,
-and a margin of 2.75 half-bins covers it; and the dphi jacobian is evaluated at
-the track's incoming state rather than at the layer.
+The upstream window has two properties that the v2p2 window does not: its phi
+bin range stops before the bin holding the upper edge, which a margin of 2.75
+half-bins makes up for, and its phi error is taken at the incoming state rather
+than at the layer. Both are kept, so that V2 selects the same hits as upstream.
 
 ## Open items
 
