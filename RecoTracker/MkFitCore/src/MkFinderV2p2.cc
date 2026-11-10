@@ -152,9 +152,9 @@ namespace mkfit {
     int count = 0;
     const LayerControl& lc = mp_steeringparams_iter->layer_control();
     for (auto& ccand : m_batch_mgr) {
-      // Pick up at either sub-layer of a paired entry. A seed whose last hit is
-      // in this layer needs no special case. See doc/MkFinderV2p2-DesignNotes.md,
-      // "Candidate pickup and stopping cuts".
+      // Pick up at either sub-layer of a paired entry; the search starts at the
+      // next entry. See doc/MkFinderV2p2-DesignNotes.md, "Candidate pickup and
+      // stopping cuts".
 
       if (ccand.state() == CombCandidate::Dormant &&
           (ccand.pickupLayer() == lc.m_layer || ccand.pickupLayer() == lc.m_layer_sec)) {
