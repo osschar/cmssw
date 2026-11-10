@@ -257,6 +257,17 @@ namespace mkfit {
 
     int n_layers() const { return m_layers.size(); }
     const LayerInfo& layer(int l) const { return m_layers[l]; }
+    // The physical layer an mkFit layer is part of. In phase 2 an outer-tracker module pair is
+    // two adjacent mkFit layers, the stereo (P) sensor first (LayerNumberConverter); the second
+    // returns the first's id. Every other layer returns its own.
+    int major_layer_id(int l) const {
+      if (l > 0) {
+        const LayerInfo &a = m_layers[l - 1], &b = m_layers[l];
+        if (a.is_strip() && b.is_strip() && a.is_stereo() && !b.is_stereo() && a.layer_type() == b.layer_type())
+          return l - 1;
+      }
+      return l;
+    }
     LayerInfo& layer_nc(int l) { return m_layers[l]; }
 
     int n_total_modules() const;

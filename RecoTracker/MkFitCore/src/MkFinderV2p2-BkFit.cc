@@ -205,6 +205,64 @@ namespace mkfit {
     const float outlier_min_pt = m_iteration_config->m_backward_fit_outlier_min_pt;
     int n_outliers[NN] = {0};
 
+    // Path order within a physical layer (TrackerInfo::major_layer_id()). The HoT chain holds
+    // the hits of the two sensor layers of a module pair in plan order, and seed hits on one
+    // layer in the seed's order; neither is always the order the track meets them. So when a
+    // lane comes to a physical layer it takes all its hits on that layer, a run, and fits them
+    // nearest module plane first, by the straight-line path from its state at the start of the
+    // run. Holes and repeated hits are skipped as before. The HoT chain is not changed.
+    constexpr int kMaxRun = 16;  // a longer run is split
+    int run_node[NN][kMaxRun];
+    int run_n[NN] = {0}, run_pos[NN] = {0};
+
+    const TrackerInfo &trk_info = *m_prop_config->backward_fit_pflags.tracker_info;
+    auto collect_run = [&](int i) {
+      run_n[i] = run_pos[i] = 0;
+      int major = -1;
+      for (; m_CurNode[i] >= 0; m_CurNode[i] = m_HoTNodeArr[i][m_CurNode[i]].m_prev_idx) {
+        const HitOnTrack &hot = m_HoTNodeArr[i][m_CurNode[i]].m_hot;
+        if (hot.index < 0)
+          continue;
+        // A repeat of the hit just fitted or of one in the run (seed-hit merging can put a
+        // hit on twice).
+        bool repeat = hot.layer == fit_lay[i] && hot.index == fit_idx[i];
+        for (int k = 0; k < run_n[i] && !repeat; ++k) {
+          const HitOnTrack &h = m_HoTNodeArr[i][run_node[i][k]].m_hot;
+          repeat = h.layer == hot.layer && h.index == hot.index;
+        }
+        if (repeat)
+          continue;
+        const int m = trk_info.major_layer_id(hot.layer);
+        if (major == -1)
+          major = m;
+        else if (m != major || run_n[i] == kMaxRun)
+          break;
+        run_node[i][run_n[i]++] = m_CurNode[i];
+      }
+      if (run_n[i] < 2)
+        return;
+
+      // s = (plane point - x) . n / (p^ . n): positive ahead along the momentum, negative behind.
+      // The fit walks backwards, so the largest s comes first; equal s keep the chain order.
+      const float x = m_Par[iC](i, 0, 0), y = m_Par[iC](i, 1, 0), z = m_Par[iC](i, 2, 0);
+      const float phi = m_Par[iC](i, 4, 0), theta = m_Par[iC](i, 5, 0);
+      const float px = std::cos(phi) * std::sin(theta), py = std::sin(phi) * std::sin(theta), pz = std::cos(theta);
+      float s[kMaxRun];
+      for (int k = 0; k < run_n[i]; ++k) {
+        const HitOnTrack &hot = m_HoTNodeArr[i][run_node[i][k]].m_hot;
+        const LayerOfHits &L = eventofhits[hot.layer];
+        const ModuleInfo &mi = L.layer_info().module_info(L.refHit(hot.index).detIDinLayer());
+        const float nx = mi.zdir[0], ny = mi.zdir[1], nz = mi.zdir[2];
+        s[k] = ((mi.pos[0] - x) * nx + (mi.pos[1] - y) * ny + (mi.pos[2] - z) * nz) / (px * nx + py * ny + pz * nz);
+      }
+      for (int k = 1; k < run_n[i]; ++k) {
+        for (int j = k; j > 0 && s[j] > s[j - 1]; --j) {
+          std::swap(s[j], s[j - 1]);
+          std::swap(run_node[i][j], run_node[i][j - 1]);
+        }
+      }
+    };
+
     int done_count = 0;
     while (done_count != N_proc) {
       int fit_node[NN];  // HoT node fitted in this step, -1 if none
@@ -214,14 +272,10 @@ namespace mkfit {
         if (done_flag[i])
           continue;
 
-        // skip holes and a repeat of the hit just fitted
-        while (m_CurNode[i] >= 0 && (m_HoTNodeArr[i][m_CurNode[i]].m_hot.index < 0 ||
-                                     (m_HoTNodeArr[i][m_CurNode[i]].m_hot.layer == fit_lay[i] &&
-                                      m_HoTNodeArr[i][m_CurNode[i]].m_hot.index == fit_idx[i]))) {
-          m_CurNode[i] = m_HoTNodeArr[i][m_CurNode[i]].m_prev_idx;
-        }
+        if (run_pos[i] == run_n[i])
+          collect_run(i);
 
-        if (m_CurNode[i] < 0) {
+        if (run_pos[i] == run_n[i]) {
           // Mark as done and copy out.
           done_flag[i] = 1;
           ++done_count;
@@ -235,19 +289,16 @@ namespace mkfit {
             trk.setScore(getScoreCand(m_steering_params->m_post_bkfit_track_scorer, trk));
           }
         } else {
-          // Prepare the next hit and module info.
-
-          // Every hit is fitted, overlap and sister hits included: MkFinderV2p2
-          // puts a layer's hits on track in path order, so walking the chain
-          // backwards is walking the path backwards. (The V1 / V2 fit keeps only
-          // the first of consecutive hits in a layer, as their overlap hit is
-          // placed after the primary one rather than in path order.)
-          const int layer = m_HoTNodeArr[i][m_CurNode[i]].m_hot.layer;
+          // Prepare the next hit of the run and its module info. Every hit is fitted,
+          // overlap and sister hits included. (The V1 / V2 fit keeps only the first of
+          // consecutive hits in a layer.)
+          const int node = run_node[i][run_pos[i]++];
+          const int layer = m_HoTNodeArr[i][node].m_hot.layer;
           fit_lay[i] = layer;
-          fit_idx[i] = m_HoTNodeArr[i][m_CurNode[i]].m_hot.index;
+          fit_idx[i] = m_HoTNodeArr[i][node].m_hot.index;
 
           const LayerOfHits &L = eventofhits[layer];
-          const Hit &hit = L.refHit(m_HoTNodeArr[i][m_CurNode[i]].m_hot.index);
+          const Hit &hit = L.refHit(m_HoTNodeArr[i][node].m_hot.index);
           const ModuleInfo &mi = L.layer_info().module_info(hit.detIDinLayer());
 
           m_msErr.copyIn(i, hit.errArray());
@@ -257,13 +308,11 @@ namespace mkfit {
           plPnt.copyIn(i, mi.pos.Array());
 
 #ifdef MKFIT_TRACE
-          tracer.on_hit(i, layer, m_HoTNodeArr[i][m_CurNode[i]].m_hot.index, hit.mcHitID());
+          tracer.on_hit(i, layer, m_HoTNodeArr[i][node].m_hot.index, hit.mcHitID());
 #endif
 
-          fit_node[i] = m_CurNode[i];
+          fit_node[i] = node;
           ++here_count;
-
-          m_CurNode[i] = m_HoTNodeArr[i][m_CurNode[i]].m_prev_idx;
 
 #ifdef DEBUG_BACKWARD_FIT
           last_hit_ptr[i] = &hit;
