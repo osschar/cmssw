@@ -59,8 +59,8 @@ Contents:
 5. [Layer crossings and the Hermite cubic](#layer-crossings-and-the-hermite-cubic)
 6. [Reachability](#reachability)
 7. [Within-sensitive-region verdict](#within-sensitive-region-verdict)
-8. [Search window](#search-window)
-9. [Hit extents](#hit-extents)
+8. [Hit extents](#hit-extents)
+9. [Search window](#search-window)
 10. [Line pre-cut](#line-pre-cut)
 11. [Reduction and hit ordering](#reduction-and-hit-ordering)
 12. [In-layer combinatorial search](#in-layer-combinatorial-search)
@@ -69,7 +69,8 @@ Contents:
 15. [Layer-step score](#layer-step-score)
 16. [V2 compatibility](#v2-compatibility)
 17. [Open items](#open-items)
-18. [History](#history)
+18. [Transport of the position covariance](#transport-of-the-position-covariance)
+19. [History](#history)
 
 ## Samples and how numbers are quoted
 
@@ -165,42 +166,37 @@ average, at 184 bytes a node.
 **Code:** `awaken_candidates()`, `begin_next_Ccrep_in_layer()`,
 `stop_cuts_at_pickup()`, `fake_hit_index()`, `end_layer()`.
 
-**Pickup.** A dormant CombCandidate wakes up when the plan reaches its pickup
-layer, matched against either sub-layer of a paired entry. A seed whose last hit
-sits in the layer being searched needs no special case. Its state is at that
-hit, so the hit sits at dalpha = 0 and everything further along at dalpha > 0,
-and the forward-only expansion never returns to it. `propagate_to_r()` picks the
-crossing with the smaller |alpha|, so the entry crossing of such a candidate is
-behind it, at negative dalpha, and the window also covers the part of the shell
-behind the candidate. That costs scanned hits and gives no wrong answers.
+**Pickup.** Seeds end at different layers. A seed waits until the plan reaches
+the entry that holds the layer of its last hit, and is searched from that entry
+on, the layer of its last hit included. It needs no special case there: its
+state is at that hit, so the hit sits at the start of the candidate's path in
+the layer and the other hits of the layer further along it. The propagation to
+the layer then finds the entry crossing behind the candidate, so the window
+also covers the part of the layer behind it. That costs scanned hits and gives
+no wrong answers.
 
-**Stopping cuts.** Both cuts read only the candidate's own state, so they are
-applied at pull-in, before any work is spent on the layer:
+**Stopping cuts.** When a candidate enters a layer, two cuts that need only its
+own state are applied before any work is spent on it:
 
-- `pT < minPtCut` from `IterationParams`;
-- the looper stop, forward search only: pT below `Policy::looper_max_pt`, r above
-  `Policy::looper_min_r`, and the transverse angle between position and momentum
-  past `Policy::looper_max_angle` (pi/2 - 0.2, 78.5 deg). Past that angle the
-  track crosses modules at grazing incidence, clusters get wide, and further
-  hits degrade the measurement.
+- pT below the iteration's `minPtCut`;
+- the looper stop, in the forward search only: pT below 1.2 GeV, transverse
+  radius above 25 cm, and the angle between the transverse position and the
+  transverse momentum above 78.5 deg (`Policy::looper_max_pt`, `looper_min_r`,
+  `looper_max_angle`). Past that angle the track crosses modules at grazing
+  incidence, the clusters get wide, and further hits degrade the measurement.
+  The test is equivalent to cos(momPhi - posPhi) < sin(0.2), so it is right on
+  either side of the phi branch cut.
 
-The angle test is on |posPhi - momPhi| with both angles wrapped to (-pi, pi]. An
-angle A past the limit therefore appears as dphi > A, or as dphi < 2 pi - A when
-the pair straddles the branch cut. The upper bound is derived from the lower one
-in code. The test as written is equivalent to cos(momPhi - posPhi) < sin(0.2).
+A stopped candidate records why: minimum pT, looper, or too many holes. Loopers
+are of interest downstream, for the phase-2 timing layer and HGCal.
 
-A stopped candidate records why, in `TrackCand::StopReason_e`, because loopers
-are of interest downstream (the phase-2 timing layer and HGCal). The trace
-carries it for the final candidate of the forward search,
-`TrCandMeta::fwd_stop_reason`; the export to CMSSW is not done yet.
+**Holes.** A candidate that takes no hit in a layer records a hole. The
+iteration's hole limits (`maxHolesPerCand`, `maxConsecHoles`) decide whether it
+is a miss or a stop, in the same order as V1. A WSR verdict of edge or gap then
+replaces it; those two kinds do not count against the limits.
 
-**Holes.** A candidate that takes no hit in a layer records a hole HoT, chosen by
-`fake_hit_index()` in V1's order: the hole limits (`maxHolesPerCand`,
-`maxConsecHoles`) decide between a miss and a stop, and then the WSR overrides
-with an edge or gap HoT, which do not count against the limits.
-
-**Retiring.** `end_layer()` marks a CombCandidate finished once every TrackCand
-under it has stopped.
+**Retiring.** A CombCandidate is finished once every candidate under it has
+stopped.
 
 ## Layer crossings and the Hermite cubic
 
@@ -277,169 +273,6 @@ hole. Measured on 20 events of the forward search: the verdict declines 64.5 %
 of OT-barrel layer searches and 23.8 % of forward ones, and the sim track has a hit in the
 declined layer in 0.05 % and 0.30 % of those.
 
-## Search window
-
-**Code:** `MkBins::determine_bin_windows()`, `MkBins::find_bin_ranges()`,
-`MkFinderV2p2::preselect_hit_batch()`, `surface_referenced_dq()`,
-`Config::V2p2::Window`.
-
-The pre-selection window has two parts: a binnor **fetch**, a range of (phi, q)
-bins, and a per-hit **cut**. The invariant is that the fetch covers everything
-the cut accepts. A hit the cut would accept but the fetch never pulled is lost
-silently.
-
-### The cut
-
-```
-ddq   < dq_trk_fac   * dq_trk     + dq_hit_fac   * hit_q_half_length
-ddphi < dphi_trk_fac * dphi_track + dphi_hit_fac * hit_phi_half_extent
-```
-
-`dq_track` and `dphi_track` are 3 sigma of the track's position error, from the
-position block of the covariance at `m_sp2` (see "Track covariance at the
-layer" below). `dq_trk` is `dq_track` referenced to the hit's module surface.
-Each residual is taken at the hit's own module plane.
-
-### Track covariance at the layer
-
-`MkBins::transport_position_cov()` transports the position block of the
-covariance from the previous hit to `m_sp2`, at the fixed path length the
-mini-propagator reached it with. Only the position block is needed. At fixed
-path length s the position is x = x0 + f(ipt, phi, theta; s), so
-
-```
-C_pos(s) = J C0 J^T,   J = [ P_in | dx/d(ipt, phi, theta) ]   (3 x 6)
-```
-
-with the derivatives in closed form from quantities the mini-propagator already
-holds. With the helix in the turning angle a, k = 1/inv_k and p in GeV,
-
-```
-x = x0 + k (px sin a - py (1 - cos a)),  y = y0 + k (py sin a + px (1 - cos a)),
-z = z0 + s cos(theta),                   a = s sin(theta) ipt inv_k
-```
-
-so, with (dx, dy) the displacement and p_end the transverse momentum at `m_sp2`,
-
-```
-d(x,y)/dphi   = (-dy, dx)
-d(x,y)/dipt   = (-(dx, dy) + a k p_end) / ipt = k (px f1 - py f2, py f1 + px f2) / ipt
-d(x,y)/dtheta = a k p_end cot(theta),     dz/dtheta = -a k / ipt
-f1 = a cos a - sin a,   f2 = a sin a - (1 - cos a)
-```
-
-with p at the previous hit in the second form of the ipt column. As in
-`errPropFromPathL_impl()` the result is curvilinear at both ends: `P_in`
-projects the starting position onto the plane normal to the momentum there,
-and the result is projected onto the plane normal to the momentum at `m_sp2`.
-The dq surface reference below depends on that. The first form of the ipt
-column is a difference of two O(s) terms that nearly cancel for a stiff track:
-it lost 25 % in sigma_y at pT 137 GeV. The second form is used, with f1 and f2
-from their series below |a| = 0.25, where they are O(a^3) and O(a^2).
-
-No material enters. Material added during a step changes only the angular
-terms, so none of it reaches the position block within that step.
-
-Against a full helix-to-plane propagation with uniform B, over 200508 lanes, the
-sigmas agree to 7e-5 and the correlations to 1.6e-4 at the worst lane. Against
-it with the parametric field at the starting point they differ by 0.4 % at p99.
-The transport uses the same uniform B as `m_sp1`, `m_sp2` and the Hermite cubic.
-
-**Two factors per coordinate.** Which term binds is a property of the layer.
-The median `hit_q_half_length` (I50 events) is 0.0075 cm in the pixel barrel, 0.042 cm
-on the P sensors and 0.80 cm on the S sensors of the OT PS barrel, and 2.51 cm
-in the OT 2S barrel,
-while the track term does not vary like that. Strips are containment-dominated
-and pixels are covariance-dominated. One factor over both terms could not sit
-in the right place for both, and a scan of it could not say which term it was
-moving.
-
-- `dq_hit_fac` multiplies the hit's own half-extent, so its floor is exactly
-  1.0: below it the window no longer reaches the whole strip. The default 1.2
-  keeps 20 % margin. Against 1.8, F30 gives -3 found tracks and -15 fakes, and
-  I50 gives +55 recovered hits and -2 fully recovered tracks.
-- `dq_trk_fac` is 1.5, in units of `dq_track`.
-
-**dq surface reference.** The covariance is transported to a fixed path length,
-not to a plane. The resulting q error describes where
-the track is after travelling a distance s, not where it crosses the module. The
-two differ by the ds degree of freedom. Sliding each point along the momentum
-until it meets the surface is a linear map on the position block,
-
-```
-dx_s = (I - p^ n^T / (n^.p^)) dx
-```
-
-so the q variance becomes v^T C v with v = e_q - ((e_q.p^)/(n^.p^)) n^.
-`surface_referenced_dq()` applies it with n^ the hit's own module normal. For a
-radial track and a cylinder normal this amplifies sigma_q by 1/sin^2(theta).
-With the module normal, the correction is almost nil for the OT PS barrel
-modules, which face the interaction point, and tilted and flat layers use the same formula with no
-branch. Measured on 20 events of the inward search, pixel barrel, as the ratio of the
-measured residual core to the quoted sigma_q:
-
-| \|eta\| | 0-0.8 | 0.8-1.6 | 1.6-2.0 | > 2.0 |
-|---|---|---|---|---|
-| without the reference | 1.64 | 4.66 | 17.0 | 46.0 |
-| with the reference | 1.38 | 1.43 | 1.71 | 2.14 |
-
-`MkBins::surface_reference_dq()` is the same correction with the layer's
-cylinder or disc normal. It is off by default (`Diag::mkbins_surface_q`) and is
-kept because it is the way a corrected `dq_track` reaches the trace.
-
-**dphi jacobian.** `sigma_phi` comes from the xy covariance through
-J = (-y, x)/r^2, so |J| = 1/r. One window covers the whole layer, so J is taken
-at whichever crossing has the smaller radius, where `sigma_phi` is largest. The
-ratio rout/rin is 1.33 at pixel layer 0.
-
-**Per-hit phi extent and `dphi_trk_fac` = 2.** The hit term is the hit's own phi
-extent from its covariance ([Hit extents](#hit-extents)), about 4e-5 rad in
-the OT 2S barrel. The cut is therefore carried by the track term, and the track term needs
-a factor 2. Differences against the flat tolerance of 0.0246 rad that the
-per-hit extent replaced:
-
-| `dphi_trk_fac` | F30 found | F30 fakes | I50 fully recovered tracks |
-|---|---|---|---|
-| 1.0 | -41 (4.2 sigma) | +87 | -582 |
-| 1.5 | -2 | +10 | -29 |
-| 2.0 | +1 | +2 | identical |
-
-The flat tolerance is still available with `Window::phi_per_hit` off, as
-`Window::dphi_flat_rad`.
-
-Above |eta| 0.8 the factor also compensates a phi covariance that is too small.
-The ratio of the measured phi residual core to the quoted `sigma_phi`, 10 events
-of the forward search, is 1.25 at |eta| < 0.8, 2.20 at 0.8-1.6, 3.40 at 1.6-2.0
-and 2.66 above. The cause is the material description in the transition and
-forward regions. When that is fixed, `dphi_trk_fac` should come down.
-
-### The fetch
-
-`find_bin_ranges()` derives the fetch from the cut, so a cut wider than the
-fetch cannot be expressed. Two details:
-
-- The cut is per hit, and the fetch runs before any hit is known, so the fetch
-  uses the layer's largest hit extent (`max_hit_q_half_length()`,
-  `max_hit_phi_half_extent()`).
-- The phi range comes from the axis helper (`LayerOfHits::phiRangeBins()`),
-  which returns a half-open range that covers the bin holding the upper edge.
-  The phi half-width is
-  clamped below pi first: a range on a circle is an arc, and a half-width of pi
-  or more wraps to a small arc instead of the full circle.
-
-Beyond the cut, the fetch adds whole bins on the bin index, so the margin
-carries no float-to-bin rounding:
-
-- `Window::phi_extra_bins` = 0. Against 1, F30 gives -1 found track and I50
-  gives +1 recovered hit, and every fetched hit costs work.
-- `Window::q_extra_bins` = 1. The per-hit q cut is surface-referenced and the
-  fetch uses the raw `dq_track`, so at high |eta| the cut reaches past the
-  fetch. With 0, I50 loses 1373 of 43358 fully recovered tracks, all in
-  pixel-barrel hits of tracks that also cross the discs. F30 is unaffected. A
-  fetch widened by the surface reference would remove the need for the spare
-  bin. With the line pre-cut in, a spare bin costs little, since most fetched
-  hits are rejected before the plane solve.
-
 ## Hit extents
 
 **Code:** `LayerOfHits::HitInfo`, `hit_phi_half_extent_of()` and
@@ -463,6 +296,125 @@ along a segment of half-length L has sigma = L/sqrt(3).
   45 um / r for a 90 um pitch.
 - `qbar_half_extent`: `hl_fac * sigma_r` in the barrel, 0 in the endcap. It is
   used by the line pre-cut for tilted strips.
+
+## Search window
+
+**Code:** `MkBins::determine_bin_windows()`, `MkBins::find_bin_ranges()`,
+`MkFinderV2p2::preselect_hit_batch()`, `surface_referenced_dq()`,
+`Config::V2p2::Window`.
+
+The window decides which hits of a layer a candidate looks at. It has two
+parts: a **fetch**, a range of (phi, q) bins read from the binnor, and a
+per-hit **cut** applied to the hits found there. The fetch must cover
+everything the cut accepts: a hit the cut would accept but the fetch never read
+is lost without any sign.
+
+### The cut
+
+```
+|dq|   < dq_trk_fac   * dq_trk     + dq_hit_fac   * hit_q_half_length
+|dphi| < dphi_trk_fac * dphi_track + dphi_hit_fac * hit_phi_half_extent
+```
+
+dq and dphi are the residuals between the hit and the track's crossing with the
+hit's own module plane. The track terms are three sigma of the track's position
+error at the layer: `dphi_track` in phi, and in q `dq_trk`, which is `dq_track`
+(the same in q) referred to the hit's module surface, see "dq surface reference"
+below. The hit terms are the hit's own extents, see [Hit extents](#hit-extents).
+
+**Two factors per coordinate.** Which term dominates depends on the layer. The
+median q half-length of a hit (on the I50 events) is 0.0075 cm in the pixel
+barrel, 0.042 cm on the P sensors and 0.80 cm on the S sensors of the OT PS
+barrel, and 2.51 cm in the OT 2S barrel, while the track term does not vary like
+that. In strips the window is set by the strip length, in pixels by the track's
+error. One factor on the sum could not be right for both, and a scan of it could
+not say which term it was moving.
+
+- `dq_hit_fac` multiplies the hit's own half-length, so 1.0 is a hard floor:
+  below it the window no longer covers the whole strip. The default 1.2 keeps
+  20 % margin. The default against 1.8: F30 -3 found tracks and -15 fakes, I50
+  +55 recovered hits and -2 fully recovered tracks.
+- `dq_trk_fac` is 1.5.
+
+### Track covariance at the layer
+
+The track terms need the track's position error at the layer. It is obtained
+by transporting the position part of the covariance from the previous hit along
+the helix to the layer's far crossing, in closed form from quantities the
+propagation to the layer already has. The derivation is in
+[Transport of the position covariance](#transport-of-the-position-covariance).
+No material enters: material added during a step changes only the direction
+terms, which do not reach the position within that step.
+
+Against a full helix-to-plane propagation with uniform field, over 200508
+lanes, the sigmas agree to 7e-5 and the correlations to 1.6e-4 at the worst
+lane. With the parametrised field at the starting point they differ by 0.4 % at
+the 99th percentile. The transport uses the same uniform field as the
+propagation to the layer and the Hermite cubic.
+
+**dq surface reference.** The covariance is transported to a fixed path length,
+not to a plane. Its q error says where the track is after a given distance, not
+where it crosses the module, and the two differ by how far the crossing can
+slide along the track. Sliding each point along the momentum direction p^ until
+it meets a surface with normal n^ is a linear map on the position error,
+
+```
+dx_s = (I - p^ n^T / (n^.p^)) dx
+```
+
+so the q variance becomes v^T C v with v = e_q - ((e_q.p^)/(n^.p^)) n^. The cut
+applies it with n^ the hit's own module normal. For a cylinder normal and a
+radial track this multiplies sigma_q by 1/sin^2(theta). With the module normal
+the correction is almost nil for the OT PS barrel modules, which face the
+interaction point, and tilted and flat layers use the same formula. Ratio of the
+measured residual core to the quoted sigma_q, 20 events of the inward search,
+pixel barrel:
+
+| \|eta\| | 0-0.8 | 0.8-1.6 | 1.6-2.0 | > 2.0 |
+|---|---|---|---|---|
+| without the reference | 1.64 | 4.66 | 17.0 | 46.0 |
+| with the reference | 1.38 | 1.43 | 1.71 | 2.14 |
+
+**phi error.** `sigma_phi` comes from the xy covariance through J = (-y, x)/r^2,
+so |J| = 1/r. One window covers the whole layer, so J is taken at the crossing
+with the smaller radius, where `sigma_phi` is largest. At pixel layer 0 the
+outer radius is 1.33 times the inner one.
+
+**`dphi_trk_fac` = 2.** The hit's own phi extent is tiny, about 4e-5 rad in the
+OT 2S barrel, so the phi cut is carried by the track term, and that needs a
+factor 2. Differences against the flat tolerance of 0.0246 rad that the per-hit
+extent replaced:
+
+| `dphi_trk_fac` | F30 found | F30 fakes | I50 fully recovered tracks |
+|---|---|---|---|
+| 1.0 | -41 (4.2 sigma) | +87 | -582 |
+| 1.5 | -2 | +10 | -29 |
+| 2.0 | +1 | +2 | identical |
+
+Above |eta| 0.8 the factor also makes up for a phi covariance that is too
+small. The ratio of the measured phi residual core to the quoted `sigma_phi`,
+10 events of the forward search, is 1.25 at |eta| < 0.8, 2.20 at 0.8-1.6, 3.40
+at 1.6-2.0 and 2.66 above. The cause is the material description in the
+transition and forward regions; when that is fixed, the factor should come
+down.
+
+### The fetch
+
+The fetch is derived from the cut (`find_bin_ranges()`), so a cut wider than
+the fetch cannot be expressed. The cut is per hit and the fetch is made before
+any hit is known, so the fetch uses the layer's largest hit extents. The phi
+range is an arc on a circle: it must include the bin holding its upper edge,
+and a half-width of pi or more must give the full circle, not a small arc.
+
+Whole spare bins can be added beyond the cut:
+
+- phi: none (`Window::phi_extra_bins` = 0). Against one spare bin, F30 -1 found
+  track and I50 +1 recovered hit, and every fetched hit costs work.
+- q: one (`Window::q_extra_bins` = 1). The per-hit q cut is referred to the
+  module surface and the fetch is not, so at high |eta| the cut reaches past the
+  fetch. Without the spare bin I50 loses 1373 of 43358 fully recovered tracks,
+  all in pixel-barrel hits of tracks that also cross the discs; F30 is
+  unaffected. With the line pre-cut in, a spare bin costs little.
 
 ## Line pre-cut
 
@@ -751,8 +703,8 @@ score:
 - every in-layer path of every `CandIncoming`;
 - every `CandIncoming` as the hole it would record, including those that did
   find paths;
-- every TrackCand that did not become a `CandIncoming` (stopped, skipped at
-  pull-in), at its unchanged score.
+- every TrackCand that did not become a `CandIncoming` (stopped, or skipped
+  when entering the layer), at its unchanged score.
 
 The list is partially sorted and the top `maxCandsPerSeed` survive. One sort is
 possible because the score is additive over layer steps
@@ -786,86 +738,83 @@ other.
 
 ## Layer-step score
 
-**Code:** `V2p2Score.h`, `LayerStepFeatures`, `Config::V2p2::Score`.
+**Code:** `V2p2Score.h`, `LayerStepFeatures`, `Config::V2p2::Score`; the final
+pick in `MkBuilder.cc`, `trackScoreV2p2Llh()`.
 
-This score is separate from `track_score_func`, which stays as it is for V1/V2.
-v2p2's final pick of a candidate per seed uses a track scorer built on it, see
-"The final pick" below. It differs from `track_score_func` in three ways.
+During the search each candidate carries a score that is the sum of one term
+per layer step. The end-of-layer selection compares candidates by it, and the
+final pick of one candidate per seed starts from it. V1 and V2 instead use
+`track_score_func`, a formula evaluated on the whole track.
 
-1. **Additive over layer steps.** A candidate's score is the sum of one term per
-   layer. That is what makes the end-of-layer selection a single flat sort.
-   `track_score_func` is additive only for some parameter choices: with the
-   default scorer the hit bonus is linear in the hit count, so the total is
-   quadratic, and the two hole penalties differ, so reclassifying a hole from
-   tail to inside changes the total.
-2. **No tail holes.** `TrackCand` reclassifies holes as inside or tail when a
-   later hit is found, because the global formula is evaluated once at the end.
-   Scoring each step when it happens has no such question. What the tail
-   penalty approximated depends on direction: outward, trailing holes are at
-   large radius where a track may leave the detector; inward, they are at small
-   radius, where the track must have come from. The score has separate outward
-   and inward parameter sets (`V2p2Params::score_outward`, `score_inward`) for
-   this; today they differ in the hit efficiency (outward 0.10, with 0.14 in the
-   OT PS barrel and 0.20 in the OT 2S barrel; inward 0.90).
-3. **A feature struct.** `LayerStepFeatures` carries what the scores read of a
-   layer step: hits taken, the chi2 sum, ln det V of the residual covariance,
-   local hit density, hole kind, the layer and direction. A new term adds a
-   member without changing a function signature: a fact of the step or of the
-   candidate is filled in `fill_step_geometry()`, a per-hit one accumulated in
-   `harvest_nodes()`. The struct can be written to the trace for fitting a
-   score offline.
+**Why additive.** With one term per layer, paths of different candidates are on
+one scale after every layer, and the end-of-layer selection is a single flat
+sort. `track_score_func` is not additive: with the default scorer the hit bonus
+grows with the hit count, so the total is quadratic in it, and a hole is
+counted as inside or tail depending on whether a hit follows later, so an old
+hole changes its cost when a new hit is found.
 
-A term keyed on the step should take its origin from the layer of the
-candidate's last found hit (`getLastFoundHitLyr()`), not from the plan
-neighbour: a candidate that missed a layer steps across two.
-
-**Two forms.** `Score::mode` 0 is linear: a bonus per hit and per overlap hit,
-minus a chi2 weight, minus a penalty per hole kind. Mode 1 is a log-likelihood
-ratio against "this layer produced no hit":
+**The form.** Each layer step scores the log-likelihood ratio of taking a hit
+against taking none:
 
 ```
-take hit j :  ln(eps/(1-eps)) - ln(2 pi) - chi2_j/2 - ln(det V_j)/2 - ln rho
+take hit j :  ln(eps/(1-eps)) - ln(2 pi) - chi2_j/2 - ln(rho sqrt(det V_j))
 take none  :  0
 ```
 
-with eps the per-layer hit efficiency (`hit_eff`), V the 2x2 residual
-covariance and rho the local hit density. The hit-versus-hole break-even is then
-derived rather than tuned. It assumes chi2 is trustworthy, which it is to the
-extent the covariance is.
+eps is the hit efficiency of the layer (`hit_eff`), V the 2x2 covariance of the
+residual and rho the local density of hits. rho sqrt(det V) is the expected
+number of random hits within the residual's error ellipse, so the units cancel.
+A hit has to fit better than a random hit at that density would; a wrong hit in
+a dense region therefore loses to a hole. A step with several hits adds one such
+term per hit. A hole scores 0: within a layer the question is only whether to
+take a hit. Outward and inward searches have separate parameter sets
+(`V2p2Params::score_outward`, `score_inward`).
 
-**Terms fixed at their mean** (`Score::use_rho`, `use_detv`). rho and eps enter the
-likelihood the same way, so replacing ln rho by a constant equal to its measured
-mean removes only its variation. On F30 in mode 1 with eps 0.99, removing the
-variation of rho costs 114 found tracks and removing that of det V costs 67.
-The default is mode 1, with the hit efficiencies of "The working point" below.
-
-**Why the likelihood.** The linear form needs a small hit bonus: with a bonus of
-30 a hit beat a hole up to chi2 38, low-pT candidates took a neighbouring
-particle's outer-tracker hits, and CMSSW MTV showed a fake rate of 4.67 %
-against V2's 1.98 %. A bonus of 3 brought it to 2.57 %, and lower bonuses only
-shortened the tracks. The likelihood form removes the forward fakes without
-shortening tracks: a hit has to be better than the local hit density predicts
-for a random one, so a wrong hit in a dense region loses to a hole. The
+`Score::mode` 0 is the earlier linear form, a bonus per hit and per overlap hit
+minus a chi2 weight and a penalty per hole, kept for comparison. It needs a hit
+bonus small enough that a wrong hit loses to a hole, and with that it shortens
+the tracks; the likelihood removes the same fakes without shortening them. The
 measurements are in [History](#history).
 
-**The working point.** A joint tuning (parameter scans and CMSSW MTV, 2026-10)
-set the outward hit efficiency to 0.10, with 0.14 in the OT PS barrel and 0.20 in
-the OT 2S barrel (`V2p2ScoreParams::hit_eff_grp`); inward it stays 0.90. It is
-conditional on the seeds, the duplicate cleaner and the final fit, and is to be
-redone when any of them changes.
+**The hit efficiency is a tuned prior.** eps enters only through
+ln(eps/(1-eps)), the prior odds of a hit, and so sets how well a hit must fit to
+beat a hole. Its values come from tuning on CMSSW MTV (2026-10), not from the
+detector: outward 0.10, with 0.14 in the OT PS barrel and 0.20 in the OT 2S
+barrel (`V2p2ScoreParams::hit_eff_grp`); inward 0.90. Outward, 0.10 asks for 4.4
+more in log-likelihood per hit than 0.90 would. Why the outward search needs
+this is not understood. The tuning is conditional on the seeds, the duplicate
+cleaner and the final fit, and is to be redone when any of them changes.
+
+**Terms fixed at their mean** (`Score::use_rho`, `use_detv`). Replacing ln rho,
+or ln det V, by its measured mean keeps the term's average and removes its
+variation, which measures what the variation is worth. On F30 in mode 1 with
+eps 0.99, removing the variation of rho costs 114 found tracks and removing that
+of det V costs 67.
 
 **The final pick.** At the end of the forward search each seed keeps one
-candidate. The scorer that picks it is named per iteration
-(`IterationConfig::m_final_pick_track_scorer_name`, default the search scorer).
-`v2p2:llh` takes the summed layer-step score of the search and subtracts
-`Policy::final_pick_hole_penalty` (8) per inside hole and
-`final_pick_tail_penalty` (3) per tail hole, so the pick sees the holes the
-layer steps scored as 0. CMSSW MTV, `TrackBuilding/initialStep`, D121 ttbar
-PU200, 100 events, CMSSW_20_1_0_pre2, on this code as of 2026-10-30:
+candidate. Because holes score 0, a candidate with many holes is not penalised
+for them during the search, and finished candidates of different length are not
+yet comparable. The final pick (`v2p2:llh`, named per iteration in
+`IterationConfig`) therefore takes the summed layer-step score and subtracts 8
+per inside hole and 3 per tail hole (`Policy::final_pick_hole_penalty`,
+`final_pick_tail_penalty`). At the end it is known which holes are which.
+
+CMSSW MTV, `TrackBuilding/initialStep`, 100 events, CMSSW_20_1_0_pre2, the code
+of this branch as of 2026-10-30 with either builder:
 
 | | efficiency | fake rate | duplicates | mean hits |
 |---|---|---|---|---|
-| v2p2, working point, final pick `v2p2:llh` | 67.13 % | 1.72 % | 0.13 % | 14.37 |
+| V2 | 66.94 % | 1.92 % | 0.17 % | 14.30 |
+| v2p2 | 67.13 % | 1.72 % | 0.13 % | 14.37 |
+
+**Adding a term.** `LayerStepFeatures` carries what the score reads of a layer
+step: hits taken, the chi2 sum, ln det V, the hit density, the hole kind, the
+layer and the direction. A new term adds a member to it without changing a
+function signature. The struct can be written to the trace, to fit a score
+offline. A term that depends on the step, such as its length or its material,
+should take the step from the candidate's last found hit
+(`getLastFoundHitLyr()`), not from the previous plan entry: a candidate that
+missed a layer steps across two.
 
 ## V2 compatibility
 
@@ -913,6 +862,48 @@ the track's incoming state rather than at the layer.
   and the final fit, and is to be redone when any of them changes
   ([Layer-step score](#layer-step-score)).
 - v2p2's own backward fit (`MkFinderV2p2-BkFit.cc`) has no section yet.
+
+## Transport of the position covariance
+
+**Code:** `MkBins::transport_position_cov()`.
+
+The position block of the covariance is transported from the previous hit to
+the layer's far crossing (`m_sp2`), at the path length s the propagation to the
+layer reached it with. The track parameters are the position and (ipt, phi,
+theta), with ipt = 1/pT. At fixed s the position is
+x = x0 + f(ipt, phi, theta; s), so
+
+```
+C_pos(s) = J C0 J^T,   J = [ P_in | dx/d(ipt, phi, theta) ]   (3 x 6)
+```
+
+where J maps the six track parameters to the three position coordinates, with
+the derivatives in closed form from quantities the propagation already holds.
+With the helix in the turning angle a, inv_k the charge-signed field factor
+(1/R = |ipt inv_k|), k = 1/inv_k and p in GeV,
+
+```
+x = x0 + k (px sin a - py (1 - cos a)),  y = y0 + k (py sin a + px (1 - cos a)),
+z = z0 + s cos(theta),                   a = s sin(theta) ipt inv_k
+```
+
+so, with (dx, dy) the displacement and p_end the transverse momentum at `m_sp2`,
+
+```
+d(x,y)/dphi   = (-dy, dx)
+d(x,y)/dipt   = (-(dx, dy) + a k p_end) / ipt = k (px f1 - py f2, py f1 + px f2) / ipt
+d(x,y)/dtheta = a k p_end cot(theta),     dz/dtheta = -a k / ipt
+f1 = a cos a - sin a,   f2 = a sin a - (1 - cos a)
+```
+
+with p at the previous hit in the second form of the ipt column. As in
+`errPropFromPathL_impl()` the result is curvilinear at both ends: `P_in`
+projects the starting position onto the plane normal to the momentum there,
+and the result is projected onto the plane normal to the momentum at `m_sp2`.
+The dq surface reference in "Search window" depends on that. The first form of the ipt
+column is a difference of two O(s) terms that nearly cancel for a stiff track:
+it lost 25 % in sigma_y at pT 137 GeV. The second form is used, with f1 and f2
+from their series below |a| = 0.25, where they are O(a^3) and O(a^2).
 
 ## History
 
