@@ -1,18 +1,58 @@
 # MkFinderV2p2 design notes
 
-Design decisions behind `MkFinderV2p2` and the classes it uses (`MkBins`,
-`LayerOfHits::HitInfo`, `V2p2Score.h`, `V2p2Config.h`). The code comments say
-what a piece of code does and point to a section here for why. For what the
-code does as a whole, read the overview at the top of `MkFinderV2p2.cc` first.
-Each measurement quoted here names its sample, its size and what was counted.
+## What v2p2 is
+
+mkFit finds tracks by following each seed through an ordered list of layers. In each layer it propagates every candidate track to the layer, looks
+for compatible hits, updates the candidate with a Kalman filter, and keeps the
+best few candidates of the seed. There are three implementations of that layer
+step:
+
+- **V1**, the original: a search window from the propagated state, one Kalman
+  update per hit from the incoming state, and at most one more hit per layer,
+  from an overlapping module.
+- **V2**, the same with a newer hit selection (`MkFinder::selectHitIndicesV2()`).
+  It is what CMSSW runs in production.
+- **v2p2**, this one, a rewrite of the whole layer step: a window built from the
+  track's covariance at the layer, the crossing with each hit's own module plane,
+  an in-layer search that can take several hits per layer (both sensors of a
+  module, overlapping modules), and one selection per seed on a score that adds
+  up layer by layer. In CMSSW it runs for the phase-2 initialStep
+  (`buildingRoutine = 'v2p2'`).
+
+The overview at the top of `MkFinderV2p2.cc` says what the code does. These notes
+say why. Most sections start with a **Code:** line naming the classes and
+functions they are about; the text tries to need no more names than that.
+
+## Words used here
+
+| word | meaning |
+|---|---|
+| seed | the short track a search starts from |
+| CombCandidate | everything grown from one seed: up to `maxCandsPerSeed` candidates (the beam) |
+| TrackCand, candidate | one candidate track of a CombCandidate |
+| layer plan | the ordered list of layers searched, one per eta region; an entry is one mkFit layer, or two sub-layers searched together |
+| pickup | the plan entry where a seed starts: the layer of its last hit |
+| HoT, hole | hit on track: a hit index per layer; a hole is a HoT with no hit, of one of four kinds: miss (counts against the hole limits), stop (the candidate ends there), edge and gap (outside the sensitive area, not counted) |
+| WSR | within sensitive region: whether the track crosses the layer inside, at the edge of, or outside its modules |
+| q, qbar, phi | the coordinates of a layer: q is z in the barrel and r in the endcap, qbar is the other one (r in the barrel, z in the endcap), phi the azimuth |
+| binnor | the per-layer (phi, q) grid that hits are sorted into, so that a window is a range of bins |
+| window, fetch, cut | the bins read for a candidate (fetch) and the per-hit test applied to what they hold (cut) |
+| dalpha | the turning angle of the track from its state to a point; it orders hits along the path |
+| path | the hits one candidate takes in one layer, in path order |
+| layer step | what one candidate does in one layer; it is scored as one additive term |
+| forward, inward search | outward, from pixel seeds; inward, towards the beam, as from outer-tracker seeds |
+| NN | the width of a Matriplex batch: 8 lanes with AVX, 16 with AVX-512 |
+| quality-val, MTV | mkFit's own efficiency validation, and CMSSW's MultiTrackValidator |
 
 Phase-2 layer names: the OT PS barrel is OT layers 1-3 (mkFit layers 4-9, one
 mkFit layer per sensor of a module), the OT 2S barrel is OT layers 4-6 (mkFit
-10-15), and the OT endcap has PS modules at small radius and 2S at large.
+10-15), and the OT endcap has PS modules at small radius and 2S at large. P and
+S are the two sensors of a PS module: P macro-pixels (1.5 mm long), S strips
+(24 mm).
 
 Contents:
 
-1. [Samples](#samples)
+1. [Samples and how numbers are quoted](#samples-and-how-numbers-are-quoted)
 2. [Configuration](#configuration)
 3. [Layer processing](#layer-processing)
 4. [Candidate pickup and stopping cuts](#candidate-pickup-and-stopping-cuts)
@@ -28,8 +68,10 @@ Contents:
 14. [End-of-layer selection](#end-of-layer-selection)
 15. [Layer-step score](#layer-step-score)
 16. [V2 compatibility](#v2-compatibility)
+17. [Open items](#open-items)
+18. [History](#history)
 
-## Samples
+## Samples and how numbers are quoted
 
 All measurements use ttbar events with pileup 200 in the phase-2 tracker
 geometry. The forward search runs from the CMSSW initialStep seeds, the inward
@@ -37,17 +79,28 @@ search from T5s from LST and has to add their pixel hits. The samples used
 repeatedly are named here and by tag afterwards.
 
 - **F30**: forward search, 30 events. Efficiency against the MTV-like
-  denominator (29759 selected sim tracks). Comparisons are paired: same events,
-  same seeds, one process.
-- **I50**: inward search, 50 events, T5s from LST. Counted: pixel hits
-  recovered, out of 211435, matched by exact (layer, index); and fully recovered
-  tracks, those with all of them, out of 43358. Neither count uses truth
-  matching.
-- **T100**: timing of the forward search, 100 events, single thread, build
-  without ROOT and without tracing, minimum of three repetitions. The quoted
-  time brackets `(builder.*FindTracks)(IT_FwdSearch)` only.
-- **H50**: the events of I50, used for detector properties such as hit
-  multiplicities per layer crossing.
+  denominator (29759 selected sim tracks).
+- **I50**: inward search, 50 events. Counted: pixel hits recovered, out of
+  211435, matched by exact (layer, index); and fully recovered tracks, those
+  with all of them, out of 43358. Neither count uses truth matching.
+- **T100**: time of the forward search alone (not seeding, fitting or duplicate
+  removal), 100 events, single thread, minimum of three repetitions.
+
+How to read the numbers:
+
+- **Comparisons are paired**: same events, same seeds, one process, one
+  setting changed. A difference like "-41 found" is the changed setting minus
+  the reference, which the text names. A significance in parentheses is that
+  difference over its event-to-event spread (sqrt(n) times the standard
+  deviation of the per-event differences).
+- **quality-val's found and fake counts reward track length.** A correctly
+  matched track with fewer than 10 hits is not found and counts as a fake, and
+  so does a track on a pileup particle that has no seed. Any change that makes
+  tracks longer gains found and loses fakes without being purer. Where it
+  matters, MTV's association (a fake is a track matched to no sim track) is
+  quoted as well.
+- **Times are of the code as it was when measured.** Compare times within one
+  table only. Older absolute times are in [History](#history).
 
 ## Configuration
 
@@ -96,7 +149,7 @@ Measured on T100, on a Xeon Gold 6130 (Skylake-SP): the filled lanes went from
 forward search became 5.3 % faster with `-mavx`, 4.6 % with AVX2 and 3.8 % with
 AVX-512.
 
-**Finishing a seed early.** Because batches mix seeds, the work of one seed
+**Finishing a seed early** (on by default). Because batches mix seeds, the work of one seed
 ends at different times. For each seed the finder counts the candidates still
 waiting for pre-selection, and the Kalman updates and paths still pending. When
 both counts are zero, the seed's paths compete and its new candidates are
@@ -132,9 +185,7 @@ applied at pull-in, before any work is spent on the layer:
 The angle test is on |posPhi - momPhi| with both angles wrapped to (-pi, pi]. An
 angle A past the limit therefore appears as dphi > A, or as dphi < 2 pi - A when
 the pair straddles the branch cut. The upper bound is derived from the lower one
-in code. V1 writes it as the literal 4.512, which is pi + A and lets the
-78.5-101.5 deg band through whenever the pair straddles. The test as written is
-equivalent to cos(momPhi - posPhi) < sin(0.2).
+in code. The test as written is equivalent to cos(momPhi - posPhi) < sin(0.2).
 
 A stopped candidate records why, in `TrackCand::StopReason_e`, because loopers
 are of interest downstream (the phase-2 timing layer and HGCal). The trace
@@ -287,17 +338,13 @@ from their series below |a| = 0.25, where they are O(a^3) and O(a^2).
 No material enters. Material added during a step changes only the angular
 terms, so none of it reaches the position block within that step.
 
-This replaced a full `propagateHelixToPlaneMPlex` call, of which only the same
-six elements were read. Against that call with uniform B, over 200508 lanes, the
+Against a full helix-to-plane propagation with uniform B, over 200508 lanes, the
 sigmas agree to 7e-5 and the correlations to 1.6e-4 at the worst lane. Against
 it with the parametric field at the starting point they differ by 0.4 % at p99.
 The transport uses the same uniform B as `m_sp1`, `m_sp2` and the Hermite cubic.
-On 20 events the quality-val track counts were identical in the default and two
-varied configurations. The block costs 0.23 s against 0.68 s over those 20
-events in a trace build, about 5 % of the build time.
 
 **Two factors per coordinate.** Which term binds is a property of the layer.
-The median `hit_q_half_length` (H50) is 0.0075 cm in the pixel barrel, 0.042 cm
+The median `hit_q_half_length` (I50 events) is 0.0075 cm in the pixel barrel, 0.042 cm
 on the P sensors and 0.80 cm on the S sensors of the OT PS barrel, and 2.51 cm
 in the OT 2S barrel,
 while the track term does not vary like that. Strips are containment-dominated
@@ -346,7 +393,8 @@ ratio rout/rin is 1.33 at pixel layer 0.
 **Per-hit phi extent and `dphi_trk_fac` = 2.** The hit term is the hit's own phi
 extent from its covariance ([Hit extents](#hit-extents)), about 4e-5 rad in
 the OT 2S barrel. The cut is therefore carried by the track term, and the track term needs
-a factor 2:
+a factor 2. Differences against the flat tolerance of 0.0246 rad that the
+per-hit extent replaced:
 
 | `dphi_trk_fac` | F30 found | F30 fakes | I50 fully recovered tracks |
 |---|---|---|---|
@@ -354,8 +402,7 @@ a factor 2:
 | 1.5 | -2 | +10 | -29 |
 | 2.0 | +1 | +2 | identical |
 
-The reference row is the flat tolerance of 0.0246 rad that the per-hit extent
-replaced. It is still available with `Window::phi_per_hit` off, as
+The flat tolerance is still available with `Window::phi_per_hit` off, as
 `Window::dphi_flat_rad`.
 
 Above |eta| 0.8 the factor also compensates a phi covariance that is too small.
@@ -373,9 +420,8 @@ fetch cannot be expressed. Two details:
   uses the layer's largest hit extent (`max_hit_q_half_length()`,
   `max_hit_phi_half_extent()`).
 - The phi range comes from the axis helper (`LayerOfHits::phiRangeBins()`),
-  which returns a half-open range that covers the upper edge, with the mask
-  applied after the increment. A hand-rolled pair of `phiBinChecked()` calls
-  misses the bin holding the upper edge on every range. The phi half-width is
+  which returns a half-open range that covers the bin holding the upper edge.
+  The phi half-width is
   clamped below pi first: a range on a circle is an arc, and a half-width of pi
   or more wraps to a small arc instead of the full circle.
 
@@ -383,9 +429,7 @@ Beyond the cut, the fetch adds whole bins on the bin index, so the margin
 carries no float-to-bin rounding:
 
 - `Window::phi_extra_bins` = 0. Against 1, F30 gives -1 found track and I50
-  gives +1 recovered hit. One spare bin cost 20 % of build time before the line
-  pre-cut (T100: 60.79 s against 48.38 s), since every fetched hit costs a
-  plane solve per candidate.
+  gives +1 recovered hit, and every fetched hit costs work.
 - `Window::q_extra_bins` = 1. The per-hit q cut is surface-referenced and the
   fetch uses the raw `dq_track`, so at high |eta| the cut reaches past the
   fetch. With 0, I50 loses 1373 of 43358 fully recovered tracks, all in
@@ -407,8 +451,8 @@ along a segment of half-length L has sigma = L/sqrt(3).
 - `q_half_length`: `hl_fac * sqrt(ezz)` in the barrel. For a strip along unit
   vector u the covariance is (L^2/3) u u^T, so this is L |u_z|, the strip's
   projection onto z. Module tilt is therefore already included. In the OT 2S barrel, where
-  modules are flat, the H50 median is 2.5125 cm against a nominal 2.5. In the endcap
-  it is `hl_fac * sqrt(exx + eyy)`, which is sigma_r^2 + r^2 sigma_phi^2. That is
+  modules are flat, the median on the I50 events is 2.5125 cm against a nominal 2.5. In the endcap
+  it is `hl_fac * sqrt(exx + eyy)`, with exx + eyy = sigma_r^2 + r^2 sigma_phi^2. That is
   right for radial strips and a factor sqrt(2) too large for endcap pixels,
   where sigma_x and sigma_y are similar.
 - `phi_half_extent`: from sigma_phi^2 = (y^2 exx - 2xy exy + x^2 eyy) / r^4, the
@@ -466,8 +510,8 @@ and the pre-cut drops. Production window, trace build:
 
 | | forward: pairs | rejected | false rejects | inward: pairs | rejected | false rejects |
 |---|---|---|---|---|---|---|
-| q, slack 2 (as built) | 11.9 M | 79.3 % | 82 | 1.83 M | 85.8 % | 0 |
-| q slack 2, and phi slack 1.5 (as built) | 11.9 M | 89.8 % | 405 | 1.83 M | 89.1 % | 15 |
+| q only, slack 2 (first version) | 11.9 M | 79.3 % | 82 | 1.83 M | 85.8 % | 0 |
+| q slack 2 and phi slack 1.5 (default) | 11.9 M | 89.8 % | 405 | 1.83 M | 89.1 % | 15 |
 | q, slack 2, without the surface factor | 11.9 M | 80.7 % | 17610 | 1.83 M | 89.0 % | 10381 |
 | q, slack 1 | 11.9 M | 82.2 % | 2278 | 1.83 M | 89.7 % | 554 |
 | q, slack 1, without the qbar term | 11.9 M | 84.3 % | 87659 | 1.83 M | 90.1 % | 3364 |
@@ -512,9 +556,7 @@ candidate, since they are reached from the same state with the same curvature.
 It is a signed turning angle, so its sign goes with the charge; `dir` is the
 sign of its change from `m_sp1` (the near bounding surface in the search
 direction) to `m_sp2` (the far one), which makes the key path order for both
-charges and either search direction. Until 2026-10-01 `dir` was the search
-direction alone, so for one charge every layer's hits were walked in reverse
-path order. ddphi decides which hits survive; path order decides the order the
+charges and either search direction. ddphi decides which hits survive; path order decides the order the
 search walks them. The queues are copied out and sorted once per candidate. Two
 hits on one module share the crossing with its plane and so have equal keys;
 they go larger ddphi first, then by hit index, so the order does not depend on
@@ -535,13 +577,10 @@ The trace records `sub_rank` (rank by ddphi within the sub-layer) and
 **Code:** `expand_in_layer()`, `harvest_nodes()`, `CandNode`,
 `MkFinderV2p2::m_node_arena`.
 
-**What it replaced.** The first version of v2p2 ran one Kalman update per
-pre-selected hit, all from the candidate's incoming state, and kept the lowest
-chi2. That takes at most one hit per layer. The best-hit path was removed once
-the search replaced it. On H50 a track crossing an OT layer pair, barrel or
-endcap, leaves both sensors' hits in 91-94 % of crossings, and 26-28 % of
-crossings carry three or more hits, because an overlapping module is itself a
-stack.
+**Why.** On the I50 events a track crossing an OT layer pair, barrel or endcap,
+leaves hits on both sensors in 91-94 % of crossings, and 26-28 % of crossings
+carry three or more hits, because an overlapping module is itself a stack. One
+hit per layer throws most of that away.
 
 **What it does.** A path through the layer is an increasing sequence of
 positions in `m_layer_hits`. Per candidate, the search is
@@ -557,7 +596,7 @@ for depth = 1 .. max_hits_per_layer - 1, while frontier is not empty:
 where `kalman()` keeps an outcome only if its acceptance chi2 passes
 `hit_chi2_cut`. Every node of every depth enters the end-of-layer selection.
 The code computes the same nodes in a different order, to keep the Matriplex
-lanes full (see "Running Kalman batches" in "Layer processing").
+lanes full (see "Kalman updates across batches" in "Layer processing").
 
 Depth 0 starts from the candidate's state, and the Hermite has already solved
 each crossing, so the propagation is handed the path length. Deeper nodes start
@@ -596,7 +635,7 @@ A `CandNode` carries a full `TrackState` and lives for one layer. A
 `HoTNode` in `CombCandidate::m_hots` is 12 bytes and lives for the event. That
 difference is why the two are separate.
 
-**Effect.** F30, cap 3, against the best-hit path before its removal: found
+**Effect.** F30, cap 3, against the first version's one best hit per layer: found
 tracks 18455 to 18846, fakes 3217 to 2765. Truth-matched hits per found track go
 from 10.78 / 11.55 / 11.32 to 12.70 / 14.32 / 14.29 in barrel / transition /
 endcap. Inward on 20
@@ -604,8 +643,7 @@ events, at depth 2: pixel hits recovered 75.7 % to 92.2 %,
 fully recovered tracks 52.8 % to 82.4 %.
 
 `maxCandsPerSeed` 3 is the production value with the search on. From 3 to 6
-F30 gains 39 found tracks. Before the line pre-cut, T100 build time with the
-search on was 60.79 s at cap 3 and 76.45 s at cap 4.
+F30 gains 39 found tracks.
 
 ## Kalman hit acceptance
 
@@ -797,51 +835,18 @@ extent the covariance is.
 likelihood the same way, so replacing ln rho by a constant equal to its measured
 mean removes only its variation. On F30 in mode 1 with eps 0.99, removing the
 variation of rho costs 114 found tracks and removing that of det V costs 67.
-The default is mode 1 with `hit_eff` 0.90, see "The default" below.
+The default is mode 1, with the hit efficiencies of "The working point" below.
 
-**The hit bonus.** In mode 0 a hit beats a hole when
-`hit_bonus - chi2_weight * chi2 > -miss_penalty`, i.e. below chi2 =
-`(hit_bonus + miss_penalty) / chi2_weight`. With the former bonus of 30 that was
-chi2 38. Almost every hit that passed the acceptance cut then beat a hole. A
-low-pT candidate that ran into a neighbouring particle's outer-tracker hits took
-them. In CMSSW MTV on ttbar PU200 D121, v2p2 had a fake rate of 4.67 % against
-1.98 % for V2. The extra fakes were tracks of 6-16 hits with a correct pixel
-seed, and their outer-tracker hits belonged mostly to another particle. The
-bonus is 3, so a hole wins above chi2 11.
+**Why the likelihood.** The linear form needs a small hit bonus: with a bonus of
+30 a hit beat a hole up to chi2 38, low-pT candidates took a neighbouring
+particle's outer-tracker hits, and CMSSW MTV showed a fake rate of 4.67 %
+against V2's 1.98 %. A bonus of 3 brought it to 2.57 %, and lower bonuses only
+shortened the tracks. The likelihood form removes the forward fakes without
+shortening tracks: a hit has to be better than the local hit density predicts
+for a random one, so a wrong hit in a dense region loses to a hole. The
+measurements are in [History](#history).
 
-MTV, `TrackBuilding/initialStep`, 100 events, V2 = CMSSW_20_1_0_pre2 as
-released, v2p2 = this branch without the rin fix:
-
-| | efficiency | fake rate | mean hits |
-|---|---|---|---|
-| V2 | 66.92 % | 1.98 % | 14.17 |
-| v2p2, bonus 30 | 66.57 % | 4.67 % | 15.57 |
-| v2p2, bonus 10 | 66.89 % | 3.27 % | 15.32 |
-| v2p2, bonus 5 | 66.94 % | 2.79 % | 15.05 |
-| v2p2, bonus 3 | 66.94 % | 2.57 % | 14.72 |
-
-The remaining excess is at 1.7 < |eta| < 2.7 and pT < 0.5 GeV. Standalone, 50
-events, MTV association: below a bonus of 3 the found and fake counts stop
-improving, while tracks become shorter than V2's, the d(pT)/pT width grows and
-duplicates rise.
-
-**The default.** The linear score cannot remove the forward fakes without
-shortening the tracks. The log-likelihood can: a hit has to be better than the
-local hit density predicts for a random one, so a wrong hit in a dense region
-loses to a hole. With `hit_eff` 0.95 it added fakes at 0.9 < |eta| < 1.7; 0.90
-does not. Same MTV setup; the mode 1 row also has the in-layer path order fix
-and v2p2's own backward fit, the mode 0 row is before both:
-
-| | efficiency | fake rate | duplicates | mean hits |
-|---|---|---|---|---|
-| V2 | 66.92 % | 1.98 % | 0.18 % | 14.17 |
-| v2p2, mode 0, bonus 3 | 66.94 % | 2.55 % | 0.12 % | 14.79 |
-| v2p2, mode 1, hit_eff 0.90 | 67.03 % | 2.08 % | 0.15 % | 14.71 |
-
-What is left of the fake excess is in the barrel (1.15 % against 0.93 %) and at
-0.9 < |eta| < 1.7 (2.87 % against 2.36 %).
-
-**The working point since.** A joint tuning (parameter scans and CMSSW MTV, 2026-10)
+**The working point.** A joint tuning (parameter scans and CMSSW MTV, 2026-10)
 set the outward hit efficiency to 0.10, with 0.14 in the OT PS barrel and 0.20 in
 the OT 2S barrel (`V2p2ScoreParams::hit_eff_grp`); inward it stays 0.90. It is
 conditional on the seeds, the duplicate cleaner and the final fit, and is to be
@@ -880,3 +885,102 @@ The upstream window keeps two properties that the v2p2 fetch does not: the upper
 phi edge of the bin range has no "+1", so the bin holding it is not scanned,
 and a margin of 2.75 half-bins covers it; and the dphi jacobian is evaluated at
 the track's incoming state rather than at the layer.
+
+## Open items
+
+- The pre-selection cap should become per layer: overlap availability varies
+  strongly across the detector ([Reduction](#reduction-and-hit-ordering)).
+- The reachability margin should scale with the track's expected dq, per layer,
+  and be retuned on outward searches, pixel seeds and the full pT range
+  ([Reachability](#reachability)).
+- `Window::dphi_trk_fac` and `chi2_trk_fac` compensate a track covariance that
+  is too small above |eta| 0.8; both should come down when the forward material
+  model is fixed ([Search window](#search-window),
+  [Kalman hit acceptance](#kalman-hit-acceptance)).
+- A fetch widened by the surface reference would remove the spare q bin
+  ([The fetch](#the-fetch)).
+- The endcap q half-length is a factor sqrt(2) too large for pixels
+  ([Hit extents](#hit-extents)).
+- The one-point Hermite would be cheaper than the plane solve for the second and
+  later hits of a path ([In-layer combinatorial search](#in-layer-combinatorial-search)).
+- No phase-2 layer sets an r hole, so the gap verdict never fires
+  ([Within-sensitive-region verdict](#within-sensitive-region-verdict)).
+- The stop reason is not yet exported to CMSSW
+  ([Candidate pickup and stopping cuts](#candidate-pickup-and-stopping-cuts)).
+- The score's working point is conditional on the seeds, the duplicate cleaner
+  and the final fit, and is to be redone when any of them changes
+  ([Layer-step score](#layer-step-score)).
+- v2p2's own backward fit (`MkFinderV2p2-BkFit.cc`) has no section yet.
+
+## History
+
+Superseded versions and measurements of earlier states of the code, kept for
+reference. Times here are not comparable with the current ones.
+
+- **Looper stop in V1.** V1 writes the upper bound of the angle test as the
+  literal 4.512, which is pi + A, and lets the 78.5-101.5 deg band through
+  whenever the pair straddles the branch cut. v2p2 derives it from the lower
+  bound.
+- **Track covariance at the layer.** The transport replaced a full
+  `propagateHelixToPlaneMPlex` call, of which only the same six elements were
+  read. On 20 events the quality-val track counts were identical in the default
+  and two varied configurations, and the block went from 0.68 s to 0.23 s over
+  those events in a trace build.
+- **phi fetch.** A hand-rolled pair of `phiBinChecked()` calls missed the bin
+  holding the upper edge on every range; the axis helper applies the mask after
+  the increment.
+- **phi spare bin.** Before the line pre-cut one spare phi bin cost 20 % of the
+  time (T100: 60.79 s against 48.38 s), since every fetched hit then cost a plane
+  solve per candidate.
+- **Path order.** Until 2026-10-01 `dir` was the search direction alone, so for
+  one charge every layer's hits were walked in reverse path order.
+- **Best-hit path.** The first version of v2p2 ran one Kalman update per
+  pre-selected hit, all from the candidate's incoming state, and kept the lowest
+  chi2, so at most one hit per layer. It was removed once the in-layer search
+  replaced it.
+- **Beam width.** Before the line pre-cut, T100 with the in-layer search on was
+  60.79 s at `maxCandsPerSeed` 3 and 76.45 s at 4.
+
+### Layer-step score: from the hit bonus to the likelihood
+
+**The hit bonus (mode 0).** In mode 0 a hit beats a hole when
+`hit_bonus - chi2_weight * chi2 > -miss_penalty`, i.e. below chi2 =
+`(hit_bonus + miss_penalty) / chi2_weight`. With the former bonus of 30 that was
+chi2 38. Almost every hit that passed the acceptance cut then beat a hole. A
+low-pT candidate that ran into a neighbouring particle's outer-tracker hits took
+them. In CMSSW MTV on ttbar PU200 D121, v2p2 had a fake rate of 4.67 % against
+1.98 % for V2. The extra fakes were tracks of 6-16 hits with a correct pixel
+seed, and their outer-tracker hits belonged mostly to another particle. The
+bonus is 3, so a hole wins above chi2 11.
+
+MTV, `TrackBuilding/initialStep`, 100 events, V2 = CMSSW_20_1_0_pre2 as
+released, v2p2 = this branch without the rin fix:
+
+| | efficiency | fake rate | mean hits |
+|---|---|---|---|
+| V2 | 66.92 % | 1.98 % | 14.17 |
+| v2p2, bonus 30 | 66.57 % | 4.67 % | 15.57 |
+| v2p2, bonus 10 | 66.89 % | 3.27 % | 15.32 |
+| v2p2, bonus 5 | 66.94 % | 2.79 % | 15.05 |
+| v2p2, bonus 3 | 66.94 % | 2.57 % | 14.72 |
+
+The remaining excess is at 1.7 < |eta| < 2.7 and pT < 0.5 GeV. Standalone, 50
+events, MTV association: below a bonus of 3 the found and fake counts stop
+improving, while tracks become shorter than V2's, the d(pT)/pT width grows and
+duplicates rise.
+
+**Mode 1 replaces mode 0.** The linear score cannot remove the forward fakes without
+shortening the tracks. The log-likelihood can: a hit has to be better than the
+local hit density predicts for a random one, so a wrong hit in a dense region
+loses to a hole. With `hit_eff` 0.95 it added fakes at 0.9 < |eta| < 1.7; 0.90
+does not. Same MTV setup; the mode 1 row also has the in-layer path order fix
+and v2p2's own backward fit, the mode 0 row is before both:
+
+| | efficiency | fake rate | duplicates | mean hits |
+|---|---|---|---|---|
+| V2 | 66.92 % | 1.98 % | 0.18 % | 14.17 |
+| v2p2, mode 0, bonus 3 | 66.94 % | 2.55 % | 0.12 % | 14.79 |
+| v2p2, mode 1, hit_eff 0.90 | 67.03 % | 2.08 % | 0.15 % | 14.71 |
+
+What is left of the fake excess is in the barrel (1.15 % against 0.93 %) and at
+0.9 < |eta| < 1.7 (2.87 % against 2.36 %).
