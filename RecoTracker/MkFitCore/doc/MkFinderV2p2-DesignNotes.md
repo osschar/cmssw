@@ -93,11 +93,13 @@ How to read the numbers:
   the reference, which the text names. A significance in parentheses is that
   difference over its event-to-event spread (sqrt(n) times the standard
   deviation of the per-event differences).
-- **quality-val's found and fake counts reward track length.** A correctly
-  matched track with fewer than 10 hits is not found and counts as a fake, and
-  so does a track on a pileup particle that has no seed. Any change that makes
-  tracks longer gains found and loses fakes without being purer. Where it
-  matters, MTV's association (a fake is a track matched to no sim track) is
+- **quality-val's found and fake counts reward track length.** In its default
+  mode a track matched to a sim track but with fewer than 10 found hits (seed
+  hits included) is not counted as found; it is counted with the tracks that
+  match no sim track, which the tables call fakes. So is a track on a particle
+  from which no seed was built. A change that makes tracks longer therefore gains
+  found tracks and loses fakes without being purer. Where it matters, MTV's
+  association (a fake is a track matched to no sim track, no minimum length) is
   quoted as well.
 - **Times are of the code as it was when measured.** Compare times within one
   table only. Older absolute times are in [History](#history).
