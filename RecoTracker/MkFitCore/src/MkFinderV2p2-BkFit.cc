@@ -205,7 +205,7 @@ namespace mkfit {
     const float outlier_min_pt = m_iteration_config->m_backward_fit_outlier_min_pt;
     int n_outliers[NN] = {0};
 
-    // Path order within a physical layer (TrackerInfo::major_layer_id()). The HoT chain holds
+    // Path order within a physical layer (TrackerInfo::get_double_layers()). The HoT chain holds
     // the hits of the two sensor layers of a module pair in plan order, and seed hits on one
     // layer in the seed's order; neither is always the order the track meets them. So when a
     // lane comes to a physical layer it takes all its hits on that layer, a run, and fits them
@@ -218,7 +218,7 @@ namespace mkfit {
     const TrackerInfo &trk_info = *m_prop_config->backward_fit_pflags.tracker_info;
     auto collect_run = [&](int i) {
       run_n[i] = run_pos[i] = 0;
-      int major = -1;
+      std::pair<int, int> dl{-1, -1};
       for (; m_CurNode[i] >= 0; m_CurNode[i] = m_HoTNodeArr[i][m_CurNode[i]].m_prev_idx) {
         const HitOnTrack &hot = m_HoTNodeArr[i][m_CurNode[i]].m_hot;
         if (hot.index < 0)
@@ -232,10 +232,9 @@ namespace mkfit {
         }
         if (repeat)
           continue;
-        const int m = trk_info.major_layer_id(hot.layer);
-        if (major == -1)
-          major = m;
-        else if (m != major || run_n[i] == kMaxRun)
+        if (dl.first < 0)
+          dl = trk_info.get_double_layers(hot.layer);
+        else if ((hot.layer != dl.first && hot.layer != dl.second) || run_n[i] == kMaxRun)
           break;
         run_node[i][run_n[i]++] = m_CurNode[i];
       }

@@ -366,6 +366,24 @@ namespace mkfit {
     read_std_vec(fp, m_mat_vec.vector());
 
     fclose(fp);
+
+    setup_double_layers();
+  }
+
+  void TrackerInfo::setup_double_layers() {
+    for (auto& li : m_layers) {
+      li.m_is_double_layer = false;
+      li.m_double_layer_partner = -1;
+    }
+    for (int l = 0; l + 1 < n_layers(); ++l) {
+      LayerInfo &a = m_layers[l], &b = m_layers[l + 1];
+      if (a.is_strip() && b.is_strip() && a.is_stereo() && !b.is_stereo() && a.layer_type() == b.layer_type() &&
+          !a.m_is_double_layer) {
+        a.m_is_double_layer = b.m_is_double_layer = true;
+        a.m_double_layer_partner = l + 1;
+        b.m_double_layer_partner = l;
+      }
+    }
   }
 
   void TrackerInfo::print_tracker(int level, int precision) const {
