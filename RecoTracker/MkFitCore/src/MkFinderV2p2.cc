@@ -41,8 +41,9 @@
 // searched from the state after the previous entry, so a missed sensor gets its
 // own hole. A paired entry, one for both sensors with a shared window and one
 // in-layer search over both, is supported but not used by default; its holes are
-// per entry, not per sensor. The hole, overlap-count and sister-hole code is
-// written for the split plan.
+// per entry, not per sensor. The hole and overlap-count code, and the dropping
+// of a hole whose path continues on the sister sensor, are written for the split
+// plan.
 //
 // The objects, per layer:
 //   CCandRep        one CombCandidate (one seed) while it is finding, from
@@ -77,20 +78,21 @@
 //       hit Kalman-updated and accepted on its chi2
 //   compete on score: every path, one hole per incoming        select_and_materialise()
 //     candidate, the TrackCands not taken in; the best
-//     m_max_cands become the CombCandidate's TrackCands
+//     maxCandsPerSeed become the CombCandidate's TrackCands
 //
 // What the code adds to that, for speed:
-//   Batching. Up to NN incoming candidates, from any CombCandidates, pass the
-//     front end together: LayerBatch is NN candidates wide, HitBatch NN
-//     (candidate, hit) pairs. The Kalman updates of the paths go into two
-//     batches that fire only when all NN lanes are filled, and stay open across
-//     layer batches ("running Kalman", rk_): depth 0 takes the plane crossing
+//   Batching. Up to NN incoming candidates, from any CombCandidates, pass
+//     propagation, window and pre-selection together: LayerBatch is NN
+//     candidates wide, HitBatch NN (candidate, hit) pairs. The Kalman updates
+//     of the paths go into two batches that fire when all NN lanes are filled,
+//     or at the end of the layer, and stay open across layer batches
+//     ("running Kalman", rk_): depth 0 takes the plane crossing
 //     found in pre-selection, deeper steps solve for the plane from the parent
 //     path's state. Accepted nodes go onto m_deep_queue and are turned into the
 //     next depth's items there: a worklist, not recursion.
 //   Completion. With batches mixing candidates, a CombCandidate's paths finish
 //     at different times. Its CCandRep counts m_n_queued (incoming candidates
-//     not yet through the front end) and m_n_inflight (Kalman items not yet run,
+//     not yet through pre-selection) and m_n_inflight (Kalman items not yet run,
 //     plus nodes not yet expanded; a child is counted before its parent is
 //     released, so the count cannot pass through zero early). With both at zero
 //     it can be selected: right after the batch with InLayer::early_select, its
