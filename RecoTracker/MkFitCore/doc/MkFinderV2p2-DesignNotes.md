@@ -232,10 +232,9 @@ landed further than `kReachTolerance` from the target, which only round-off
 should cause.
 
 The margin is provisional. It was chosen on 10 events of the inward search
-from T5 seeds, counting real failures (searches whose crossing solve broke down)
-and healthy searches that the margin would wrongly veto: 0.1 cm catches 138 of
-148 real failures and vetoes none of 2087 healthy searches, 0.25 cm vetoes 7
-and 1 cm vetoes 47. One length
+from T5 seeds: of 148 searches in which the propagation to the layer failed
+without a margin, 0.1 cm catches 138, and it vetoes none of 2087 searches that
+succeed; 0.25 cm vetoes 7 of those and 1 cm vetoes 47. One length
 for the whole detector is probably the wrong shape. Whether a track reaches a
 layer is a statement about a track with an error, so the band should rather
 scale with the track's expected dq, per layer. A retuning needs outward
