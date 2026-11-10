@@ -79,11 +79,12 @@ Contents:
 13. [Kalman hit acceptance](#kalman-hit-acceptance)
 14. [End-of-layer selection](#end-of-layer-selection)
 15. [Layer-step score](#layer-step-score)
-16. [V2 compatibility](#v2-compatibility)
-17. [Open items](#open-items)
-18. [Transport of the position
+16. [Backward fit](#backward-fit)
+17. [V2 compatibility](#v2-compatibility)
+18. [Open items](#open-items)
+19. [Transport of the position
     covariance](#appendix-transport-of-the-position-covariance)
-19. [History](#appendix-history)
+20. [History](#appendix-history)
 
 ## Samples and how numbers are quoted
 
@@ -553,8 +554,8 @@ hit index) only makes the result reproducible.
 put the partner sensor at larger or smaller radius module by module, so the
 order in which a track meets P and S cannot be read from the layer number. The
 split plan nevertheless searches them in plan order, P first; the hits of the
-two sensors then enter the track in plan order, not always in path order. See
-[Open items](#open-items).
+two sensors then enter the track in plan order, not always in path order. The
+backward fit puts them back in path order (see [Backward fit](#backward-fit)).
 
 ## In-layer combinatorial search
 
@@ -860,6 +861,56 @@ should take the step from the candidate's last found hit
 (`getLastFoundHitLyr()`), not from the previous plan entry: a candidate that
 missed a layer steps across two.
 
+## Backward fit
+
+**Code:** `MkFinder::bkFitFitTracksV2p2()` in `MkFinderV2p2-BkFit.cc`,
+`TrackerInfo::get_double_layers()`, `getS()` and `getSNearPlanePoint()` in
+`PropagationMPlexPlane.cc`.
+
+After the forward search, each track is fitted again from its last hit back to
+its first. The fit propagates to each hit's module plane and updates there; it
+needs no layer plan. Every hit is fitted, sister and overlap hits included,
+where the V1 and V2 fit keeps only the first of consecutive hits in a layer. A
+hit that is on the track twice, which merging the seed hits can cause, is
+fitted once.
+
+**Hit order within a physical layer.** The hits of a track are stored in the
+order they were added: plan order for the two sensors of a module pair (see
+[Reduction](#reduction-and-hit-ordering)), the seed's order for seed hits.
+Neither is always the order in which the track meets them. So when the fit
+reaches a physical layer, it takes all of the track's hits on that layer and
+fits them nearest module plane first. The distance is measured along a straight
+line, from the state at the start of the layer. Which two sensor layers make up
+one physical layer comes from the geometry: a stereo strip layer followed by a
+non-stereo strip layer of the same type (`TrackerInfo::setup_double_layers()`,
+run when the geometry is set up; not stored in the geometry file).
+
+Measured on 20 events, against the order of the sim hits: before the change the
+fit met the hits of a physical layer in the wrong order in 50.5 % of the
+physical layers with two or more hits, after it in 0.17 %. The median d(pT)/pT of the fitted
+tracks went from -0.0045 to -0.0018; found and fake tracks, with MTV's
+association, did not change.
+
+**The crossing near the turning point.** The propagation to a plane solves a
+quadratic in the path length and takes the root of smaller size. Where a
+low-pT track turns back in radius, the two roots are of similar size, and the
+smaller one can be the track's other crossing of the same plane, 50 to 110 cm
+from the hit. A fit that steps there loses the track: the median final pT of
+such tracks was 0.18 of the true one. These steps were from 67 to 110 cm radius into the
+barrel, at pT 0.4 to 0.7 GeV. So when the two roots are within a factor of
+about 50 of each other, the propagation computes both crossing points and keeps
+the one nearer the module. A step that starts on the plane, as from a sister
+sensor, has one root near zero and the other far away, and is not flagged.
+The rule is in the plane propagation, so it applies to every caller: the
+backward fits of v2p2, V1 and V2, and the in-layer search.
+
+Measured on 20 events. Tracks whose fitted state leaves the plane of a hit by
+more than 0.1 cm went from 197 to 7. The rule took the other root in 202 steps
+of the v2p2 backward fit, 326 of the V1 and V2 backward fit, and 20 of 657
+thousand in the in-layer search; the forward search's output did not change.
+Found and fake tracks with MTV's association did not change, and the time was
+the same within the spread of repeated runs.
+
 ## V2 compatibility
 
 **Code:** `MkFinder::selectHitIndicesV2()`.
@@ -887,10 +938,6 @@ output is not identical to upstream, because of the new propagation.
 - The pre-selection cap should become per layer, since how often modules
   overlap varies strongly across the detector
   ([Reduction](#reduction-and-hit-ordering)).
-- In the split plan the two sensors of a module are searched in plan order, so
-  their hits enter the track in that order, not always in path order; the
-  backward fit then meets them out of order
-  ([Reduction](#reduction-and-hit-ordering)).
 - The reachability margin should scale with the track's expected dq, per layer,
   and be retuned on outward searches, pixel seeds and the full pT range
   ([Reachability](#reachability)).
@@ -913,8 +960,6 @@ output is not identical to upstream, because of the new propagation.
 - The score's working point is conditional on the seeds, the duplicate cleaner
   and the final fit, and is to be redone when any of them changes
   ([Layer-step score](#layer-step-score)).
-- v2p2 has its own backward fit, run after the forward search
-  (`MkFinderV2p2-BkFit.cc`); it has no section yet.
 
 ## Appendix: transport of the position covariance
 
