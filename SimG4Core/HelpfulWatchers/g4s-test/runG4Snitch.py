@@ -187,7 +187,7 @@ process.g4SimHits.Watchers = cms.VPSet(cms.PSet(
     output_sensitive_steps  = cms.untracked.bool(True),
 	output_inert_steps = cms.untracked.bool(True),
 	sensitive_step_ecut = cms.untracked.double(0.0),
-	inert_step_ecut = cms.untracked.double(10e-6),
+	inert_step_ecut = cms.untracked.double(10e-6), # MeV: 10 eV
 
     output_path = cms.untracked.bool(True),
     path_max_angle = cms.untracked.double(0.05), # rad

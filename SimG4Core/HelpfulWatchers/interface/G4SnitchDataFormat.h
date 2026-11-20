@@ -27,12 +27,29 @@ struct G4S_Info {
 
 // A tracked G4 particle
 
+// A particle's life cycle, positions and times in cm and ns, four-momenta in GeV:
+// - birth: where and when it was created, and its four-momentum then (Geant4's creation vertex);
+// - last:  its state after the last step that left it more than 1 MeV of kinetic energy (E_final_cut in G4Snitch.cc),
+//          kept so that a drawing has an end direction; equal to birth for a particle killed in its first step;
+// - death: where and when Geant4 ended the track, and its four-momentum then. The kinetic energy is zero when the
+//          particle stopped or a process absorbed it (conversion, photoelectric, annihilation, inelastic
+//          interaction, decay at rest). It is not zero for a decay in flight, when the particle left the world, or
+//          when CMS's SteppingAction killed it (time window, dead region, energy threshold of a volume, beyond the
+//          central |z|, too many steps, low energy in the beam pipe); then the death process is the last step's,
+//          for example Transportation or hadElastic. D128 test, 20 events: 283 of 67259 tracked particles die
+//          with kinetic energy, 279 of them by decay in flight.
+// m_birth_proc, m_death_proc: indices into the file's process table, tree "P" (idx, name, type, subtype); -1 for
+// none: the birth of a primary, or a particle never tracked (m_was_tracked false, death members zero).
 struct G4S_Particle {
   using Vec4D = ROOT::Experimental::REveVector4D;
-  Vec4D  m_x_beg;
-  Vec4D  m_p_beg;
-  Vec4D  m_x_end;
-  Vec4D  m_p_end;
+  Vec4D  m_x_birth;
+  Vec4D  m_p_birth;
+  Vec4D  m_x_last;
+  Vec4D  m_p_last;
+  Vec4D  m_x_death;
+  Vec4D  m_p_death;
+  int    m_birth_proc {-1};
+  int    m_death_proc {-1};
   double m_mass {0};
   int    m_pdg  {0};
   int    m_charge {0};
@@ -122,13 +139,23 @@ struct G4S_PathPoint {
   Vec4D m_p;
 };
 
+// The magnetic field at each point of a particle's path (tesla), parallel to G4S_ParticleSteps::m_path: the CMSSW
+// MagneticField that Geant4's field wraps, asked at the point (Geant4 itself may use the value at a point within
+// its caching tolerance). Written to the separate branch "b" only when the G4Snitch parameter
+// output_path_bfield is on, so files without it keep the format of the other branches.
+
+struct G4S_PathBField {
+  using Vec3F = ROOT::Experimental::REveVectorF;
+  std::vector<Vec3F> m_b;
+};
+
 // Step and EDep storage, one per Particle.
 //
 // m_path is the thinned path of the particle itself (never of its untracked descendants): its start, its end, and
 // the end points of the steps after which its direction has turned by more than path_max_angle, or its path has
 // grown by more than path_max_length, since the last stored point (G4Snitch parameters). A step is stored when its
-// energy deposit is at least sensitive_step_ecut or inert_step_ecut (0 and 10 keV in the test configurations, so
-// every sensitive step, most with no deposit, and inert steps from 10 keV), so the steps do not describe a
+// energy deposit is at least sensitive_step_ecut or inert_step_ecut, in MeV (0 and 1e-5 MeV = 10 eV in the test
+// configurations, so every sensitive step, most with no deposit, and inert steps from 10 eV), so the steps do not describe a
 // trajectory; the path does. Deposits (G4S_EDep) are in MeV, unlike the GeV of the momenta.
 
 struct G4S_ParticleSteps {

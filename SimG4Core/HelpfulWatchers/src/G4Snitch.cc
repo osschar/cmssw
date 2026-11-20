@@ -29,6 +29,12 @@ Description: Outputs a ROOT tree of kinematics.
 #include "G4VPhysicalVolume.hh"
 #include "G4LogicalVolume.hh"
 #include "G4VSensitiveDetector.hh"
+#include "DataFormats/GeometryVector/interface/GlobalPoint.h"
+#include "DataFormats/GeometryVector/interface/GlobalVector.h"
+#include "FWCore/Framework/interface/ConsumesCollector.h"
+#include "FWCore/Framework/interface/EventSetup.h"
+#include "MagneticField/Engine/interface/MagneticField.h"
+#include "MagneticField/Records/interface/IdealMagneticFieldRecord.h"
 
 
 #include <TFile.h>
@@ -64,11 +70,14 @@ namespace {
     g4_pos_to_cms(t, x);
     g4_mom_to_cms(t, p);
   }
-  void g4_pos_mom_to_cms_begin(const G4Track *t, G4S_Particle &part) {
-    g4_pos_mom_to_cms(t, part.m_x_beg, part.m_p_beg);
+  void g4_pos_mom_to_cms_birth(const G4Track *t, G4S_Particle &part) {
+    g4_pos_mom_to_cms(t, part.m_x_birth, part.m_p_birth);
   }
-  void g4_pos_mom_to_cms_end(const G4Track *t, G4S_Particle &part) {
-    g4_pos_mom_to_cms(t, part.m_x_end, part.m_p_end);
+  void g4_pos_mom_to_cms_last(const G4Track *t, G4S_Particle &part) {
+    g4_pos_mom_to_cms(t, part.m_x_last, part.m_p_last);
+  }
+  void g4_pos_mom_to_cms_death(const G4Track *t, G4S_Particle &part) {
+    g4_pos_mom_to_cms(t, part.m_x_death, part.m_p_death);
   }
 
   void g4_pos_to_cms_begin(const G4StepPoint *sp, G4S_Step &step) {
@@ -101,7 +110,8 @@ G4Snitch::G4Snitch(const edm::ParameterSet &pSet)
 
         m_output_path(pSet.getUntrackedParameter<bool>("output_path", true)),
         m_path_max_angle(pSet.getUntrackedParameter<double>("path_max_angle", 0.05)),
-        m_path_max_length(pSet.getUntrackedParameter<double>("path_max_length", 5.0))
+        m_path_max_length(pSet.getUntrackedParameter<double>("path_max_length", 5.0)),
+        m_output_path_bfield(pSet.getUntrackedParameter<bool>("output_path_bfield", false))
 {
   m_path_cos_max_angle = std::cos(m_path_max_angle);
   // 2025-04-18 Linking through BuildFile.xml no longer works (-Wl,--as-needed)
@@ -116,6 +126,61 @@ void G4Snitch::add_path_point(int id, const double *pos_mm, double t_ns, const d
   pp.m_p.Set(Mom_fac * mom_MeV[0], Mom_fac * mom_MeV[1], Mom_fac * mom_MeV[2]);
   pp.m_p.fT = Mom_fac * e_MeV;
   particle_steps(id).m_path.emplace_back(pp);
+  if (m_output_path_bfield) {
+    // The CMSSW field that Geant4's field (sim::Field) wraps, asked directly: sim::Field caches its last point, and
+    // asking it here would change what the stepper gets back next, and so the simulation.
+    float bx = 0, by = 0, bz = 0;
+    if (m_bfield) {
+      const GlobalVector v = m_bfield->inTesla(GlobalPoint(Pos_fac * pos_mm[0], Pos_fac * pos_mm[1], Pos_fac * pos_mm[2]));
+      bx = v.x(); by = v.y(); bz = v.z();
+    }
+    (*m_pbfield_vec)[id].m_b.emplace_back(bx, by, bz);
+  }
+}
+
+int G4Snitch::process_index(const G4VProcess *proc) {
+  if (!proc)
+    return -1;
+  auto it = m_proc_index.find(proc);
+  if (it != m_proc_index.end())
+    return it->second;
+  const int idx = (int)m_proc_names.size();
+  m_proc_index.emplace(proc, idx);
+  m_proc_names.push_back(proc->GetProcessName());
+  m_proc_types.push_back((int)proc->GetProcessType());
+  m_proc_subtypes.push_back(proc->GetProcessSubType());
+  return idx;
+}
+
+void G4Snitch::registerConsumes(edm::ConsumesCollector cc) {
+  if (m_output_path_bfield)
+    m_bfield_token = cc.esConsumes<MagneticField, IdealMagneticFieldRecord, edm::Transition::BeginRun>();
+}
+
+void G4Snitch::beginRun(edm::EventSetup const &es) {
+  if (m_output_path_bfield)
+    m_bfield = &es.getData(m_bfield_token);
+}
+
+void G4Snitch::steps_emplace_back() {
+  m_psteps_vec->emplace_back(G4S_ParticleSteps());
+  if (m_output_path_bfield)
+    m_pbfield_vec->emplace_back(G4S_PathBField());
+}
+void G4Snitch::steps_resize(int n) {
+  m_psteps_vec->resize(n);
+  if (m_output_path_bfield)
+    m_pbfield_vec->resize(n);
+}
+void G4Snitch::steps_reserve(int n) {
+  m_psteps_vec->reserve(n);
+  if (m_output_path_bfield)
+    m_pbfield_vec->reserve(n);
+}
+void G4Snitch::steps_clear() {
+  m_psteps_vec->clear();
+  if (m_output_path_bfield)
+    m_pbfield_vec->clear();
 }
 
 // this never gets called, sigh
@@ -137,20 +202,42 @@ void G4Snitch::open_file_tree() {
   m_tree->Branch("p", m_part_vec.get());
 
   m_psteps_vec.reset(new std::vector<G4S_ParticleSteps>);
-  m_psteps_vec->reserve(m_vec_capacity);
   m_tree->Branch("s", m_psteps_vec.get());
+  if (m_output_path_bfield) {
+    m_pbfield_vec.reset(new std::vector<G4S_PathBField>);
+    m_tree->Branch("b", m_pbfield_vec.get());
+  }
+  steps_reserve(m_vec_capacity);
 }
 
 void G4Snitch::write_tree_close_file() {
+  m_file->cd();
   m_tree->Write();
   delete m_tree;
+  // The process table that m_birth_proc and m_death_proc index.
+  {
+    TTree ptree("P", "G4Snitch process table: idx, name, type (G4ProcessType), subtype");
+    int idx = 0, type = 0, subtype = 0;
+    std::string name;
+    ptree.Branch("idx", &idx);
+    ptree.Branch("name", &name);
+    ptree.Branch("type", &type);
+    ptree.Branch("subtype", &subtype);
+    for (idx = 0; idx < (int)m_proc_names.size(); ++idx) {
+      name = m_proc_names[idx];
+      type = m_proc_types[idx];
+      subtype = m_proc_subtypes[idx];
+      ptree.Fill();
+    }
+    ptree.Write();
+  }
   m_file->Close();
   delete m_file;
 }
 
 void G4Snitch::reset_output_structs() {
   m_part_vec->clear();
-  m_psteps_vec->clear();
+  steps_clear();
   m_vec_size = 0;
   m_gtp2vid.clear();
   m_stack.clear();
@@ -209,7 +296,7 @@ void G4Snitch::update(const BeginOfTrack* bot)
     m_id_current_primary = 0;
 
     m_part_vec->resize(m_g4_num_primaries + 1);
-    m_psteps_vec->resize(m_g4_num_primaries + 1);
+    steps_resize(m_g4_num_primaries + 1);
     m_vec_size = m_g4_num_primaries + 1;
     m_info->m_n_primaries = m_g4_num_primaries; // XXX might not be true !!! fix at end !!!
     m_event_tracks_accepted = m_event_tracks_skipped = 0;
@@ -329,9 +416,10 @@ void G4Snitch::update(const BeginOfTrack* bot)
   m_info->update_min_time(iTrk->GetGlobalTime());
   m_step_n = 0;
 
-  g4_pos_mom_to_cms_begin(iTrk, p);
-  // Also set end ... in case there is no step info. In End momentum = 0!
-  g4_pos_mom_to_cms_end(iTrk, p);
+  g4_pos_mom_to_cms_birth(iTrk, p);
+  p.m_birth_proc = process_index(iTrk->GetCreatorProcess());
+  // Also set last ... in case there is no step info. In End momentum = 0!
+  g4_pos_mom_to_cms_last(iTrk, p);
   p.m_mass = Mom_fac * pd->GetPDGMass();
   p.m_pdg = pd->GetPDGEncoding();
   p.m_charge = (int) pd->GetPDGCharge();
@@ -427,7 +515,7 @@ void G4Snitch::update(const G4Step *iStep)
   std::string pn2(p2 ? p2->GetProcessName() : "null");
 
   if (iTrk->GetKineticEnergy() > E_final_cut) {
-    g4_pos_mom_to_cms_end(iTrk, particle(m_id));
+    g4_pos_mom_to_cms_last(iTrk, particle(m_id));
   }
 
   // Thinned path: the step's end point when the direction turned by more than path_max_angle or the path grew by
@@ -487,17 +575,18 @@ void G4Snitch::update(const G4Step *iStep)
           if (m_verbose)
             printf("MMMMMMM Growing vec memory from %d to %d\n", m_vec_size, m_vec_capacity);
           m_part_vec->reserve(m_vec_capacity);
-          m_psteps_vec->reserve(m_vec_capacity);
+          steps_reserve(m_vec_capacity);
         }
         G4S_Particle p;
-        g4_pos_mom_to_cms_begin(gt, p);
+        g4_pos_mom_to_cms_birth(gt, p);
+        p.m_birth_proc = process_index(gt->GetCreatorProcess());
         p.m_mass = Mom_fac * gp->GetPDGMass();
         p.m_pdg = gp->GetPDGEncoding();
         p.m_charge = (int) gp->GetPDGCharge();
         p.m_parent = m_id;
         p.m_g4_level = stack_level() + 1;
         m_part_vec->emplace_back(p);
-        m_psteps_vec->emplace_back(G4S_ParticleSteps());
+        steps_emplace_back();
         ++m_vec_size;
         ++m_num_accepted_daugters_for_track;
         ++m_primary_n_accepted_tracks;
@@ -522,6 +611,14 @@ void G4Snitch::update(const EndOfTrack* eot)
   const G4Track *iTrk = (*eot)();
   auto &pos = iTrk->GetPosition();
   auto  mom = iTrk->GetMomentum();
+
+  // Death: the track's final state, and the process of its last step.
+  g4_pos_mom_to_cms_death(iTrk, p);
+  {
+    const G4Step *last_step = iTrk->GetStep();
+    const G4StepPoint *post = last_step ? last_step->GetPostStepPoint() : nullptr;
+    p.m_death_proc = process_index(post ? post->GetProcessDefinedStep() : nullptr);
+  }
 
   // The path's last point: the track's end, unless the last step already stored it.
   if (m_output_path && m_path_len_since > 0) {

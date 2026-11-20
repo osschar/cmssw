@@ -25,6 +25,10 @@
 #include "SimG4Core/Notification/interface/Observer.h"
 
 #include "SimG4Core/HelpfulWatchers/interface/G4SnitchDataFormat.h"
+#include "FWCore/Utilities/interface/ESGetToken.h"
+
+class MagneticField;
+class IdealMagneticFieldRecord;
 
 class TFile;
 class TTree;
@@ -34,6 +38,7 @@ class BeginOfRun;
 class BeginOfEvent;
 class BeginOfTrack;
 class G4Track;
+class G4VProcess;
 class G4Step;
 class EndOfTrack;
 class EndOfEvent;
@@ -68,6 +73,10 @@ class G4Snitch : public SimWatcher,
                  OBSERVES(EndOfJob) {
 public:
   G4Snitch(const edm::ParameterSet &pSet);
+
+  // The CMSSW magnetic field, read at begin of run, for output_path_bfield.
+  void registerConsumes(edm::ConsumesCollector) override;
+  void beginRun(edm::EventSetup const &) override;
   virtual ~G4Snitch();
 
   UPDATE(BeginOfJob);
@@ -98,7 +107,7 @@ private:
   bool m_output_sensitive_steps = true;
   bool m_output_inert_steps     = true;
   double m_sensitive_step_ecut = 0.0;
-  double m_inert_step_ecut = 10e-6; // 10 keV
+  double m_inert_step_ecut = 10e-6; // MeV (Geant4 units): 10 eV
 
   // Thinned path of each tracked particle (G4S_ParticleSteps::m_path).
   bool m_output_path = true;
@@ -109,6 +118,10 @@ private:
   double m_path_dir[3] = {0, 0, 0};
   double m_path_len_since = 0;
   void add_path_point(int id, const double *pos_mm, double t_ns, const double *mom_MeV, double e_MeV);
+  // The field Geant4 used at each path point, in the separate branch "b" (off by default).
+  bool m_output_path_bfield = false;
+  edm::ESGetToken<MagneticField, IdealMagneticFieldRecord> m_bfield_token;
+  const MagneticField *m_bfield = nullptr;
 
   TFile *m_file;
   TTree *m_tree;
@@ -116,9 +129,15 @@ private:
   std::shared_ptr<G4S_Info> m_info;
   std::shared_ptr<std::vector<G4S_Particle>> m_part_vec;
   std::shared_ptr<std::vector<G4S_ParticleSteps>> m_psteps_vec;
+  std::shared_ptr<std::vector<G4S_PathBField>> m_pbfield_vec;  // only with m_output_path_bfield
 
   G4S_Particle& particle(int i) { return (*m_part_vec)[i]; }
   G4S_ParticleSteps& particle_steps(int i) { return (*m_psteps_vec)[i]; }
+  // The per-particle vectors parallel to m_part_vec: grow, reserve and clear them together.
+  void steps_emplace_back();
+  void steps_resize(int n);
+  void steps_reserve(int n);
+  void steps_clear();
 
   int m_event = 0;
   int m_step_n = -1;
@@ -139,6 +158,12 @@ private:
   int m_primary_n_accepted_tracks = -1; // needed to estimate kine tree size for vec.reserve()
 
   std::map<const G4Track*, int> m_gtp2vid;
+
+  // The process table of the file (tree "P"): G4S_Particle::m_birth_proc and m_death_proc index it.
+  std::map<const G4VProcess*, int> m_proc_index;
+  std::vector<std::string> m_proc_names;
+  std::vector<int> m_proc_types, m_proc_subtypes;
+  int process_index(const G4VProcess *proc);
 
   int m_last_g4_id = -1;
 

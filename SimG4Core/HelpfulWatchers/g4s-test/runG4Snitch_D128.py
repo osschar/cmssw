@@ -188,9 +188,15 @@ process.g4SimHits.Watchers = cms.VPSet(cms.PSet(
     output_sensitive_steps  = cms.untracked.bool(True),
 	output_inert_steps = cms.untracked.bool(True),
 	sensitive_step_ecut = cms.untracked.double(0.0),
-	inert_step_ecut = cms.untracked.double(10e-6),
+	inert_step_ecut = cms.untracked.double(10e-6), # MeV: 10 eV
 
     output_path = cms.untracked.bool(True),
     path_max_angle = cms.untracked.double(0.05), # rad
     path_max_length = cms.untracked.double(5.0), # cm
+    output_path_bfield = cms.untracked.bool(False), # the field at each path point, in branch "b"
     ))
+
+# G4SNITCH_BFIELD=1 in the environment turns on the field at the path points.
+import os
+if os.environ.get("G4SNITCH_BFIELD", "0") == "1":
+    process.g4SimHits.Watchers[0].output_path_bfield = True
