@@ -106,7 +106,7 @@ G4Snitch::G4Snitch(const edm::ParameterSet &pSet)
         m_output_sensitive_steps(pSet.getUntrackedParameter<bool>("output_sensitive_steps", true)),
         m_output_inert_steps(pSet.getUntrackedParameter<bool>("output_inert_steps", true)),
         m_sensitive_step_ecut(pSet.getUntrackedParameter<double>("sensitive_step_ecut", 0.0)),
-        m_output_sensitive_zero_steps(pSet.getUntrackedParameter<bool>("output_sensitive_zero_steps", true)),
+        m_output_sensitive_zero_steps(pSet.getUntrackedParameter<bool>("output_sensitive_zero_steps", false)),
         m_inert_step_ecut(pSet.getUntrackedParameter<double>("inert_step_ecut", 1e-6)),
 
         m_output_path(pSet.getUntrackedParameter<bool>("output_path", true)),

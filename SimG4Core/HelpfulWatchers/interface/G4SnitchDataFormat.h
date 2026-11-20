@@ -156,7 +156,7 @@ struct G4S_PathBField {
 // grown by more than path_max_length, since the last stored point (G4Snitch parameters). A step is stored when its
 // energy deposit is at least sensitive_step_ecut or inert_step_ecut, in MeV (0 and 1e-5 MeV = 10 eV in the test
 // configurations, so every sensitive step, most with no deposit, and inert steps from 10 eV; sensitive steps with no
-// deposit only with output_sensitive_zero_steps, on by default), so the steps do not describe a
+// deposit only with output_sensitive_zero_steps, off by default), so the steps do not describe a
 // trajectory; the path does. Deposits (G4S_EDep) are in MeV, unlike the GeV of the momenta.
 
 struct G4S_ParticleSteps {
