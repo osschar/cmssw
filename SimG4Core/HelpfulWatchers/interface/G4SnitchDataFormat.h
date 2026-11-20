@@ -1,4 +1,5 @@
 #ifndef HelpfulWatchers_G4SnitchDataFormat_h
+#define HelpfulWatchers_G4SnitchDataFormat_h
 
 #include "ROOT/REveVector.hxx"
 
@@ -125,8 +126,10 @@ struct G4S_PathPoint {
 //
 // m_path is the thinned path of the particle itself (never of its untracked descendants): its start, its end, and
 // the end points of the steps after which its direction has turned by more than path_max_angle, or its path has
-// grown by more than path_max_length, since the last stored point (G4Snitch parameters). Steps are stored only when
-// they deposit energy, so they do not describe a trajectory; the path does.
+// grown by more than path_max_length, since the last stored point (G4Snitch parameters). A step is stored when its
+// energy deposit is at least sensitive_step_ecut or inert_step_ecut (0 and 10 keV in the test configurations, so
+// every sensitive step, most with no deposit, and inert steps from 10 keV), so the steps do not describe a
+// trajectory; the path does. Deposits (G4S_EDep) are in MeV, unlike the GeV of the momenta.
 
 struct G4S_ParticleSteps {
   std::vector<G4S_Step> m_steps_sensitive;
