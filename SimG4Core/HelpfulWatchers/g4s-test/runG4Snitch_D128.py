@@ -187,7 +187,8 @@ process.g4SimHits.Watchers = cms.VPSet(cms.PSet(
 
     output_sensitive_steps  = cms.untracked.bool(True),
 	output_inert_steps = cms.untracked.bool(True),
-	sensitive_step_ecut = cms.untracked.double(0.0),
+	sensitive_step_ecut = cms.untracked.double(0.0), # MeV
+    output_sensitive_zero_steps = cms.untracked.bool(True), # sensitive steps with no deposit, as path marks
 	inert_step_ecut = cms.untracked.double(10e-6), # MeV: 10 eV
 
     output_path = cms.untracked.bool(True),
@@ -200,3 +201,6 @@ process.g4SimHits.Watchers = cms.VPSet(cms.PSet(
 import os
 if os.environ.get("G4SNITCH_BFIELD", "0") == "1":
     process.g4SimHits.Watchers[0].output_path_bfield = True
+# G4SNITCH_ZEROSTEPS=0 drops the sensitive steps with no deposit.
+if os.environ.get("G4SNITCH_ZEROSTEPS", "1") == "0":
+    process.g4SimHits.Watchers[0].output_sensitive_zero_steps = False

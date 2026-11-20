@@ -106,7 +106,9 @@ private:
 
   bool m_output_sensitive_steps = true;
   bool m_output_inert_steps     = true;
-  double m_sensitive_step_ecut = 0.0;
+  double m_sensitive_step_ecut = 0.0;  // MeV
+  // Store sensitive steps with no deposit too (a particle's crossing of a sensitive volume, a potential path mark).
+  bool m_output_sensitive_zero_steps = true;
   double m_inert_step_ecut = 10e-6; // MeV (Geant4 units): 10 eV
 
   // Thinned path of each tracked particle (G4S_ParticleSteps::m_path).

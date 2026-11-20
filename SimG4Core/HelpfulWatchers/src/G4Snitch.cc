@@ -106,6 +106,7 @@ G4Snitch::G4Snitch(const edm::ParameterSet &pSet)
         m_output_sensitive_steps(pSet.getUntrackedParameter<bool>("output_sensitive_steps", true)),
         m_output_inert_steps(pSet.getUntrackedParameter<bool>("output_inert_steps", true)),
         m_sensitive_step_ecut(pSet.getUntrackedParameter<double>("sensitive_step_ecut", 0.0)),
+        m_output_sensitive_zero_steps(pSet.getUntrackedParameter<bool>("output_sensitive_zero_steps", true)),
         m_inert_step_ecut(pSet.getUntrackedParameter<double>("inert_step_ecut", 1e-6)),
 
         m_output_path(pSet.getUntrackedParameter<bool>("output_path", true)),
@@ -478,7 +479,8 @@ void G4Snitch::update(const G4Step *iStep)
       // What to do here? Crete own ptr-to-id map + some name?
       step.m_g4_pv_id = 42;
       if (is_sensitive) {
-        if (m_output_sensitive_steps && tot >= m_sensitive_step_ecut)
+        // A step with no deposit is stored only on request; one with a deposit when it reaches the cut.
+        if (m_output_sensitive_steps && (tot > 0 ? tot >= m_sensitive_step_ecut : m_output_sensitive_zero_steps))
           psteps.m_steps_sensitive.emplace_back(step);
       } else {
         if (m_output_inert_steps && tot >= m_inert_step_ecut)
