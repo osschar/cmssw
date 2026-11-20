@@ -446,10 +446,11 @@ void G4Snitch::update(const G4Step *iStep)
   // If the following is non-null, the step is in sensitive material.
   G4VSensitiveDetector *sd1 = lv1->GetSensitiveDetector();
 
+  // The post-step point has no volume when the step leaves the world.
   G4StepPoint *sp2 = iStep->GetPostStepPoint();
   G4VPhysicalVolume *pv2 = sp2->GetPhysicalVolume();
-  G4LogicalVolume *lv2 = pv2->GetLogicalVolume();
-  G4VSensitiveDetector *sd2 = lv2->GetSensitiveDetector();
+  G4LogicalVolume *lv2 = pv2 ? pv2->GetLogicalVolume() : nullptr;
+  G4VSensitiveDetector *sd2 = lv2 ? lv2->GetSensitiveDetector() : nullptr;
 
   // We process energy deposits in any case.
   {
