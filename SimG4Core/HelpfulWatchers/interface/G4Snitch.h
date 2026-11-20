@@ -100,6 +100,16 @@ private:
   double m_sensitive_step_ecut = 0.0;
   double m_inert_step_ecut = 10e-6; // 10 keV
 
+  // Thinned path of each tracked particle (G4S_ParticleSteps::m_path).
+  bool m_output_path = true;
+  double m_path_max_angle = 0.05;  // rad: store a point when the direction turned by more than this ...
+  double m_path_max_length = 5.0;  // cm: ... or the path since the last point is longer than this
+  double m_path_cos_max_angle = 1.0;
+  // State of the path of the track being followed, in G4 units.
+  double m_path_dir[3] = {0, 0, 0};
+  double m_path_len_since = 0;
+  void add_path_point(int id, const double *pos_mm, double t_ns, const double *mom_MeV, double e_MeV);
+
   TFile *m_file;
   TTree *m_tree;
 

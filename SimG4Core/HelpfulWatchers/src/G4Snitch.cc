@@ -14,6 +14,7 @@ Description: Outputs a ROOT tree of kinematics.
 //
 
 // system include files
+#include <cmath>
 #include <iostream>
 
 // user include files
@@ -96,11 +97,25 @@ G4Snitch::G4Snitch(const edm::ParameterSet &pSet)
         m_output_sensitive_steps(pSet.getUntrackedParameter<bool>("output_sensitive_steps", true)),
         m_output_inert_steps(pSet.getUntrackedParameter<bool>("output_inert_steps", true)),
         m_sensitive_step_ecut(pSet.getUntrackedParameter<double>("sensitive_step_ecut", 0.0)),
-        m_inert_step_ecut(pSet.getUntrackedParameter<double>("inert_step_ecut", 1e-6))
+        m_inert_step_ecut(pSet.getUntrackedParameter<double>("inert_step_ecut", 1e-6)),
+
+        m_output_path(pSet.getUntrackedParameter<bool>("output_path", true)),
+        m_path_max_angle(pSet.getUntrackedParameter<double>("path_max_angle", 0.05)),
+        m_path_max_length(pSet.getUntrackedParameter<double>("path_max_length", 5.0))
 {
+  m_path_cos_max_angle = std::cos(m_path_max_angle);
   // 2025-04-18 Linking through BuildFile.xml no longer works (-Wl,--as-needed)
   // so we just pull the dicts in here.
   gSystem->Load("libRootG4Snitch.so");
+}
+
+void G4Snitch::add_path_point(int id, const double *pos_mm, double t_ns, const double *mom_MeV, double e_MeV) {
+  G4S_PathPoint pp;
+  pp.m_x.Set(Pos_fac * pos_mm[0], Pos_fac * pos_mm[1], Pos_fac * pos_mm[2]);
+  pp.m_x.fT = t_ns;
+  pp.m_p.Set(Mom_fac * mom_MeV[0], Mom_fac * mom_MeV[1], Mom_fac * mom_MeV[2]);
+  pp.m_p.fT = Mom_fac * e_MeV;
+  particle_steps(id).m_path.emplace_back(pp);
 }
 
 // this never gets called, sigh
@@ -320,6 +335,16 @@ void G4Snitch::update(const BeginOfTrack* bot)
   p.m_mass = Mom_fac * pd->GetPDGMass();
   p.m_pdg = pd->GetPDGEncoding();
   p.m_charge = (int) pd->GetPDGCharge();
+
+  if (m_output_path) {
+    const G4ThreeVector &pos = iTrk->GetPosition();
+    const G4ThreeVector mom = iTrk->GetMomentum();
+    const G4ThreeVector &dir = iTrk->GetMomentumDirection();
+    const double x[3] = {pos.x(), pos.y(), pos.z()}, q[3] = {mom.x(), mom.y(), mom.z()};
+    add_path_point(m_id, x, iTrk->GetGlobalTime(), q, iTrk->GetTotalEnergy());
+    m_path_dir[0] = dir.x(); m_path_dir[1] = dir.y(); m_path_dir[2] = dir.z();
+    m_path_len_since = 0;
+  }
 }
 
 void G4Snitch::update(const G4Step *iStep)
@@ -354,6 +379,11 @@ void G4Snitch::update(const G4Step *iStep)
       G4S_Step step;
       g4_pos_to_cms_begin(sp1, step);
       g4_pos_to_cms_end(sp2, step);
+      {
+        const G4ThreeVector mom = sp2->GetMomentum();
+        step.m_p_end.Set(Mom_fac * mom.x(), Mom_fac * mom.y(), Mom_fac * mom.z());
+        step.m_p_end.fT = Mom_fac * sp2->GetTotalEnergy();
+      }
       step.m_edep.set_edep(tot, niel);
       step.m_g4_pid = iTrk->GetTrackID();
       // As it turns out there is no global phys-volume id in G4.
@@ -392,6 +422,22 @@ void G4Snitch::update(const G4Step *iStep)
 
   if (iTrk->GetKineticEnergy() > E_final_cut) {
     g4_pos_mom_to_cms_end(iTrk, particle(m_id));
+  }
+
+  // Thinned path: the step's end point when the direction turned by more than path_max_angle or the path grew by
+  // more than path_max_length since the last stored point. Done before the secondaries below grow the vectors.
+  if (m_output_path) {
+    const G4ThreeVector &dir = sp2->GetMomentumDirection();
+    m_path_len_since += iStep->GetStepLength();
+    const double cosang = dir.x() * m_path_dir[0] + dir.y() * m_path_dir[1] + dir.z() * m_path_dir[2];
+    if (cosang < m_path_cos_max_angle || Pos_fac * m_path_len_since > m_path_max_length) {
+      const G4ThreeVector &pos = sp2->GetPosition();
+      const G4ThreeVector mom = sp2->GetMomentum();
+      const double x[3] = {pos.x(), pos.y(), pos.z()}, q[3] = {mom.x(), mom.y(), mom.z()};
+      add_path_point(m_id, x, sp2->GetGlobalTime(), q, sp2->GetTotalEnergy());
+      m_path_dir[0] = dir.x(); m_path_dir[1] = dir.y(); m_path_dir[2] = dir.z();
+      m_path_len_since = 0;
+    }
   }
 
   if (m_verbose && (m_verbose_transport || pt2 != fTransportation)) {
@@ -471,6 +517,13 @@ void G4Snitch::update(const EndOfTrack* eot)
   const G4Track *iTrk = (*eot)();
   auto &pos = iTrk->GetPosition();
   auto  mom = iTrk->GetMomentum();
+
+  // The path's last point: the track's end, unless the last step already stored it.
+  if (m_output_path && m_path_len_since > 0) {
+    const double x[3] = {pos.x(), pos.y(), pos.z()}, q[3] = {mom.x(), mom.y(), mom.z()};
+    add_path_point(m_id, x, iTrk->GetGlobalTime(), q, iTrk->GetTotalEnergy());
+    m_path_len_since = 0;
+  }
   if (m_verbose)
     printf("  END         pos=%.1f,%.1f,%.1f  mom=%.1f,%.1f,%.1f  t=%.3f E_kin=%.1f E_tot=%.1f v=%.4f; daughters: %d -> %d\n",
       pos.x(), pos.y(), pos.z(),

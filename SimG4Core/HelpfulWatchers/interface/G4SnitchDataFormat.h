@@ -101,6 +101,7 @@ struct G4S_Step {
   using Vec4D = ROOT::Experimental::REveVector4D;
   Vec4D    m_x_beg;
   Vec4D    m_x_end;
+  Vec4D    m_p_end;  // momentum (GeV) and total energy at the step's end point, of the stepping track (see m_g4_pid)
   G4S_EDep m_edep;
   // To add: process type at step-end
   // Also, do we need to filter by process type in the snitch?
@@ -112,11 +113,25 @@ struct G4S_Step {
   // G4S_Step& operator=(const G4S_Step&) = default;
 };
 
+// A point on the path of a tracked particle: position (cm) and time (ns), momentum (GeV) and total energy.
+
+struct G4S_PathPoint {
+  using Vec4D = ROOT::Experimental::REveVector4D;
+  Vec4D m_x;
+  Vec4D m_p;
+};
+
 // Step and EDep storage, one per Particle.
+//
+// m_path is the thinned path of the particle itself (never of its untracked descendants): its start, its end, and
+// the end points of the steps after which its direction has turned by more than path_max_angle, or its path has
+// grown by more than path_max_length, since the last stored point (G4Snitch parameters). Steps are stored only when
+// they deposit energy, so they do not describe a trajectory; the path does.
 
 struct G4S_ParticleSteps {
   std::vector<G4S_Step> m_steps_sensitive;
   std::vector<G4S_Step> m_steps_inert;
+  std::vector<G4S_PathPoint> m_path;
 
   G4S_EDep m_edep_sum_all; // Summed-up E-deposits from all steps
   int      m_n_edeps_all {0};
