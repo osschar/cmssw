@@ -399,9 +399,15 @@ void G4Snitch::update(const G4Step *iStep)
     }
   }
 
+  // The secondaries created in this step. GetNumberOfSecondariesInCurrentStep() can count a secondary that is not
+  // appended to the track's secondary vector (seen with eBrem in Geant4 11.4, CMSSW_20_1_0_pre5), so indexing the
+  // cumulative vector GetSecondary() with a running count goes wrong; this vector holds exactly the step's own.
+  const std::vector<const G4Track *> *step_secondaries = iStep->GetSecondaryInCurrentStep();
+  const int n_step_secondaries = step_secondaries ? (int)step_secondaries->size() : 0;
+
   if (m_tracking == false) {
     ++m_steps_skipped;
-    int nd_skipped = iStep->GetNumberOfSecondariesInCurrentStep();
+    int nd_skipped = n_step_secondaries;
     if (nd_skipped > 0) {
       m_daughters_skipped += nd_skipped;
       auto &p = particle(m_id);
@@ -447,17 +453,16 @@ void G4Snitch::update(const G4Step *iStep)
         (pv1 == pv2) ? "same" : "chng", pn2.c_str(),
         (sd1) ? 1 : 0, (sd2) ? 1 : 0,
         iStep->GetTotalEnergyDeposit(), iStep->GetNonIonizingEnergyDeposit(),
-        (int) iStep->GetNumberOfSecondariesInCurrentStep(),
+        n_step_secondaries,
         (int) iStep->GetSecondary()->size()
     );
   }
 
   // Process any new secondaries, prepare map entries for those that pass. Resize is done in EndOfTrack.
-  int nss = (int) iStep->GetNumberOfSecondariesInCurrentStep();
+  int nss = n_step_secondaries;
   if (nss > 0) {
-    auto &gsv = * iStep->GetSecondary();
     for (int i = 0; i < nss; ++i) {
-      auto *gt = gsv[m_num_total_daugters_for_track];
+      const G4Track *gt = (*step_secondaries)[i];
       auto *gp = gt->GetParticleDefinition();
       int new_gid = m_last_g4_id + 1 + m_num_total_daugters_for_track;
       if (filter(gt)) {
