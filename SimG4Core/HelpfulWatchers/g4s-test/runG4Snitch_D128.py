@@ -144,6 +144,26 @@ process.generator = cms.EDProducer("CloseByParticleGunProducer",
     psethack = cms.string('random particles in phi and r windows')
 )
 
+# G4SNITCH_GUN=vertex replaces the gun at the HGCal face with particles from the origin (the CloseBy vertex smearing
+# is zero): one mu- and one pi+ per event, pT 10-50 GeV, eta 1.7-2.7, through the tracker and the timing layer.
+import os
+if os.environ.get("G4SNITCH_GUN", "") == "vertex":
+    process.generator = cms.EDProducer("FlatRandomPtGunProducer",
+        PGunParameters = cms.PSet(
+            MinPt = cms.double(10.0),
+            MaxPt = cms.double(50.0),
+            PartID = cms.vint32(13, 211),
+            MinEta = cms.double(1.7),
+            MaxEta = cms.double(2.7),
+            MinPhi = cms.double(-3.14159265359),
+            MaxPhi = cms.double(3.14159265359),
+        ),
+        Verbosity = cms.untracked.int32(0),
+        psethack = cms.string('mu- and pi+ from the origin, pt 10-50, eta 1.7-2.7'),
+        AddAntiParticle = cms.bool(False),
+        firstRun = cms.untracked.uint32(1)
+    )
+
 
 # Path and EndPath definitions
 process.generation_step = cms.Path(process.pgen)
