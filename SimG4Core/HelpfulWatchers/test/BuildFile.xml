@@ -1,0 +1,10 @@
+<library file="MagFieldTableDumper.cc" name="testSimG4CoreHelpfulWatchersMagFieldTable">
+  <use name="FWCore/Framework"/>
+  <use name="FWCore/ParameterSet"/>
+  <use name="MagneticField/Engine"/>
+  <use name="MagneticField/Records"/>
+  <use name="DataFormats/GeometryVector"/>
+  <use name="rootcore"/>
+  <use name="roottree"/>
+  <flags EDM_PLUGIN="1"/>
+</library>
