@@ -29,6 +29,9 @@ Description: Outputs a ROOT tree of kinematics.
 #include "G4VPhysicalVolume.hh"
 #include "G4LogicalVolume.hh"
 #include "G4VSensitiveDetector.hh"
+#include "G4VTouchable.hh"
+#include "G4Material.hh"
+#include "CLHEP/Units/SystemOfUnits.h"
 #include "DataFormats/GeometryVector/interface/GlobalPoint.h"
 #include "DataFormats/GeometryVector/interface/GlobalVector.h"
 #include "FWCore/Framework/interface/ConsumesCollector.h"
@@ -108,6 +111,7 @@ G4Snitch::G4Snitch(const edm::ParameterSet &pSet)
         m_sensitive_step_ecut(pSet.getUntrackedParameter<double>("sensitive_step_ecut", 0.0)),
         m_output_sensitive_zero_steps(pSet.getUntrackedParameter<bool>("output_sensitive_zero_steps", false)),
         m_inert_step_ecut(pSet.getUntrackedParameter<double>("inert_step_ecut", 1e-6)),
+        m_inert_aggregate_descendants(pSet.getUntrackedParameter<bool>("inert_aggregate_descendants", true)),
 
         m_output_path(pSet.getUntrackedParameter<bool>("output_path", true)),
         m_path_max_angle(pSet.getUntrackedParameter<double>("path_max_angle", 0.05)),
@@ -151,6 +155,94 @@ int G4Snitch::process_index(const G4VProcess *proc) {
   m_proc_types.push_back((int)proc->GetProcessType());
   m_proc_subtypes.push_back(proc->GetProcessSubType());
   return idx;
+}
+
+int G4Snitch::volume_index(const G4StepPoint *sp) {
+  const G4VTouchable *th = sp->GetTouchable();
+  const int depth = th->GetHistoryDepth();
+  uint64_t h = 1469598103934665603ULL;
+  auto mix = [&h](uint64_t v) {
+    h ^= v;
+    h *= 1099511628211ULL;
+  };
+  for (int d = 0; d <= depth; ++d) {
+    mix((uint64_t)(uintptr_t)th->GetVolume(d));
+    mix((uint64_t)(uint32_t)th->GetCopyNumber(d));
+  }
+  auto it = m_vol_index.find(h);
+  if (it != m_vol_index.end())
+    return it->second;
+  const int idx = (int)m_vol_paths.size();
+  m_vol_index.emplace(h, idx);
+  std::string path;
+  for (int d = depth; d >= 0; --d) {
+    if (!path.empty())
+      path += '/';
+    path += th->GetVolume(d)->GetName();
+    path += ':';
+    path += std::to_string(th->GetCopyNumber(d));
+  }
+  m_vol_paths.push_back(path);
+  const G4Material *mat = th->GetVolume(0)->GetLogicalVolume()->GetMaterial();
+  m_vol_materials.push_back(mat->GetName());
+  m_vol_x0.push_back(Pos_fac * mat->GetRadlen());
+  m_vol_density.push_back(mat->GetDensity() / (CLHEP::g / CLHEP::cm3));
+  const G4ThreeVector &o = th->GetTranslation(0);
+  m_vol_x.push_back(Pos_fac * o.x());
+  m_vol_y.push_back(Pos_fac * o.y());
+  m_vol_z.push_back(Pos_fac * o.z());
+  return idx;
+}
+
+void G4Snitch::add_inert_step(int slot, const G4Step *step, double tot, double niel) {
+  const G4StepPoint *sp1 = step->GetPreStepPoint(), *sp2 = step->GetPostStepPoint();
+  const int vol = volume_index(sp1);
+  const uint64_t key = ((uint64_t)(uint32_t)slot << 32) | (uint64_t)(uint32_t)vol;
+  const G4ThreeVector &p1 = sp1->GetPosition(), &p2 = sp2->GetPosition();
+  const double x[4] = {0.5 * Pos_fac * (p1.x() + p2.x()), 0.5 * Pos_fac * (p1.y() + p2.y()),
+                       0.5 * Pos_fac * (p1.z() + p2.z()), 0.5 * (sp1->GetGlobalTime() + sp2->GetGlobalTime())};
+  int ai;
+  auto it = m_inert_acc_index.find(key);
+  if (it == m_inert_acc_index.end()) {
+    ai = (int)m_inert_acc.size();
+    m_inert_acc_index.emplace(key, ai);
+    InertAcc a{slot, vol, 0, 0, 0, {x[0], x[1], x[2], x[3]}, {0, 0, 0, 0}, {0, 0, 0, 0}};
+    m_inert_acc.push_back(a);
+  } else {
+    ai = it->second;
+  }
+  InertAcc &a = m_inert_acc[ai];
+  ++a.n;
+  a.e += tot;
+  a.niel += niel;
+  for (int k = 0; k < 4; ++k) {
+    const double d = x[k] - a.ref[k];
+    a.sw[k] += tot * d;
+    a.sw2[k] += tot * d * d;
+  }
+}
+
+void G4Snitch::flush_inert_sums() {
+  // Every sum has e > 0: only steps with a deposit above zero are added.
+  for (const InertAcc &a : m_inert_acc) {
+    G4S_InertSum is;
+    is.m_volume = a.vol;
+    is.m_n_steps = a.n;
+    is.m_edep.set_edep(a.e, a.niel);
+    double m[4], r[4];
+    for (int k = 0; k < 4; ++k) {
+      const double mu = a.sw[k] / a.e;
+      m[k] = a.ref[k] + mu;
+      r[k] = std::sqrt(std::max(0.0, a.sw2[k] / a.e - mu * mu));
+    }
+    is.m_x_mean.Set(m[0], m[1], m[2]);
+    is.m_x_mean.fT = m[3];
+    is.m_x_rms.Set(r[0], r[1], r[2]);
+    is.m_x_rms.fT = r[3];
+    particle_steps(a.slot).m_inert_sums.emplace_back(is);
+  }
+  m_inert_acc.clear();
+  m_inert_acc_index.clear();
 }
 
 void G4Snitch::registerConsumes(edm::ConsumesCollector cc) {
@@ -232,6 +324,33 @@ void G4Snitch::write_tree_close_file() {
     }
     ptree.Write();
   }
+  // The volume table that G4S_InertSum::m_volume indexes.
+  {
+    TTree vtree("V", "G4Snitch volume table: idx, path (name:copy from the world down), material, x0 (cm), density "
+                     "(g/cm3), x, y, z (cm, the volume's origin in global coordinates)");
+    int idx = 0;
+    std::string path, material;
+    double x0 = 0, density = 0, x = 0, y = 0, z = 0;
+    vtree.Branch("idx", &idx);
+    vtree.Branch("path", &path);
+    vtree.Branch("material", &material);
+    vtree.Branch("x0", &x0);
+    vtree.Branch("density", &density);
+    vtree.Branch("x", &x);
+    vtree.Branch("y", &y);
+    vtree.Branch("z", &z);
+    for (idx = 0; idx < (int)m_vol_paths.size(); ++idx) {
+      path = m_vol_paths[idx];
+      material = m_vol_materials[idx];
+      x0 = m_vol_x0[idx];
+      density = m_vol_density[idx];
+      x = m_vol_x[idx];
+      y = m_vol_y[idx];
+      z = m_vol_z[idx];
+      vtree.Fill();
+    }
+    vtree.Write();
+  }
   m_file->Close();
   delete m_file;
 }
@@ -242,6 +361,9 @@ void G4Snitch::reset_output_structs() {
   m_vec_size = 0;
   m_gtp2vid.clear();
   m_stack.clear();
+  m_stack_vid.clear();
+  m_inert_acc.clear();
+  m_inert_acc_index.clear();
   m_info->reset();
 }
 
@@ -278,6 +400,7 @@ void G4Snitch::update(const BeginOfEvent* boe) {
   m_tracking = true;
 
   m_stack.clear();
+  m_stack_vid.clear();
   m_starting_new_event = true; // delay initializatio until expected number of primaries are known
 }
 
@@ -308,6 +431,7 @@ void G4Snitch::update(const BeginOfTrack* bot)
 
     /// insert 0, setup mamma particle
     m_stack.push_back(0);
+    m_stack_vid.push_back(0);
     auto &p = particle(0);
     p.m_daughters_begin = 1;
     p.m_daughters_end = 1;
@@ -331,10 +455,12 @@ void G4Snitch::update(const BeginOfTrack* bot)
       m_tracking = true;
     }
     m_stack.pop_back();
+    m_stack_vid.pop_back();
     if (m_verbose_stack_level && (m_tracking || m_verbose_skip_with_ids))
       printf("--- UP 1 level to %d\n", stack_level());
   }
   m_stack.push_back(gid);
+  m_stack_vid.push_back(-1);
   if (m_verbose_stack_level && (m_tracking || m_verbose_skip_with_ids)) {
     printf("+++ DOWN 1 level to %d\n", stack_level());
   } else if (m_verbose && (m_tracking || m_verbose_skip_with_ids)) {
@@ -363,6 +489,9 @@ void G4Snitch::update(const BeginOfTrack* bot)
     m_steps_skipped = 0;
     m_daughters_skipped = 0;
     m_tracking = false;
+    // The skipped subtree's steps go to the parent, the entry below the top: tracked, as tracking was on.
+    m_id = m_stack_vid[m_stack_vid.size() - 2];
+    assert(m_id >= 0);
     return;
   }
 
@@ -406,6 +535,7 @@ void G4Snitch::update(const BeginOfTrack* bot)
     // - positrons
     // - deep inelastic scattering (no secondary, particle is just replaced with a new one).
   }
+  m_stack_vid.back() = m_id;
   auto &p = particle(m_id);
   p.m_daughters_begin = p.m_daughters_end = m_vec_size;
   p.m_g4_id = gid;
@@ -464,8 +594,12 @@ void G4Snitch::update(const G4Step *iStep)
     // Store all, eventually merge inert ones up to some
     // thresholds on distance / summed up energy / volume-id.
 
-    if (( is_sensitive && m_output_sensitive_steps) ||
-        (!is_sensitive && m_output_inert_steps)) {
+    if (!is_sensitive && !m_tracking && m_inert_aggregate_descendants) {
+      // An untracked descendant's inert step: summed per volume under the tracked ancestor.
+      if (tot > 0 && tot >= m_inert_step_ecut)
+        add_inert_step(m_id, iStep, tot, niel);
+    } else if (( is_sensitive && m_output_sensitive_steps) ||
+               (!is_sensitive && m_output_inert_steps)) {
       G4S_Step step;
       g4_pos_to_cms_begin(sp1, step);
       g4_pos_to_cms_end(sp2, step);
@@ -501,11 +635,7 @@ void G4Snitch::update(const G4Step *iStep)
     int nd_skipped = n_step_secondaries;
     if (nd_skipped > 0) {
       m_daughters_skipped += nd_skipped;
-      auto &p = particle(m_id);
-      if (stack_top() == m_id)
-        p.m_n_daughters_skipped += nd_skipped;
-      else
-        p.m_n_sub_daughters_skipped += nd_skipped;
+      particle(m_id).m_n_sub_daughters_skipped += nd_skipped;
     }
     return;
   }
@@ -557,6 +687,7 @@ void G4Snitch::update(const G4Step *iStep)
       auto *gp = gt->GetParticleDefinition();
       int new_gid = m_last_g4_id + 1 + m_num_total_daugters_for_track;
       if (filter(gt)) {
+        ++particle(m_id).m_n_daughters_skipped;
         if (m_verbose_skip) {
           printf("------> NOT Scheduling insertion of secondary gid %d, stable=%s pdg=%d E_k=%.1f\n",
                  new_gid, b2yn(gp->GetPDGStable()), gp->GetPDGEncoding(), gt->GetKineticEnergy());
@@ -648,6 +779,7 @@ void G4Snitch::update(const EndOfEvent *eoe)
   m_total_tracks_accepted += m_event_tracks_accepted;
   m_total_tracks_skipped += m_event_tracks_skipped;
 
+  flush_inert_sums();
   m_tree->Fill();
   reset_output_structs();
 }

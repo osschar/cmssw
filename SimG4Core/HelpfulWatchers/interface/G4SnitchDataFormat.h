@@ -56,8 +56,8 @@ struct G4S_Particle {
   int    m_parent {-1};
   int    m_daughters_begin {-1};
   int    m_daughters_end   {-1};
-  int    m_n_daughters_skipped     {0};
-  int    m_n_sub_daughters_skipped {0};
+  int    m_n_daughters_skipped     {0};  // direct daughters that G4Snitch::filter() did not let in
+  int    m_n_sub_daughters_skipped {0};  // daughters created by the untracked descendants filed under this particle
   int    m_g4_id       {-1};
   int    m_g4_level    {-1};
   bool   m_was_tracked {false};
@@ -149,20 +149,42 @@ struct G4S_PathBField {
   std::vector<Vec3F> m_b;
 };
 
+// The inert deposits of a tracked particle's untracked descendants in one Geant4 volume, summed (G4Snitch parameter
+// inert_aggregate_descendants, on by default; the descendants' inert steps are then not stored one by one). A volume
+// is a placement: a physical volume with the copy numbers of its whole path from the world, an entry of the file's
+// volume table, tree "V" (idx, path, material, x0 and density, and the volume's origin in global coordinates). A
+// step is counted when its deposit is above zero and at least inert_step_ecut. Position (cm) and time (ns) are the
+// deposit-weighted mean and RMS, per coordinate, of the steps' midpoints. Deposits in MeV.
+
+struct G4S_InertSum {
+  using Vec4D = ROOT::Experimental::REveVector4D;
+  int      m_volume {-1};
+  int      m_n_steps {0};
+  G4S_EDep m_edep;
+  Vec4D    m_x_mean;
+  Vec4D    m_x_rms;
+};
+
 // Step and EDep storage, one per Particle.
 //
 // m_path is the thinned path of the particle itself (never of its untracked descendants): its start, its end, and
 // the end points of the steps after which its direction has turned by more than path_max_angle, or its path has
 // grown by more than path_max_length, since the last stored point (G4Snitch parameters). A step is stored when its
 // energy deposit is at least sensitive_step_ecut or inert_step_ecut, in MeV (0 and 1e-5 MeV = 10 eV in the test
-// configurations, so every sensitive step, most with no deposit, and inert steps from 10 eV; sensitive steps with no
+// configurations, so every sensitive step with a deposit, and inert steps from 10 eV; sensitive steps with no
 // deposit only with output_sensitive_zero_steps, off by default), so the steps do not describe a
 // trajectory; the path does. Deposits (G4S_EDep) are in MeV, unlike the GeV of the momenta.
+//
+// The steps under a particle are its own (G4S_Step::m_g4_pid is its m_g4_id) and those of its untracked
+// descendants: the particles the snitch does not track (G4Snitch::filter()) and everything below them, filed under
+// their nearest tracked ancestor. With inert_aggregate_descendants (the default) the descendants' inert steps go into
+// m_inert_sums instead of m_steps_inert; their sensitive steps stay in m_steps_sensitive.
 
 struct G4S_ParticleSteps {
   std::vector<G4S_Step> m_steps_sensitive;
   std::vector<G4S_Step> m_steps_inert;
   std::vector<G4S_PathPoint> m_path;
+  std::vector<G4S_InertSum> m_inert_sums;  // the untracked descendants' inert deposits per volume, see G4S_InertSum
 
   G4S_EDep m_edep_sum_all; // Summed-up E-deposits from all steps
   int      m_n_edeps_all {0};

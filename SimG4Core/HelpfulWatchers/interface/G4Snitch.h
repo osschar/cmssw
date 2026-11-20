@@ -27,6 +27,11 @@
 #include "SimG4Core/HelpfulWatchers/interface/G4SnitchDataFormat.h"
 #include "FWCore/Utilities/interface/ESGetToken.h"
 
+#include <cstdint>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
 class MagneticField;
 class IdealMagneticFieldRecord;
 
@@ -40,6 +45,7 @@ class BeginOfTrack;
 class G4Track;
 class G4VProcess;
 class G4Step;
+class G4StepPoint;
 class EndOfTrack;
 class EndOfEvent;
 class EndOfRun;
@@ -110,6 +116,8 @@ private:
   // Store sensitive steps with no deposit too (a particle's crossing of a sensitive volume, a potential path mark).
   bool m_output_sensitive_zero_steps = false;
   double m_inert_step_ecut = 10e-6; // MeV (Geant4 units): 10 eV
+  // Sum the untracked descendants' inert steps per tracked particle and volume (G4S_ParticleSteps::m_inert_sums).
+  bool m_inert_aggregate_descendants = true;
 
   // Thinned path of each tracked particle (G4S_ParticleSteps::m_path).
   bool m_output_path = true;
@@ -167,9 +175,30 @@ private:
   std::vector<int> m_proc_types, m_proc_subtypes;
   int process_index(const G4VProcess *proc);
 
+  // The volume table of the file (tree "V"): G4S_InertSum::m_volume indexes it. A volume is a placement, keyed by a
+  // hash of the (physical volume, copy number) pairs of its touchable's whole history.
+  std::unordered_map<uint64_t, int> m_vol_index;
+  std::vector<std::string> m_vol_paths, m_vol_materials;
+  std::vector<double> m_vol_x0, m_vol_density, m_vol_x, m_vol_y, m_vol_z;
+  int volume_index(const G4StepPoint *sp);
+
+  // Per-event accumulators of the inert sums, keyed by (particle slot << 32 | volume index). Positions and times
+  // are summed relative to the first step of the sum, which keeps the RMS precise far from the origin.
+  struct InertAcc {
+    int slot, vol, n;
+    double e, niel, ref[4], sw[4], sw2[4];
+  };
+  std::unordered_map<uint64_t, int> m_inert_acc_index;
+  std::vector<InertAcc> m_inert_acc;
+  void add_inert_step(int slot, const G4Step *step, double tot, double niel);
+  void flush_inert_sums();
+
   int m_last_g4_id = -1;
 
   std::vector<int> m_stack; // stack of g4 ids
+  // The particle-vector slot of each stack entry; -1 for an untracked one. While tracking is on, every entry below
+  // the top is tracked, so a track that pauses tracking files its steps under its parent's slot.
+  std::vector<int> m_stack_vid;
   int stack_level() const { return (int) m_stack.size() - 1; }
   int stack_top() const { return m_stack.back(); }
 };
