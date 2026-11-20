@@ -32,6 +32,8 @@ Description: Outputs a ROOT tree of kinematics.
 #include "G4VTouchable.hh"
 #include "G4Material.hh"
 #include "CLHEP/Units/SystemOfUnits.h"
+#include "SimG4Core/SensitiveDetector/interface/SensitiveDetector.h"
+#include "Randomize.hh"
 #include "DataFormats/GeometryVector/interface/GlobalPoint.h"
 #include "DataFormats/GeometryVector/interface/GlobalVector.h"
 #include "FWCore/Framework/interface/ConsumesCollector.h"
@@ -112,6 +114,7 @@ G4Snitch::G4Snitch(const edm::ParameterSet &pSet)
         m_output_sensitive_zero_steps(pSet.getUntrackedParameter<bool>("output_sensitive_zero_steps", false)),
         m_inert_step_ecut(pSet.getUntrackedParameter<double>("inert_step_ecut", 1e-6)),
         m_inert_aggregate_descendants(pSet.getUntrackedParameter<bool>("inert_aggregate_descendants", true)),
+        m_sensitive_det_id(pSet.getUntrackedParameter<bool>("sensitive_det_id", true)),
 
         m_output_path(pSet.getUntrackedParameter<bool>("output_path", true)),
         m_path_max_angle(pSet.getUntrackedParameter<double>("path_max_angle", 0.05)),
@@ -610,16 +613,29 @@ void G4Snitch::update(const G4Step *iStep)
       }
       step.m_edep.set_edep(tot, niel);
       step.m_g4_pid = iTrk->GetTrackID();
-      // As it turns out there is no global phys-volume id in G4.
-      // What to do here? Crete own ptr-to-id map + some name?
-      step.m_g4_pv_id = 42;
       if (is_sensitive) {
         // A step with no deposit is stored only on request; one with a deposit when it reaches the cut.
-        if (m_output_sensitive_steps && (tot > 0 ? tot >= m_sensitive_step_ecut : m_output_sensitive_zero_steps))
+        if (m_output_sensitive_steps && (tot > 0 ? tot >= m_sensitive_step_ecut : m_output_sensitive_zero_steps)) {
+          step.m_volume = volume_index(sp1);
+          // The sensitive detector has processed this step already. For CaloSD the members its setDetUnitId() sets
+          // (HGCalSD's fraction_ and calibCell_) are set again by the next ProcessHits() before they are read.
+          // HCalSD's setDetUnitId() draws a random number (HF: depth 1 or 3, 2 or 4) and changed the simulation from
+          // there on; the engine's state is kept around the call, so the snitch takes nothing from it.
+          if (m_sensitive_det_id) {
+            if (auto *csd = dynamic_cast<SensitiveDetector *>(sd1)) {
+              CLHEP::HepRandomEngine *engine = G4Random::getTheEngine();
+              const std::vector<unsigned long> engine_state = engine->put();
+              step.m_det_id = csd->setDetUnitId(iStep);
+              engine->get(engine_state);
+            }
+          }
           psteps.m_steps_sensitive.emplace_back(step);
+        }
       } else {
-        if (m_output_inert_steps && tot >= m_inert_step_ecut)
+        if (m_output_inert_steps && tot >= m_inert_step_ecut) {
+          step.m_volume = volume_index(sp1);
           psteps.m_steps_inert.emplace_back(step);
+        }
       }
     }
   }

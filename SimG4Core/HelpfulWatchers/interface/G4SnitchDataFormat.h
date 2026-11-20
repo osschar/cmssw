@@ -4,6 +4,7 @@
 #include "ROOT/REveVector.hxx"
 
 #include <algorithm>
+#include <cstdint>
 #include <limits>
 
 // Information about the event
@@ -124,8 +125,12 @@ struct G4S_Step {
   // To add: process type at step-end
   // Also, do we need to filter by process type in the snitch?
   int      m_g4_pid;   // G4 particle id -- to distinguish this particle or untracked secondaries.
-  int      m_g4_pv_id; // PhysicalVolume -- actually does not exist.
-                       // TODO: figure out what we need here.
+  int      m_volume {-1};  // the placement of the step's pre-step point: index into the volume table, tree "V"
+  // Sensitive steps: the DetId that the volume's CMS sensitive detector gives the step (its setDetUnitId(), as for
+  // its own hits; G4Snitch parameter sensitive_det_id, on by default). 0 for inert steps, with the option off, or
+  // when the sensitive detector rejects the step (in HGCal: the guard ring and the mouse bites of the wafers). In HF
+  // the depth is drawn at random (1 or 3, 2 or 4), and the snitch's draw can differ from the one of the hit.
+  uint32_t m_det_id {0};
 
   // G4S_Step() = default;
   // G4S_Step& operator=(const G4S_Step&) = default;

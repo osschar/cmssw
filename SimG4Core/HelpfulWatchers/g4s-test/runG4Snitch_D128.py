@@ -211,6 +211,7 @@ process.g4SimHits.Watchers = cms.VPSet(cms.PSet(
     output_sensitive_zero_steps = cms.untracked.bool(False), # sensitive steps with no deposit, as path marks
 	inert_step_ecut = cms.untracked.double(10e-6), # MeV: 10 eV
     inert_aggregate_descendants = cms.untracked.bool(True), # untracked descendants' inert steps summed per volume
+    sensitive_det_id = cms.untracked.bool(True), # the DetId of each stored sensitive step
 
     output_path = cms.untracked.bool(True),
     path_max_angle = cms.untracked.double(0.05), # rad
@@ -228,3 +229,6 @@ if os.environ.get("G4SNITCH_ZEROSTEPS", "0") == "1":
 # G4SNITCH_AGGR=0 stores the untracked descendants' inert steps one by one instead of their sums per volume.
 if os.environ.get("G4SNITCH_AGGR", "1") == "0":
     process.g4SimHits.Watchers[0].inert_aggregate_descendants = False
+# G4SNITCH_DETID=0 leaves G4S_Step::m_det_id at 0 (the sensitive detectors are then not asked).
+if os.environ.get("G4SNITCH_DETID", "1") == "0":
+    process.g4SimHits.Watchers[0].sensitive_det_id = False

@@ -3,6 +3,7 @@
 <use name="FWCore/ParameterSet"/>
 <use name="SimG4Core/Watcher"/>
 <use name="SimG4Core/Notification"/>
+<use name="SimG4Core/SensitiveDetector"/>
 <use name="boost"/>
 <use name="geant4core"/>
 <use name="CommonTools/UtilAlgos"/>

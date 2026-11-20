@@ -118,6 +118,8 @@ private:
   double m_inert_step_ecut = 10e-6; // MeV (Geant4 units): 10 eV
   // Sum the untracked descendants' inert steps per tracked particle and volume (G4S_ParticleSteps::m_inert_sums).
   bool m_inert_aggregate_descendants = true;
+  // The DetId of each stored sensitive step, from the step's CMS sensitive detector (G4S_Step::m_det_id).
+  bool m_sensitive_det_id = true;
 
   // Thinned path of each tracked particle (G4S_ParticleSteps::m_path).
   bool m_output_path = true;
