@@ -757,10 +757,15 @@ void G4Snitch::update(const G4Step *iStep)
         m_gtp2vid.insert(std::make_pair(gt, m_vec_size));
 
         if (m_vec_size >= m_vec_capacity) {
-          if (2 * m_id_current_primary < m_g4_num_primaries || m_id_current_primary <= 1)
+          if (2 * m_id_current_primary < m_g4_num_primaries || m_id_current_primary <= 1) {
             m_vec_capacity *= 2;
-          else
-            m_vec_capacity = (m_vec_capacity - m_primary_n_accepted_tracks) / (m_id_current_primary - 1) * m_g4_num_primaries;
+          } else {
+            // The extrapolation from the finished primaries goes negative when the current primary alone has more
+            // accepted tracks than the capacity (a TeV hadron into HF among ten primaries), and vector::reserve
+            // threw; double instead whenever it does not grow the vectors.
+            const int est = (m_vec_capacity - m_primary_n_accepted_tracks) / (m_id_current_primary - 1) * m_g4_num_primaries;
+            m_vec_capacity = (est > m_vec_size) ? est : 2 * m_vec_capacity;
+          }
           if (m_verbose)
             printf("MMMMMMM Growing vec memory from %d to %d\n", m_vec_size, m_vec_capacity);
           m_part_vec->reserve(m_vec_capacity);
