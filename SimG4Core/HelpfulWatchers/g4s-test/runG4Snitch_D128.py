@@ -163,6 +163,25 @@ if os.environ.get("G4SNITCH_GUN", "") == "vertex":
         AddAntiParticle = cms.bool(False),
         firstRun = cms.untracked.uint32(1)
     )
+# G4SNITCH_GUN=cms sends particles into most of CMS: mu-, e-, gamma, pi+ and n from the origin, pT 5-20 GeV, eta -5
+# to 5, each with its anti-particle back to back (10 per event): trackers, MTD, ECAL barrel, HGCal, HCAL barrel and
+# outer, HF, and the muon chambers (pT 5 GeV still reaches the barrel muon stations).
+elif os.environ.get("G4SNITCH_GUN", "") == "cms":
+    process.generator = cms.EDProducer("FlatRandomPtGunProducer",
+        PGunParameters = cms.PSet(
+            MinPt = cms.double(5.0),
+            MaxPt = cms.double(20.0),
+            PartID = cms.vint32(13, 11, 22, 211, 2112),
+            MinEta = cms.double(-5.0),
+            MaxEta = cms.double(5.0),
+            MinPhi = cms.double(-3.14159265359),
+            MaxPhi = cms.double(3.14159265359),
+        ),
+        Verbosity = cms.untracked.int32(0),
+        psethack = cms.string('mu-, e-, gamma, pi+, n and anti-particles from the origin, pt 5-20, eta -5..5'),
+        AddAntiParticle = cms.bool(True),
+        firstRun = cms.untracked.uint32(1)
+    )
 
 
 # Path and EndPath definitions
