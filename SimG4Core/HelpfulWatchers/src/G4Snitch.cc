@@ -15,7 +15,10 @@ Description: Outputs a ROOT tree of kinematics.
 
 // system include files
 #include <cmath>
+#include <cstdlib>
+#include <cxxabi.h>
 #include <iostream>
+#include <typeinfo>
 
 // user include files
 #include "SimG4Core/HelpfulWatchers/interface/G4Snitch.h"
@@ -160,6 +163,22 @@ int G4Snitch::process_index(const G4VProcess *proc) {
   return idx;
 }
 
+int G4Snitch::sd_index(const G4VSensitiveDetector *sd) {
+  if (!sd)
+    return -1;
+  auto it = m_sd_index.find(sd);
+  if (it != m_sd_index.end())
+    return it->second;
+  const int idx = (int)m_sd_names.size();
+  m_sd_index.emplace(sd, idx);
+  m_sd_names.push_back(sd->GetName());
+  int status = 0;
+  char *dm = abi::__cxa_demangle(typeid(*sd).name(), nullptr, nullptr, &status);
+  m_sd_classes.push_back(status == 0 && dm ? dm : typeid(*sd).name());
+  std::free(dm);
+  return idx;
+}
+
 int G4Snitch::volume_index(const G4StepPoint *sp) {
   const G4VTouchable *th = sp->GetTouchable();
   const int depth = th->GetHistoryDepth();
@@ -186,7 +205,9 @@ int G4Snitch::volume_index(const G4StepPoint *sp) {
     path += std::to_string(th->GetCopyNumber(d));
   }
   m_vol_paths.push_back(path);
-  const G4Material *mat = th->GetVolume(0)->GetLogicalVolume()->GetMaterial();
+  const G4LogicalVolume *lv = th->GetVolume(0)->GetLogicalVolume();
+  m_vol_sd.push_back(sd_index(lv->GetSensitiveDetector()));
+  const G4Material *mat = lv->GetMaterial();
   m_vol_materials.push_back(mat->GetName());
   m_vol_x0.push_back(Pos_fac * mat->GetRadlen());
   m_vol_density.push_back(mat->GetDensity() / (CLHEP::g / CLHEP::cm3));
@@ -330,8 +351,9 @@ void G4Snitch::write_tree_close_file() {
   // The volume table that G4S_InertSum::m_volume indexes.
   {
     TTree vtree("V", "G4Snitch volume table: idx, path (name:copy from the world down), material, x0 (cm), density "
-                     "(g/cm3), x, y, z (cm, the volume's origin in global coordinates)");
-    int idx = 0;
+                     "(g/cm3), x, y, z (cm, the volume's origin in global coordinates), sd (index into tree D, -1 for "
+                     "none)");
+    int idx = 0, sd = -1;
     std::string path, material;
     double x0 = 0, density = 0, x = 0, y = 0, z = 0;
     vtree.Branch("idx", &idx);
@@ -342,6 +364,7 @@ void G4Snitch::write_tree_close_file() {
     vtree.Branch("x", &x);
     vtree.Branch("y", &y);
     vtree.Branch("z", &z);
+    vtree.Branch("sd", &sd);
     for (idx = 0; idx < (int)m_vol_paths.size(); ++idx) {
       path = m_vol_paths[idx];
       material = m_vol_materials[idx];
@@ -350,9 +373,25 @@ void G4Snitch::write_tree_close_file() {
       x = m_vol_x[idx];
       y = m_vol_y[idx];
       z = m_vol_z[idx];
+      sd = m_vol_sd[idx];
       vtree.Fill();
     }
     vtree.Write();
+  }
+  // The sensitive-detector table that the volume table's column "sd" indexes.
+  {
+    TTree dtree("D", "G4Snitch sensitive-detector table: idx, name, class");
+    int idx = 0;
+    std::string name, cls;
+    dtree.Branch("idx", &idx);
+    dtree.Branch("name", &name);
+    dtree.Branch("class", &cls);
+    for (idx = 0; idx < (int)m_sd_names.size(); ++idx) {
+      name = m_sd_names[idx];
+      cls = m_sd_classes[idx];
+      dtree.Fill();
+    }
+    dtree.Write();
   }
   m_file->Close();
   delete m_file;

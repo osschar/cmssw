@@ -128,8 +128,13 @@ struct G4S_Step {
   int      m_volume {-1};  // the placement of the step's pre-step point: index into the volume table, tree "V"
   // Sensitive steps: the DetId that the volume's CMS sensitive detector gives the step (its setDetUnitId(), as for
   // its own hits; G4Snitch parameter sensitive_det_id, on by default). 0 for inert steps, with the option off, or
-  // when the sensitive detector rejects the step (in HGCal: the guard ring and the mouse bites of the wafers). In HF
-  // the depth is drawn at random (1 or 3, 2 or 4), and the snitch's draw can differ from the one of the hit.
+  // when the sensitive detector rejects the step (in HGCal: the guard ring and the mouse bites of the wafers). Which
+  // detector gave it: m_volume -> tree V, column sd -> tree D (name, class). Not every detector gives a DetId: HCalSD
+  // gives an HCAL test-numbering index when g4SimHits.HCalSD.TestNumberingScheme is on (phase 2, from Run 2's
+  // run2_HCAL_2017): HcalTestNumbering::packHcalIndex(det, z, depth, eta, phi, layer), with the scintillator layer,
+  // which HcalHitRelabeller (Geometry/HcalCommonData) turns into the readout HcalDetId, as the digitizer does. Its
+  // top four bits are the HCAL part (1 HB, 2 HE, 3 HO, 4 HF), not DetId::Detector. In HF the depth is drawn at random
+  // (1 or 3, 2 or 4), and the snitch's draw can differ from the one of the hit.
   uint32_t m_det_id {0};
 
   // G4S_Step() = default;
@@ -157,7 +162,8 @@ struct G4S_PathBField {
 // The inert deposits of a tracked particle's untracked descendants in one Geant4 volume, summed (G4Snitch parameter
 // inert_aggregate_descendants, on by default; the descendants' inert steps are then not stored one by one). A volume
 // is a placement: a physical volume with the copy numbers of its whole path from the world, an entry of the file's
-// volume table, tree "V" (idx, path, material, x0 and density, and the volume's origin in global coordinates). A
+// volume table, tree "V" (idx, path, material, x0 and density, the volume's origin in global coordinates, and sd,
+// the volume's sensitive detector: an index into tree "D" (idx, name, class), -1 for an inert volume). A
 // step is counted when its deposit is above zero and at least inert_step_ecut. Position (cm) and time (ns) are the
 // deposit-weighted mean and RMS, per coordinate, of the steps' midpoints. Deposits in MeV.
 

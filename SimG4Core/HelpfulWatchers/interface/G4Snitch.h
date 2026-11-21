@@ -46,6 +46,7 @@ class G4Track;
 class G4VProcess;
 class G4Step;
 class G4StepPoint;
+class G4VSensitiveDetector;
 class EndOfTrack;
 class EndOfEvent;
 class EndOfRun;
@@ -182,7 +183,13 @@ private:
   std::unordered_map<uint64_t, int> m_vol_index;
   std::vector<std::string> m_vol_paths, m_vol_materials;
   std::vector<double> m_vol_x0, m_vol_density, m_vol_x, m_vol_y, m_vol_z;
+  std::vector<int> m_vol_sd;
   int volume_index(const G4StepPoint *sp);
+
+  // The sensitive-detector table of the file (tree "D": idx, name, class): the volume table's column "sd" indexes it.
+  std::map<const G4VSensitiveDetector *, int> m_sd_index;
+  std::vector<std::string> m_sd_names, m_sd_classes;
+  int sd_index(const G4VSensitiveDetector *sd);
 
   // Per-event accumulators of the inert sums, keyed by (particle slot << 32 | volume index). Positions and times
   // are summed relative to the first step of the sum, which keeps the RMS precise far from the origin.
