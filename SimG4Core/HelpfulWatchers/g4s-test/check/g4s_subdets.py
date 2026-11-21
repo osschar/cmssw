@@ -14,10 +14,11 @@ for ev in t:
             if st.m_edep.m_total <= 0 or st.m_det_id == 0: continue
             c = cls.get(vol_sd[st.m_volume], "none")
             # HCalSD gives HCAL test-numbering indices: the top four bits are the HCAL part (1 HB, 2 HE, 3 HO, 4 HF).
-            sub = (st.m_det_id >> 28) if c == "HCalSD" else (st.m_det_id >> 25) & 7
+            # HGCal DetIds carry no subdetector field there: grouped by class only.
+            sub = (st.m_det_id >> 28) if c == "HCalSD" else ("-" if c.startswith("HGC") else (st.m_det_id >> 25) & 7)
             k = (c, sub)
             n[k] += 1
             x = st.m_x_beg; r = math.hypot(x.fX, x.fY); e = abs(math.asinh(x.fZ / r)) if r > 0 else 9
             lo, hi = eta.get(k, (9, 0)); eta[k] = (min(lo, e), max(hi, e))
-for k in sorted(n):
+for k in sorted(n, key=str):
     print(f"  {k[0]:34s} subdet {k[1]}  steps {n[k]:6d}  |eta| {eta[k][0]:.2f}-{eta[k][1]:.2f}")
