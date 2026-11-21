@@ -118,6 +118,8 @@ G4Snitch::G4Snitch(const edm::ParameterSet &pSet)
         m_inert_step_ecut(pSet.getUntrackedParameter<double>("inert_step_ecut", 1e-6)),
         m_inert_aggregate_descendants(pSet.getUntrackedParameter<bool>("inert_aggregate_descendants", true)),
         m_sensitive_det_id(pSet.getUntrackedParameter<bool>("sensitive_det_id", true)),
+        m_no_det_id_volumes(pSet.getUntrackedParameter<std::vector<std::string>>(
+            "no_det_id_volumes", std::vector<std::string>{"HVQF", "OQUA"})),
 
         m_output_path(pSet.getUntrackedParameter<bool>("output_path", true)),
         m_path_max_angle(pSet.getUntrackedParameter<double>("path_max_angle", 0.05)),
@@ -197,14 +199,19 @@ int G4Snitch::volume_index(const G4StepPoint *sp) {
   const int idx = (int)m_vol_paths.size();
   m_vol_index.emplace(h, idx);
   std::string path;
+  bool no_det_id = false;
   for (int d = depth; d >= 0; --d) {
     if (!path.empty())
       path += '/';
+    for (const std::string &n : m_no_det_id_volumes)
+      if (th->GetVolume(d)->GetName() == n)
+        no_det_id = true;
     path += th->GetVolume(d)->GetName();
     path += ':';
     path += std::to_string(th->GetCopyNumber(d));
   }
   m_vol_paths.push_back(path);
+  m_vol_no_det_id.push_back(no_det_id);
   const G4LogicalVolume *lv = th->GetVolume(0)->GetLogicalVolume();
   m_vol_sd.push_back(sd_index(lv->GetSensitiveDetector()));
   const G4Material *mat = lv->GetMaterial();
@@ -656,11 +663,13 @@ void G4Snitch::update(const G4Step *iStep)
         // A step with no deposit is stored only on request; one with a deposit when it reaches the cut.
         if (m_output_sensitive_steps && (tot > 0 ? tot >= m_sensitive_step_ecut : m_output_sensitive_zero_steps)) {
           step.m_volume = volume_index(sp1);
+          // Not under no_det_id_volumes: CMS makes HF's hits from a shower library and fibre light, not from steps,
+          // so no step there has a hit's id. (HCalSD's id for an HF step would also draw a random number, below.)
           // The sensitive detector has processed this step already. For CaloSD the members its setDetUnitId() sets
           // (HGCalSD's fraction_ and calibCell_) are set again by the next ProcessHits() before they are read.
           // HCalSD's setDetUnitId() draws a random number (HF: depth 1 or 3, 2 or 4) and changed the simulation from
           // there on; the engine's state is kept around the call, so the snitch takes nothing from it.
-          if (m_sensitive_det_id) {
+          if (m_sensitive_det_id && !m_vol_no_det_id[step.m_volume]) {
             if (auto *csd = dynamic_cast<SensitiveDetector *>(sd1)) {
               CLHEP::HepRandomEngine *engine = G4Random::getTheEngine();
               const std::vector<unsigned long> engine_state = engine->put();
@@ -812,6 +821,7 @@ void G4Snitch::update(const EndOfTrack* eot)
     const G4Step *last_step = iTrk->GetStep();
     const G4StepPoint *post = last_step ? last_step->GetPostStepPoint() : nullptr;
     p.m_death_proc = process_index(post ? post->GetProcessDefinedStep() : nullptr);
+    p.m_death_volume = last_step ? volume_index(last_step->GetPreStepPoint()) : -1;
   }
 
   // The path's last point: the track's end, unless the last step already stored it.

@@ -58,7 +58,7 @@ if len(sys.argv) > 3:
                 if st.m_edep.m_total <= 0: continue
                 k = sd_name.get(vol_sd[st.m_volume], "none")
                 if k.startswith("HCalSD"):  # HCAL test numbering: the top four bits are the HCAL part
-                    k += " " + {1: "HB", 2: "HE", 3: "HO", 4: "HF"}.get(st.m_det_id >> 28, "?")
+                    k += " " + ({1: "HB", 2: "HE", 3: "HO", 4: "HF"}.get(st.m_det_id >> 28, "?") if st.m_det_id else "(no id)")
                 if st.m_det_id == 0: zero[k] = zero.get(k, 0) + 1; continue
                 tot[k] = tot.get(k, 0) + 1
                 if st.m_det_id in ids[i]: found[k] = found.get(k, 0) + 1

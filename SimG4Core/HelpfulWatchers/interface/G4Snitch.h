@@ -121,6 +121,9 @@ private:
   bool m_inert_aggregate_descendants = true;
   // The DetId of each stored sensitive step, from the step's CMS sensitive detector (G4S_Step::m_det_id).
   bool m_sensitive_det_id = true;
+  // Volumes whose steps make no hits of their own: no DetId for steps under them. HF (HVQF): its hits come from CMS's
+  // shower library and from fibre light; its readout box (OQUA): fibre-bundle and PMT hits are off by default.
+  std::vector<std::string> m_no_det_id_volumes = {"HVQF", "OQUA"};
 
   // Thinned path of each tracked particle (G4S_ParticleSteps::m_path).
   bool m_output_path = true;
@@ -184,6 +187,7 @@ private:
   std::vector<std::string> m_vol_paths, m_vol_materials;
   std::vector<double> m_vol_x0, m_vol_density, m_vol_x, m_vol_y, m_vol_z;
   std::vector<int> m_vol_sd;
+  std::vector<bool> m_vol_no_det_id;  // a volume under one of m_no_det_id_volumes
   int volume_index(const G4StepPoint *sp);
 
   // The sensitive-detector table of the file (tree "D": idx, name, class): the volume table's column "sd" indexes it.

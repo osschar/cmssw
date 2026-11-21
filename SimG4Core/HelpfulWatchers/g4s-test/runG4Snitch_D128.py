@@ -231,6 +231,7 @@ process.g4SimHits.Watchers = cms.VPSet(cms.PSet(
 	inert_step_ecut = cms.untracked.double(10e-6), # MeV: 10 eV
     inert_aggregate_descendants = cms.untracked.bool(True), # untracked descendants' inert steps summed per volume
     sensitive_det_id = cms.untracked.bool(True), # the DetId of each stored sensitive step
+    no_det_id_volumes = cms.untracked.vstring("HVQF", "OQUA"), # HF and its readout box: no hits from steps there
 
     output_path = cms.untracked.bool(True),
     path_max_angle = cms.untracked.double(0.05), # rad

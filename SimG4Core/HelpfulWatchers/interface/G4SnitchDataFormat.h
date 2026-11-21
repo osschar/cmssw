@@ -38,7 +38,9 @@ struct G4S_Info {
 //          when CMS's SteppingAction killed it (time window, dead region, energy threshold of a volume, beyond the
 //          central |z|, too many steps, low energy in the beam pipe); then the death process is the last step's,
 //          for example Transportation or hadElastic. D128 test, 20 events: 283 of 67259 tracked particles die
-//          with kinetic energy, 279 of them by decay in flight.
+//          with kinetic energy, 279 of them by decay in flight. In HF, CMS kills every e, gamma and stable hadron
+//          on its first step and replaces its shower with hits from a shower library (HCalSD, HFShowerLibrary):
+//          such a particle dies in an HF volume (m_death_volume) with its energy, by Transportation.
 // m_birth_proc, m_death_proc: indices into the file's process table, tree "P" (idx, name, type, subtype); -1 for
 // none: the birth of a primary, or a particle never tracked (m_was_tracked false, death members zero).
 struct G4S_Particle {
@@ -51,6 +53,7 @@ struct G4S_Particle {
   Vec4D  m_p_death;
   int    m_birth_proc {-1};
   int    m_death_proc {-1};
+  int    m_death_volume {-1};  // the volume of its last step, an index into the file's volume table, tree "V"
   double m_mass {0};
   int    m_pdg  {0};
   int    m_charge {0};
@@ -128,13 +131,15 @@ struct G4S_Step {
   int      m_volume {-1};  // the placement of the step's pre-step point: index into the volume table, tree "V"
   // Sensitive steps: the DetId that the volume's CMS sensitive detector gives the step (its setDetUnitId(), as for
   // its own hits; G4Snitch parameter sensitive_det_id, on by default). 0 for inert steps, with the option off, or
-  // when the sensitive detector rejects the step (in HGCal: the guard ring and the mouse bites of the wafers). Which
+  // when the sensitive detector rejects the step (in HGCal: the guard ring and the mouse bites of the wafers), and in
+  // HF, whose hits CMS makes from a shower library and from fibre light, not from steps, and its readout box, whose
+  // fibre-bundle and PMT hits are off by default (volumes under the G4Snitch parameter no_det_id_volumes, HVQF and
+  // OQUA). So a nonzero m_det_id is the id of the hit the step contributes to. Which
   // detector gave it: m_volume -> tree V, column sd -> tree D (name, class). Not every detector gives a DetId: HCalSD
   // gives an HCAL test-numbering index when g4SimHits.HCalSD.TestNumberingScheme is on (phase 2, from Run 2's
   // run2_HCAL_2017): HcalTestNumbering::packHcalIndex(det, z, depth, eta, phi, layer), with the scintillator layer,
   // which HcalHitRelabeller (Geometry/HcalCommonData) turns into the readout HcalDetId, as the digitizer does. Its
-  // top four bits are the HCAL part (1 HB, 2 HE, 3 HO, 4 HF), not DetId::Detector. In HF the depth is drawn at random
-  // (1 or 3, 2 or 4), and the snitch's draw can differ from the one of the hit.
+  // top four bits are the HCAL part (1 HB, 2 HE, 3 HO, 4 HF), not DetId::Detector.
   uint32_t m_det_id {0};
 
   // G4S_Step() = default;
