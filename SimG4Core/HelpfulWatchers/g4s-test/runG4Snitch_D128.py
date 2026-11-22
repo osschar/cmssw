@@ -202,6 +202,24 @@ elif os.environ.get("G4SNITCH_GUN", "") == "cms":
         AddAntiParticle = cms.bool(True),
         firstRun = cms.untracked.uint32(1)
     )
+# G4SNITCH_GUN=minbias: one inelastic pp interaction per event at 14 TeV (Pythia8 CP5, SoftQCD:inelastic, the
+# fragment phase-2 pileup is mixed from), with the HL-LHC luminous region of VtxSmearedHLLHC14TeV in place of the
+# CloseBy smearing (zero width) that the other guns use.
+elif os.environ.get("G4SNITCH_GUN", "") == "minbias":
+    from Configuration.Generator.MinBias_14TeV_pythia8_TuneCP5_cfi import generator as _minbias_generator
+    process.generator = _minbias_generator.clone()
+    from IOMC.EventVertexGenerators.VtxSmearedHLLHC14TeV_cfi import VtxSmeared as _vtx_hllhc14
+    process.VtxSmeared = _vtx_hllhc14.clone()
+
+# G4SNITCH_SEED=N: the seeds of every module that draws random numbers (generator, VtxSmeared, g4SimHits, mix, ...),
+# drawn from a Python random.Random(N), so that equal N give equal events and different N different ones. Unset: the
+# fixed seeds of IOMC_cff, as before.
+if os.environ.get("G4SNITCH_SEED"):
+    import random
+    from IOMC.RandomEngine.RandomServiceHelper import RandomNumberServiceHelper
+    _seed_helper = RandomNumberServiceHelper(process.RandomNumberGeneratorService)
+    _seed_rng = random.Random(int(os.environ["G4SNITCH_SEED"]))
+    _seed_helper.insertSeeds(*[_seed_rng.randint(1, 900000000) for _ in range(_seed_helper.countSeeds())])
 
 
 # Path and EndPath definitions
