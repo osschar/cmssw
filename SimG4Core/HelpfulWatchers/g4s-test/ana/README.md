@@ -40,3 +40,8 @@ Run in the area's environment on uaf-4 (`/ceph/users/matevz/g4snitch-2026-11/env
   OUT...`: per |eta| bin and per arrival at a physical layer. `g4s_tkmat_vol.py ETAMIN ETAMAX FILE...`: the true X0
   between the first and the last hit per Geant4 volume (module parts grouped per sub-detector). `g4s_tkmat_once.py
   OUT...`: the per-track material with the stack value of PS/2S modules applied per sensor (as mkFit does) and once.
+- `g4s_tgeo_cmp.py ENVELOPES DIFFUSE FILE...`: the TGeo material session's maps (`/baz/matevz/root-dev/geo-stuff/`,
+  D123, tracker T35) against Geant4 along the true tracks: Geant4's X0 and lambda_I inside and outside that session's
+  layer and disc envelopes (`../geo/envelopes_zpad05_D123.txt`, printed by `../geo/tgeo_envs.C`), its diffuse table
+  `matdiffuse_rz_zpad05.root` integrated along the same paths, and Geant4's X0 per disc crossing against its disc
+  budgets.
