@@ -236,42 +236,6 @@ process = customiseEarlyDelete(process)
 #     closeFileFast = cms.untracked.bool(True)
 #     )
 
-process.g4SimHits.Watchers = cms.VPSet(cms.PSet(
-    type = cms.string('G4Snitch'),
-    verbose = cms.untracked.bool(True),
-    verbose_stack_level = cms.untracked.bool(False),
-    verbose_transport = cms.untracked.bool(False),
-    verbose_skip = cms.untracked.bool(False),
-    verbose_skip_with_ids = cms.untracked.bool(False),
-
-    output_sensitive_steps  = cms.untracked.bool(True),
-	output_inert_steps = cms.untracked.bool(True),
-	sensitive_step_ecut = cms.untracked.double(0.0), # MeV
-    output_sensitive_zero_steps = cms.untracked.bool(False), # sensitive steps with no deposit, as path marks
-	inert_step_ecut = cms.untracked.double(10e-6), # MeV: 10 eV
-    inert_aggregate_descendants = cms.untracked.bool(True), # untracked descendants' inert steps summed per volume
-    sensitive_det_id = cms.untracked.bool(True), # the DetId of each stored sensitive step
-    no_det_id_volumes = cms.untracked.vstring("HVQF", "OQUA"), # HF and its readout box: no hits from steps there
-
-    output_path = cms.untracked.bool(True),
-    path_max_angle = cms.untracked.double(0.05), # rad
-    path_max_length = cms.untracked.double(5.0), # cm
-    output_path_bfield = cms.untracked.bool(False), # the field at each path point, in branch "b"
-    ))
-
-# G4SNITCH_BFIELD=1 in the environment turns on the field at the path points.
-import os
-if os.environ.get("G4SNITCH_BFIELD", "0") == "1":
-    process.g4SimHits.Watchers[0].output_path_bfield = True
-# G4SNITCH_ZEROSTEPS=1 keeps the sensitive steps with no deposit.
-if os.environ.get("G4SNITCH_ZEROSTEPS", "0") == "1":
-    process.g4SimHits.Watchers[0].output_sensitive_zero_steps = True
-# G4SNITCH_AGGR=0 stores the untracked descendants' inert steps one by one instead of their sums per volume.
-if os.environ.get("G4SNITCH_AGGR", "1") == "0":
-    process.g4SimHits.Watchers[0].inert_aggregate_descendants = False
-# G4SNITCH_VERBOSE=0: no step-by-step log (production; the checks compare these logs).
-if os.environ.get("G4SNITCH_VERBOSE", "1") == "0":
-    process.g4SimHits.Watchers[0].verbose = False
-# G4SNITCH_DETID=0 leaves G4S_Step::m_det_id at 0 (the sensitive detectors are then not asked).
-if os.environ.get("G4SNITCH_DETID", "1") == "0":
-    process.g4SimHits.Watchers[0].sensitive_det_id = False
+# The G4Snitch watcher, configured from the environment (see SimG4Core/HelpfulWatchers/python/G4Snitch_cfi.py).
+from SimG4Core.HelpfulWatchers.G4Snitch_cfi import g4snitch_watchers
+process.g4SimHits.Watchers = g4snitch_watchers()

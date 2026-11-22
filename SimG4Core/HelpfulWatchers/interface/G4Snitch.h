@@ -208,6 +208,13 @@ private:
   void add_inert_step(int slot, const G4Step *step, double tot, double niel);
   void flush_inert_sums();
 
+  // Output selection at the end of the event (the simulation is not touched): the subtree of the tracked particle
+  // with this Geant4 track id (a primary or a SimTrack; 0 = all), and the steps and inert sums inside a cone from the
+  // origin (eta, phi, dR; empty = all; the particle tree and the paths stay whole).
+  int m_select_track_id = 0;
+  std::vector<double> m_select_cone;
+  void select_output();
+
   int m_last_g4_id = -1;
 
   std::vector<int> m_stack; // stack of g4 ids

@@ -37,6 +37,8 @@ Description: Outputs a ROOT tree of kinematics.
 #include "CLHEP/Units/SystemOfUnits.h"
 #include "SimG4Core/SensitiveDetector/interface/SensitiveDetector.h"
 #include "Randomize.hh"
+#include "FWCore/MessageLogger/interface/MessageLogger.h"
+#include <algorithm>
 #include "DataFormats/GeometryVector/interface/GlobalPoint.h"
 #include "DataFormats/GeometryVector/interface/GlobalVector.h"
 #include "FWCore/Framework/interface/ConsumesCollector.h"
@@ -127,6 +129,8 @@ G4Snitch::G4Snitch(const edm::ParameterSet &pSet)
         m_output_path_bfield(pSet.getUntrackedParameter<bool>("output_path_bfield", false))
 {
   m_path_cos_max_angle = std::cos(m_path_max_angle);
+  m_select_track_id = pSet.getUntrackedParameter<int>("select_track_id", 0);
+  m_select_cone = pSet.getUntrackedParameter<std::vector<double>>("select_cone", std::vector<double>());
   // 2025-04-18 Linking through BuildFile.xml no longer works (-Wl,--as-needed)
   // so we just pull the dicts in here.
   gSystem->Load("libRootG4Snitch.so");
@@ -897,8 +901,91 @@ void G4Snitch::update(const EndOfEvent *eoe)
   m_total_tracks_skipped += m_event_tracks_skipped;
 
   flush_inert_sums();
+  select_output();
   m_tree->Fill();
   reset_output_structs();
+}
+
+void G4Snitch::select_output() {
+  if (m_select_track_id > 0) {
+    // The subtree of the selected particle, in the same layout: slot 0 the administrative mother with the selected
+    // particle as its only daughter, then each particle's daughters as one contiguous block.
+    std::vector<G4S_Particle> &pv = *m_part_vec;
+    int root = -1;
+    for (int i = 1; i < (int)pv.size(); ++i)
+      if (pv[i].m_was_tracked && pv[i].m_g4_id == m_select_track_id) {
+        root = i;
+        break;
+      }
+    std::vector<G4S_Particle> np;
+    std::vector<G4S_ParticleSteps> ns;
+    std::vector<G4S_PathBField> nb;
+    std::vector<int> order;  // old index of each new slot
+    np.push_back(pv[0]);
+    ns.emplace_back();
+    if (m_output_path_bfield)
+      nb.emplace_back();
+    order.push_back(0);
+    np[0].m_daughters_begin = 1;
+    np[0].m_daughters_end = 1;
+    if (root >= 0) {
+      np[0].m_daughters_end = 2;
+      order.push_back(root);
+      np.push_back(pv[root]);
+      np[1].m_parent = 0;
+      for (size_t k = 1; k < order.size(); ++k) {
+        const int o = order[k];
+        ns.push_back(std::move((*m_psteps_vec)[o]));
+        if (m_output_path_bfield)
+          nb.push_back(std::move((*m_pbfield_vec)[o]));
+        const int db = pv[o].m_daughters_begin, de = pv[o].m_daughters_end;
+        if (db < 0 || de <= db) {
+          if (db >= 0)
+            np[k].m_daughters_begin = np[k].m_daughters_end = (int)np.size();
+          continue;
+        }
+        np[k].m_daughters_begin = (int)np.size();
+        for (int j = db; j < de; ++j) {
+          order.push_back(j);
+          np.push_back(pv[j]);
+          np.back().m_parent = (int)k;
+        }
+        np[k].m_daughters_end = (int)np.size();
+      }
+    } else {
+      edm::LogWarning("G4Snitch") << "select_track_id " << m_select_track_id << ": no tracked particle with that id";
+    }
+    m_part_vec->swap(np);
+    m_psteps_vec->swap(ns);
+    if (m_output_path_bfield)
+      m_pbfield_vec->swap(nb);
+  }
+  if (m_select_cone.size() == 3) {
+    const double eta0 = m_select_cone[0], phi0 = m_select_cone[1], dr2 = m_select_cone[2] * m_select_cone[2];
+    auto inside = [&](double x, double y, double z) {
+      const double r = std::hypot(x, y);
+      if (r <= 0)
+        return false;
+      const double deta = std::asinh(z / r) - eta0;
+      const double dphi = std::remainder(std::atan2(y, x) - phi0, 2 * M_PI);
+      return deta * deta + dphi * dphi <= dr2;
+    };
+    for (G4S_ParticleSteps &ps : *m_psteps_vec) {
+      for (std::vector<G4S_Step> *v : {&ps.m_steps_sensitive, &ps.m_steps_inert})
+        v->erase(std::remove_if(v->begin(), v->end(),
+                                [&](const G4S_Step &st) {
+                                  return !inside(0.5 * (st.m_x_beg.fX + st.m_x_end.fX),
+                                                 0.5 * (st.m_x_beg.fY + st.m_x_end.fY),
+                                                 0.5 * (st.m_x_beg.fZ + st.m_x_end.fZ));
+                                }),
+                 v->end());
+      ps.m_inert_sums.erase(std::remove_if(ps.m_inert_sums.begin(), ps.m_inert_sums.end(),
+                                           [&](const G4S_InertSum &is) {
+                                             return !inside(is.m_x_mean.fX, is.m_x_mean.fY, is.m_x_mean.fZ);
+                                           }),
+                            ps.m_inert_sums.end());
+    }
+  }
 }
 
 void G4Snitch::update(const EndOfRun *eor)
