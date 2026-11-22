@@ -9,3 +9,6 @@ Run in the area's environment on uaf-4 (`/ceph/users/matevz/g4snitch-2026-11/env
   half of the energy radiated), in which region, at how many X0 and lambda_I from the origin, and the HGCal layers
   crossed before it.
 - `g4s_front_material.py FILE [ZMIN ZMAX]`: the primary's material between two |z| per volume (for muons).
+- `g4s_towers.py FIELDTABLE FILE...`: how much of a single particle's visible HGCal energy lands in the tower its
+  track points to, on the pointing-tower grid (|eta| from 1.305; EM 0.0174 x 2pi/360, hadronic 0.087 x 2pi/72);
+  pointing by the track's crossing of the HGCal face (RK4 through the field table) and by the vertex direction.
