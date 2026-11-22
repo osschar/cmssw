@@ -58,3 +58,6 @@ Run in the area's environment on uaf-4 (`/ceph/users/matevz/g4snitch-2026-11/env
   hadElastic and CoulombScat. `g4s_hadint_sum.py OUT...`: the tables.
 - `g4s_tkmat_ref.py CSV MD FILE...`: the reference table of the true material per arrival at a physical layer and
   |eta| bin, with mkFit's values; `ref/tkmat_ref_D128.{csv,md}` from T1's muons and T2's forward muons.
+- `g4s_disc_split.py GEO ENVELOPES FILE...`: where a forward pixel disc's material lies relative to its sensors: the
+  true X0 between hits on adjacent discs, split into the source disc's envelope after its hit, the destination's
+  before its hit, and elsewhere; "SUMS" lines add up over runs on several files.
