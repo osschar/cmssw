@@ -45,3 +45,6 @@ Run in the area's environment on uaf-4 (`/ceph/users/matevz/g4snitch-2026-11/env
   layer and disc envelopes (`../geo/envelopes_zpad05_D123.txt`, printed by `../geo/tgeo_envs.C`), its diffuse table
   `matdiffuse_rz_zpad05.root` integrated along the same paths, and Geant4's X0 per disc crossing against its disc
   budgets.
+- `g4s_auxcount.py FILE...`: what auxiliary points every 10, 20, 30 degrees of field turn would add to the paths, per
+  particle class, counted from existing files (field branch needed): the field turn of each path segment from the
+  stored times, momenta and field; and how many large turns are field turns.
