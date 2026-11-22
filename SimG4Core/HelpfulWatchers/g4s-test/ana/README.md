@@ -33,3 +33,9 @@ Run in the area's environment on uaf-4 (`/ceph/users/matevz/g4snitch-2026-11/env
   point plus the radial-field kick of `FinalFit.cc`, with 1, 2 or 4 sub-steps). Per track the relative error of the
   azimuthal bending, the pT bias of a position fit, and the residual left after it. `g4s_field_sum.py OUT...`: the
   tables per |eta| bin.
+- `g4s_tkmat.py GEO OUT FILE...`: mkFit's tracker material against Geant4's, per step between consecutive hits of
+  the primary: the true X0 and lambda_I from one hit's mid point to the next, against the material mkFit applies on
+  arriving at the destination hit (the module's MediumProperties radl, and the (|z|, r) grid, times p/|p.n|). GEO is
+  mkFit's geometry dumped by `../geo/dump_mkfit_geo.C` (Ceph `T1/mat/mkfit_geo_D121.root`). `g4s_tkmat_sum.py
+  OUT...`: per |eta| bin and per arrival at a physical layer. `g4s_tkmat_vol.py ETAMIN ETAMAX FILE...`: the true X0
+  between the first and the last hit per Geant4 volume (module parts grouped per sub-detector).
