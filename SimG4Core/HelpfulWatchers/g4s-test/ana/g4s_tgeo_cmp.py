@@ -12,7 +12,9 @@ hit and the end of its last, as in g4s_tkmat.py), each own Geant4 step is cut in
 each piece is classified by its mid point (r, z) against the envelopes:
   g4_in, g4_out : Geant4 X0 (and lambda_I) inside any envelope / outside all of them
   tg_out        : the diffuse table integrated over the same pieces (its phi average along this track's (r, z))
-and per disc crossing (the pieces inside one disc envelope), Geant4's X0 inside it times |t_z| (normal incidence),
+and per disc crossing (the pieces inside one disc envelope, anywhere on the outgoing leg, so that the discs before
+the first and after the last hit are crossed completely; before 2026-11-22 15:00 only the pieces between the first
+and the last hit were used, which cut those crossings short), Geant4's X0 inside it times |t_z| (normal incidence),
 by family, as a plain mean over crossings and area-weighted over r (1 cm rings, weight r), the way the TGeo session
 averages its disc budgets (a track hits a random point of the disc)."""
 import sys, math, collections
@@ -77,9 +79,10 @@ for fn in sys.argv[3:]:
         hit_i = [i for i, st in enumerate(own) if st.m_det_id != 0 and 0 <= st.m_volume < len(V) and V[st.m_volume][2]]
         if len(hit_i) < 2:
             continue
-        # pieces: mid point, length, 1/X0, 1/lambda, |t_z|
+        # pieces: mid point, length, 1/X0, 1/lambda, |t_z|, between the first and the last hit (1) or not (0); the
+        # whole outgoing leg, so that disc crossings before the first and after the last hit are complete
         P = []
-        for st in own[hit_i[0]:hit_i[-1] + 1]:
+        for ist, st in enumerate(own):
             a = (st.m_x_beg.fX, st.m_x_beg.fY, st.m_x_beg.fZ)
             b = (st.m_x_end.fX, st.m_x_end.fY, st.m_x_end.fZ)
             d = (b[0] - a[0], b[1] - a[1], b[2] - a[2])
@@ -92,11 +95,12 @@ for fn in sys.argv[3:]:
             for j in range(n):
                 u = (j + 0.5) / n
                 P.append((a[0] + u * d[0], a[1] + u * d[1], a[2] + u * d[2], ln / n, 1.0 / x0,
-                          1.0 / lam if lam > 0 else 0.0, tz))
+                          1.0 / lam if lam > 0 else 0.0, tz, 1.0 if hit_i[0] <= ist <= hit_i[-1] else 0.0))
         P = np.array(P)
         r = np.hypot(P[:, 0], P[:, 1])
         z = P[:, 2]
         dl, ix0, ilam, tz = P[:, 3], P[:, 4], P[:, 5], P[:, 6]
+        btw = P[:, 7] > 0
         inside = np.zeros(len(P), dtype=bool)
         which = np.full(len(P), -1)
         for ie, e in enumerate(E):
@@ -107,9 +111,10 @@ for fn in sys.argv[3:]:
         ir = np.clip(((r - rmin) / (rmax - rmin) * nr).astype(int), 0, nr - 1)
         g4x = dl * ix0
         g4l = dl * ilam
-        row = dict(g4_all=g4x.sum(), g4_in=g4x[inside].sum(), g4_out=g4x[~inside].sum(),
-                   tg_out=(dl * TX[iz, ir]).sum(), g4l_out=g4l[~inside].sum(), tgl_out=(dl * TL[iz, ir]).sum(),
-                   tg_on_in=(dl * TX[iz, ir])[inside].sum())
+        tgx, tgl = dl * TX[iz, ir], dl * TL[iz, ir]
+        row = dict(g4_all=g4x[btw].sum(), g4_in=g4x[btw & inside].sum(), g4_out=g4x[btw & ~inside].sum(),
+                   tg_out=tgx[btw].sum(), g4l_out=g4l[btw & ~inside].sum(), tgl_out=tgl[btw].sum(),
+                   tg_on_in=tgx[btw & inside].sum())
         for i in range(len(edges) - 1):
             if edges[i] <= abs(eta) < edges[i + 1]:
                 acc[i].append(row)
