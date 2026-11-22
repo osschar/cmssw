@@ -269,6 +269,9 @@ if os.environ.get("G4SNITCH_ZEROSTEPS", "0") == "1":
 # G4SNITCH_AGGR=0 stores the untracked descendants' inert steps one by one instead of their sums per volume.
 if os.environ.get("G4SNITCH_AGGR", "1") == "0":
     process.g4SimHits.Watchers[0].inert_aggregate_descendants = False
+# G4SNITCH_VERBOSE=0: no step-by-step log (production; the checks compare these logs).
+if os.environ.get("G4SNITCH_VERBOSE", "1") == "0":
+    process.g4SimHits.Watchers[0].verbose = False
 # G4SNITCH_DETID=0 leaves G4S_Step::m_det_id at 0 (the sensitive detectors are then not asked).
 if os.environ.get("G4SNITCH_DETID", "1") == "0":
     process.g4SimHits.Watchers[0].sensitive_det_id = False
