@@ -16,7 +16,7 @@ ch = ROOT.TChain("F")
 for a in args:
     ch.Add(a)
 M = ["const", "build", "fit", "build_step", "fit_mid", "fit_s1", "fit_s2", "fit_s4"]
-edges = [0.0, 0.5, 0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7, 3.0]
+edges = [0.0, 0.5, 0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7, 3.0, 3.5, 4.0, 4.5]
 rows = {i: [] for i in range(len(edges) - 1)}
 for e in ch:
     if not ptr[0] <= e.pt < ptr[1]:

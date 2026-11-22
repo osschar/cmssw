@@ -47,7 +47,7 @@ rmin, rmax = hx.GetYaxis().GetXmin(), hx.GetYaxis().GetXmax()
 TX = np.array([[hx.GetBinContent(i + 1, j + 1) for j in range(nr)] for i in range(nz)])
 TL = np.array([[hl.GetBinContent(i + 1, j + 1) for j in range(nr)] for i in range(nz)])
 
-edges = [0.0, 0.5, 0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7, 3.0]
+edges = [0.0, 0.5, 0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7, 3.0, 3.5, 4.0, 4.5]
 acc = collections.defaultdict(list)
 cross = collections.defaultdict(list)  # family -> [(r, x0 * |t_z|)]
 for fn in sys.argv[3:]:

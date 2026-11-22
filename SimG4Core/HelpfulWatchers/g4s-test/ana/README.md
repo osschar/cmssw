@@ -48,3 +48,13 @@ Run in the area's environment on uaf-4 (`/ceph/users/matevz/g4snitch-2026-11/env
 - `g4s_auxcount.py FILE...`: what auxiliary points every 10, 20, 30 degrees of field turn would add to the paths, per
   particle class, counted from existing files (field branch needed): the field turn of each path segment from the
   stored times, momenta and field; and how many large turns are field turns.
+- `samplesT2.sh`: sample T2, pi+ at pT 1, 3, 10 GeV over |eta| < 3 (2000 each) and mu- at pT 2, 10 GeV over eta
+  2.5-4.5 (1000 each), field branch on; in `/ceph/users/matevz/g4snitch-2026-11/T2/`, 9.6 GB (2026-11-22).
+- `g4s_eloss.py GEO OUT FILE...`: mkFit's energy loss (applyMaterialEffects' mean Bethe-Bloch with the module's or
+  the grid's bbxi, transcribed) against the true loss of the primary between consecutive hits. `g4s_eloss_sum.py
+  OUT... [--ptmax P]`: per pT and |eta| bin, per arrival at a physical layer.
+- `g4s_hadint.py OUT FILE...`: single charged hadrons in the tracker: inelastic interactions and decays (where,
+  after how many hits, the leading charged daughter's momentum fraction, angle and hits), and the kinks from
+  hadElastic and CoulombScat. `g4s_hadint_sum.py OUT...`: the tables.
+- `g4s_tkmat_ref.py CSV MD FILE...`: the reference table of the true material per arrival at a physical layer and
+  |eta| bin, with mkFit's values; `ref/tkmat_ref_D128.{csv,md}` from T1's muons and T2's forward muons.

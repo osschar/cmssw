@@ -19,7 +19,7 @@ def phys(lay):
 S = ROOT.TChain("S")
 for a in sys.argv[1:]:
     S.Add(a)
-edges = [0.0, 0.5, 0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7, 3.0]
+edges = [0.0, 0.5, 0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7, 3.0, 3.5, 4.0, 4.5]
 acc = collections.defaultdict(lambda: [0.0, 0.0, 0.0, set()])
 for e in S:
     i = next((i for i in range(len(edges) - 1) if edges[i] <= abs(e.eta) < edges[i + 1]), None)

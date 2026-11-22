@@ -43,7 +43,7 @@ S = ROOT.TChain("S")
 for a in args:
     K.Add(a)
     S.Add(a)
-edges = [0.0, 0.5, 0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7, 3.0]
+edges = [0.0, 0.5, 0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7, 3.0, 3.5, 4.0, 4.5]
 rows = collections.defaultdict(list)
 for e in K:
     if pdg is not None and int(e.pdg) != pdg:
