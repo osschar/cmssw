@@ -138,6 +138,8 @@ void G4Snitch::add_path_point(int id, const double *pos_mm, double t_ns, const d
   pp.m_x.fT = t_ns;
   pp.m_p.Set(Mom_fac * mom_MeV[0], Mom_fac * mom_MeV[1], Mom_fac * mom_MeV[2]);
   pp.m_p.fT = Mom_fac * e_MeV;
+  pp.m_x0 = m_mat_x0;
+  pp.m_lambda = m_mat_lambda;
   particle_steps(id).m_path.emplace_back(pp);
   if (m_output_path_bfield) {
     // The CMSSW field that Geant4's field (sim::Field) wraps, asked directly: sim::Field caches its last point, and
@@ -217,6 +219,7 @@ int G4Snitch::volume_index(const G4StepPoint *sp) {
   const G4Material *mat = lv->GetMaterial();
   m_vol_materials.push_back(mat->GetName());
   m_vol_x0.push_back(Pos_fac * mat->GetRadlen());
+  m_vol_lambda.push_back(Pos_fac * mat->GetNuclearInterLength());
   m_vol_density.push_back(mat->GetDensity() / (CLHEP::g / CLHEP::cm3));
   const G4ThreeVector &o = th->GetTranslation(0);
   m_vol_x.push_back(Pos_fac * o.x());
@@ -362,11 +365,12 @@ void G4Snitch::write_tree_close_file() {
                      "none)");
     int idx = 0, sd = -1;
     std::string path, material;
-    double x0 = 0, density = 0, x = 0, y = 0, z = 0;
+    double x0 = 0, lambda = 0, density = 0, x = 0, y = 0, z = 0;
     vtree.Branch("idx", &idx);
     vtree.Branch("path", &path);
     vtree.Branch("material", &material);
     vtree.Branch("x0", &x0);
+    vtree.Branch("lambda", &lambda);
     vtree.Branch("density", &density);
     vtree.Branch("x", &x);
     vtree.Branch("y", &y);
@@ -376,6 +380,7 @@ void G4Snitch::write_tree_close_file() {
       path = m_vol_paths[idx];
       material = m_vol_materials[idx];
       x0 = m_vol_x0[idx];
+      lambda = m_vol_lambda[idx];
       density = m_vol_density[idx];
       x = m_vol_x[idx];
       y = m_vol_y[idx];
@@ -459,6 +464,9 @@ void G4Snitch::update(const BeginOfTrack* bot)
   const G4ParticleDefinition* pd = iTrk->GetParticleDefinition();
   const int gid = iTrk->GetTrackID();
   const int pid = iTrk->GetParentID();
+
+  // Every track, tracked or not, sums its material from its birth.
+  m_mat_x0 = m_mat_lambda = 0;
 
   if (m_starting_new_event) {
     // G4Id of incoming track is the final primary id ... setup primary slots.
@@ -631,6 +639,15 @@ void G4Snitch::update(const G4Step *iStep)
   G4LogicalVolume *lv2 = pv2 ? pv2->GetLogicalVolume() : nullptr;
   G4VSensitiveDetector *sd2 = lv2 ? lv2->GetSensitiveDetector() : nullptr;
 
+  // The material of this step (its pre-step point's): stored steps get the sums at their start, path points after it.
+  double step_x0 = 0, step_lambda = 0;
+  {
+    const G4Material *mat = sp1->GetMaterial();
+    const double len = iStep->GetStepLength();
+    step_x0 = len / mat->GetRadlen();
+    step_lambda = len / mat->GetNuclearInterLength();
+  }
+
   // We process energy deposits in any case.
   {
     double tot  = iStep->GetTotalEnergyDeposit();
@@ -659,6 +676,8 @@ void G4Snitch::update(const G4Step *iStep)
       }
       step.m_edep.set_edep(tot, niel);
       step.m_g4_pid = iTrk->GetTrackID();
+      step.m_x0_beg = m_mat_x0;
+      step.m_lambda_beg = m_mat_lambda;
       if (is_sensitive) {
         // A step with no deposit is stored only on request; one with a deposit when it reaches the cut.
         if (m_output_sensitive_steps && (tot > 0 ? tot >= m_sensitive_step_ecut : m_output_sensitive_zero_steps)) {
@@ -687,6 +706,9 @@ void G4Snitch::update(const G4Step *iStep)
       }
     }
   }
+
+  m_mat_x0 += step_x0;
+  m_mat_lambda += step_lambda;
 
   // The secondaries created in this step. GetNumberOfSecondariesInCurrentStep() can count a secondary that is not
   // appended to the track's secondary vector (seen with eBrem in Geant4 11.4, CMSSW_20_1_0_pre5), so indexing the

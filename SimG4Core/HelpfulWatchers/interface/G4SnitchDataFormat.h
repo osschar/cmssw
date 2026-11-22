@@ -124,6 +124,11 @@ struct G4S_Step {
   Vec4D    m_x_beg;
   Vec4D    m_x_end;
   Vec4D    m_p_end;  // momentum (GeV) and total energy at the step's end point, of the stepping track (see m_g4_pid)
+  // Material crossed by the stepping track from its birth to the step's start, summed over all its steps (stored or
+  // not): step length / X0 and step length / lambda_I of each step's material (the pre-step point's). The difference
+  // between two steps of one track is the material between them.
+  float    m_x0_beg {0};
+  float    m_lambda_beg {0};
   G4S_EDep m_edep;
   // To add: process type at step-end
   // Also, do we need to filter by process type in the snitch?
@@ -146,12 +151,16 @@ struct G4S_Step {
   // G4S_Step& operator=(const G4S_Step&) = default;
 };
 
-// A point on the path of a tracked particle: position (cm) and time (ns), momentum (GeV) and total energy.
+// A point on the path of a tracked particle: position (cm) and time (ns), momentum (GeV) and total energy, and the
+// material the particle crossed from its birth to this point, in radiation lengths and in nuclear interaction lengths
+// (summed over all its steps, as G4S_Step::m_x0_beg). The last point is the death: its sums are the totals.
 
 struct G4S_PathPoint {
   using Vec4D = ROOT::Experimental::REveVector4D;
   Vec4D m_x;
   Vec4D m_p;
+  float m_x0 {0};
+  float m_lambda {0};
 };
 
 // The magnetic field at each point of a particle's path (tesla), parallel to G4S_ParticleSteps::m_path: the CMSSW
@@ -167,7 +176,8 @@ struct G4S_PathBField {
 // The inert deposits of a tracked particle's untracked descendants in one Geant4 volume, summed (G4Snitch parameter
 // inert_aggregate_descendants, on by default; the descendants' inert steps are then not stored one by one). A volume
 // is a placement: a physical volume with the copy numbers of its whole path from the world, an entry of the file's
-// volume table, tree "V" (idx, path, material, x0 and density, the volume's origin in global coordinates, and sd,
+// volume table, tree "V" (idx, path, material, x0, lambda (nuclear interaction length, cm) and density, the volume's
+// origin in global coordinates, and sd,
 // the volume's sensitive detector: an index into tree "D" (idx, name, class), -1 for an inert volume). A
 // step is counted when its deposit is above zero and at least inert_step_ecut. Position (cm) and time (ns) are the
 // deposit-weighted mean and RMS, per coordinate, of the steps' midpoints. Deposits in MeV.

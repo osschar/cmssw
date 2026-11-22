@@ -133,6 +133,8 @@ private:
   // State of the path of the track being followed, in G4 units.
   double m_path_dir[3] = {0, 0, 0};
   double m_path_len_since = 0;
+  // Material crossed by the current Geant4 track since its birth (every track, tracked or not; reset at BeginOfTrack).
+  double m_mat_x0 = 0, m_mat_lambda = 0;
   void add_path_point(int id, const double *pos_mm, double t_ns, const double *mom_MeV, double e_MeV);
   // The field Geant4 used at each path point, in the separate branch "b" (off by default).
   bool m_output_path_bfield = false;
@@ -185,7 +187,7 @@ private:
   // hash of the (physical volume, copy number) pairs of its touchable's whole history.
   std::unordered_map<uint64_t, int> m_vol_index;
   std::vector<std::string> m_vol_paths, m_vol_materials;
-  std::vector<double> m_vol_x0, m_vol_density, m_vol_x, m_vol_y, m_vol_z;
+  std::vector<double> m_vol_x0, m_vol_lambda, m_vol_density, m_vol_x, m_vol_y, m_vol_z;
   std::vector<int> m_vol_sd;
   std::vector<bool> m_vol_no_det_id;  // a volume under one of m_no_det_id_volumes
   int volume_index(const G4StepPoint *sp);

@@ -27,8 +27,9 @@ process.load('Configuration.StandardSequences.SimIdeal_cff')
 process.load('Configuration.StandardSequences.EndOfProcess_cff')
 process.load('Configuration.StandardSequences.FrontierConditions_GlobalTag_cff')
 
+import os
 process.maxEvents = cms.untracked.PSet(
-    input = cms.untracked.int32(20),
+    input = cms.untracked.int32(int(os.environ.get("G4SNITCH_NEVT", "20"))),
     output = cms.optional.untracked.allowed(cms.int32,cms.PSet)
 )
 
@@ -166,6 +167,25 @@ if os.environ.get("G4SNITCH_GUN", "") == "vertex":
 # G4SNITCH_GUN=cms sends particles into most of CMS: mu-, e-, gamma, pi+ and n from the origin, pT 5-20 GeV, eta -5
 # to 5, each with its anti-particle back to back (10 per event): trackers, MTD, ECAL barrel, HGCal, HCAL barrel and
 # outer, HF, and the muon chambers (pT 5 GeV still reaches the barrel muon stations).
+# G4SNITCH_GUN=single: one particle per event from the origin, G4SNITCH_PDG (default 211) at a fixed G4SNITCH_PT
+# (GeV, default 10), eta uniform in G4SNITCH_ETAMIN..G4SNITCH_ETAMAX (default 1.6..2.9), phi uniform.
+elif os.environ.get("G4SNITCH_GUN", "") == "single":
+    pt = float(os.environ.get("G4SNITCH_PT", "10"))
+    process.generator = cms.EDProducer("FlatRandomPtGunProducer",
+        PGunParameters = cms.PSet(
+            MinPt = cms.double(pt - 0.001),
+            MaxPt = cms.double(pt + 0.001),
+            PartID = cms.vint32(int(os.environ.get("G4SNITCH_PDG", "211"))),
+            MinEta = cms.double(float(os.environ.get("G4SNITCH_ETAMIN", "1.6"))),
+            MaxEta = cms.double(float(os.environ.get("G4SNITCH_ETAMAX", "2.9"))),
+            MinPhi = cms.double(-3.14159265359),
+            MaxPhi = cms.double(3.14159265359),
+        ),
+        Verbosity = cms.untracked.int32(0),
+        psethack = cms.string('one particle from the origin'),
+        AddAntiParticle = cms.bool(False),
+        firstRun = cms.untracked.uint32(1)
+    )
 elif os.environ.get("G4SNITCH_GUN", "") == "cms":
     process.generator = cms.EDProducer("FlatRandomPtGunProducer",
         PGunParameters = cms.PSet(
