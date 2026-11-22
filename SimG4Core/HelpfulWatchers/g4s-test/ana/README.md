@@ -19,3 +19,17 @@ Run in the area's environment on uaf-4 (`/ceph/users/matevz/g4snitch-2026-11/env
   smearing; `G4SNITCH_SEED` per job) puts into HGCal: visible energy by entrant class (nearest ancestor born at
   |z| < 320 cm) and pT, and the charged energy outside the 3x3 around each entrant's face crossing (samples `MB/`,
   1000 events). `g4s_seedcheck.py`: equal seeds give equal events, different seeds different ones.
+
+## Spinoffs for mkFit's tracker models
+
+- `samplesT1.sh`: the tracker-wide sample T1, one particle per event from the origin, eta -3..3, D128 (tracker T35 =
+  D121's), field branch on: mu- at pT 1, 2, 5, 10, 100 GeV (1000 events each) and pi+ at pT 1, 10 GeV (500 each), 4
+  jobs per configuration with different `G4SNITCH_SEED`; in `/ceph/users/matevz/g4snitch-2026-11/T1/`, 5.4 GB
+  (2026-11-22).
+- `g4s_field.py OUT FILE...`: mkFit's parametrised field against the CMSSW field map, by the bending integral along
+  the primary's true path between its first and last tracker hit (outgoing leg only): the constant field, track
+  building's model (ParabolicMf constants, Bz only) and the final fit's (bFieldParams, with Br), each integrated
+  along the path and as mkFit samples it per step (building: Bz at the step's start; final fit: Bz at the chord mid
+  point plus the radial-field kick of `FinalFit.cc`, with 1, 2 or 4 sub-steps). Per track the relative error of the
+  azimuthal bending, the pT bias of a position fit, and the residual left after it. `g4s_field_sum.py OUT...`: the
+  tables per |eta| bin.
