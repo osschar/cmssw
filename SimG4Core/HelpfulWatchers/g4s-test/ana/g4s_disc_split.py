@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """g4s_disc_split.py GEO ENVELOPES FILE...: where a forward pixel disc's material lies relative to its sensors, from the
 primary's true path. For each step between hits on adjacent discs of one family (TFPX, mkFit layers 16-23 and 38-45;
-TEPX, 24-27 and 46-49; a hit's disc from mkFit's module dump GEO), the true X0 between the two hits' mid points is
+TEPX, 24-27 and 46-49; a hit's disc from mkFit's module dump GEO), and between hits on adjacent barrel layers (IT1-IT4,
+OT1-OT6, the two sensors of an OT stack being one layer), the true X0 between the two hits' mid points is
 split by position into: inside the source disc's envelope (after its hit), inside the destination's (before its
-hit), and elsewhere. ENVELOPES as for g4s_tgeo_cmp.py (the TGeo material session's discs at zpad 0.5). Each Geant4 step
+hit), and elsewhere. ENVELOPES as for g4s_tgeo_cmp.py (the TGeo material session's discs at zpad 0.5, barrel layers at bare extent). Each Geant4 step
 inside the tracker volume (r < 120 cm, |z| < 290 cm at either end) is cut into pieces of at most 0.1 cm, timed by
 linear interpolation. A line "SUMS family n after before elsewhere" per family lets runs on several files be added. The share after the hit, src / (src + dst), is
 what "half before, half after" assumes to be 0.5."""
@@ -18,10 +19,19 @@ for line in open(sys.argv[2]):
     if a[0] == "D" and (a[1].startswith("TFPX") or a[1].startswith("TEPX")):
         z, hz = float(a[4]), float(a[5]) + 0.5
         ENV[a[1]] = (float(a[2]), float(a[3]), z - hz, z + hz)
+    elif a[0] == "L" and (a[1].startswith("IT") or a[1].startswith("OT")):
+        ENV[a[1]] = (float(a[2]), float(a[3]), 0.0, float(a[4]))
+
+
+BARREL = ["IT1", "IT2", "IT3", "IT4", "OT1", "OT2", "OT3", "OT4", "OT5", "OT6"]
 
 
 def disc(lay):
-    """(family, index) of an mkFit pixel-disc layer, both sides folded"""
+    """(family, index) of an mkFit pixel-disc layer, both sides folded; ("BRL", i) for the barrel, i indexing BARREL"""
+    if 0 <= lay <= 3:
+        return ("BRL", lay)
+    if 4 <= lay <= 15:
+        return ("BRL", 4 + (lay - 4) // 2)
     l = lay if lay < 38 else lay - 22
     if 16 <= l <= 23:
         return ("TFPX", l - 16 + 1)
@@ -74,7 +84,11 @@ for fn in sys.argv[3:]:
             if da is None or db is None or da[0] != db[0] or db[1] != da[1] + 1:
                 continue
             fam = da[0]
-            src, dst = f"{fam}{da[1]}", f"{fam}{db[1]}"
+            if fam == "BRL":
+                src, dst = BARREL[da[1]], BARREL[db[1]]
+                fam = f"BRL {src}->{dst}"
+            else:
+                src, dst = f"{fam}{da[1]}", f"{fam}{db[1]}"
             nstep[fam] += 1
             for (tt, r, z, x) in pieces:
                 if ta <= tt <= tb:
