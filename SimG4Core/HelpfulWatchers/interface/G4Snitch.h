@@ -201,7 +201,7 @@ private:
   // are summed relative to the first step of the sum, which keeps the RMS precise far from the origin.
   struct InertAcc {
     int slot, vol, n;
-    double e, niel, ref[4], sw[4], sw2[4];
+    double e, niel, ref[4], s1[4], s2[6], s2t;  // s2: xx, yy, zz, xy, xz, yz
   };
   std::unordered_map<uint64_t, int> m_inert_acc_index;
   std::vector<InertAcc> m_inert_acc;

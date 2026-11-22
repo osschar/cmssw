@@ -28,7 +28,7 @@ void g4s_sums(const char *fn) {
         ++n_sums; e_all += is.m_edep.m_total;
         e_mat[vm[is.m_volume]] += is.m_edep.m_total; ++n_mat[vm[is.m_volume]];
         e_vol[is.m_volume] += is.m_edep.m_total;
-        rms_sum += is.m_edep.m_total * std::sqrt(is.m_x_rms.fX * is.m_x_rms.fX + is.m_x_rms.fY * is.m_x_rms.fY + is.m_x_rms.fZ * is.m_x_rms.fZ);
+        rms_sum += is.m_edep.m_total * std::sqrt(is.m_cov[0] + is.m_cov[1] + is.m_cov[2]);
       }
     }
   }

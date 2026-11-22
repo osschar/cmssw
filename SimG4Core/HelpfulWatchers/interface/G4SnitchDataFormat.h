@@ -133,6 +133,8 @@ struct G4S_Step {
   // To add: process type at step-end
   // Also, do we need to filter by process type in the snitch?
   int      m_g4_pid;   // G4 particle id -- to distinguish this particle or untracked secondaries.
+  int      m_pdg {0};    // the stepping particle's PDG code
+  int      m_proc {-1};  // the process that ended the step: an index into the file's process table, tree "P"
   int      m_volume {-1};  // the placement of the step's pre-step point: index into the volume table, tree "V"
   // Sensitive steps: the DetId that the volume's CMS sensitive detector gives the step (its setDetUnitId(), as for
   // its own hits; G4Snitch parameter sensitive_det_id, on by default). 0 for inert steps, with the option off, or
@@ -177,10 +179,13 @@ struct G4S_PathBField {
 // inert_aggregate_descendants, on by default; the descendants' inert steps are then not stored one by one). A volume
 // is a placement: a physical volume with the copy numbers of its whole path from the world, an entry of the file's
 // volume table, tree "V" (idx, path, material, x0, lambda (nuclear interaction length, cm) and density, the volume's
-// origin in global coordinates, and sd,
-// the volume's sensitive detector: an index into tree "D" (idx, name, class), -1 for an inert volume). A
-// step is counted when its deposit is above zero and at least inert_step_ecut. Position (cm) and time (ns) are the
-// deposit-weighted mean and RMS, per coordinate, of the steps' midpoints. Deposits in MeV.
+// origin in global coordinates, and sd, the volume's sensitive detector: an index into tree "D" (idx, name, class),
+// -1 for an inert volume). A step is counted when its deposit is above zero and at least inert_step_ecut. A sum
+// holds the steps' count, their deposit-weighted mean (cm, ns), the deposit-weighted spatial covariance (cm2) and
+// the time RMS (ns). A step of a charged track counts as its segment, the deposit spread evenly from begin to end:
+// its midpoint, plus D D^T / 12 to the covariance (D = end - begin); a step of a neutral track has no continuous
+// loss, so its deposit counts as a point at its end. Deposits in MeV. To merge sums k: m = sum w_k m_k / W,
+// C = sum w_k (C_k + (m_k - m)(m_k - m)^T) / W.
 
 struct G4S_InertSum {
   using Vec4D = ROOT::Experimental::REveVector4D;
@@ -188,7 +193,8 @@ struct G4S_InertSum {
   int      m_n_steps {0};
   G4S_EDep m_edep;
   Vec4D    m_x_mean;
-  Vec4D    m_x_rms;
+  float    m_cov[6] {0, 0, 0, 0, 0, 0};  // xx, yy, zz, xy, xz, yz
+  float    m_t_rms {0};
 };
 
 // Step and EDep storage, one per Particle.

@@ -233,14 +233,30 @@ void G4Snitch::add_inert_step(int slot, const G4Step *step, double tot, double n
   const int vol = volume_index(sp1);
   const uint64_t key = ((uint64_t)(uint32_t)slot << 32) | (uint64_t)(uint32_t)vol;
   const G4ThreeVector &p1 = sp1->GetPosition(), &p2 = sp2->GetPosition();
-  const double x[4] = {0.5 * Pos_fac * (p1.x() + p2.x()), 0.5 * Pos_fac * (p1.y() + p2.y()),
-                       0.5 * Pos_fac * (p1.z() + p2.z()), 0.5 * (sp1->GetGlobalTime() + sp2->GetGlobalTime())};
+  // A charged track's deposit is spread along its step: the midpoint, and the segment's own spread D D^T / 12. A
+  // neutral track has no continuous loss: its deposit is local, at the step's end.
+  const bool charged = step->GetTrack()->GetDefinition()->GetPDGCharge() != 0;
+  double x[4], dd[3] = {0, 0, 0};
+  if (charged) {
+    x[0] = 0.5 * Pos_fac * (p1.x() + p2.x());
+    x[1] = 0.5 * Pos_fac * (p1.y() + p2.y());
+    x[2] = 0.5 * Pos_fac * (p1.z() + p2.z());
+    x[3] = 0.5 * (sp1->GetGlobalTime() + sp2->GetGlobalTime());
+    dd[0] = Pos_fac * (p2.x() - p1.x());
+    dd[1] = Pos_fac * (p2.y() - p1.y());
+    dd[2] = Pos_fac * (p2.z() - p1.z());
+  } else {
+    x[0] = Pos_fac * p2.x();
+    x[1] = Pos_fac * p2.y();
+    x[2] = Pos_fac * p2.z();
+    x[3] = sp2->GetGlobalTime();
+  }
   int ai;
   auto it = m_inert_acc_index.find(key);
   if (it == m_inert_acc_index.end()) {
     ai = (int)m_inert_acc.size();
     m_inert_acc_index.emplace(key, ai);
-    InertAcc a{slot, vol, 0, 0, 0, {x[0], x[1], x[2], x[3]}, {0, 0, 0, 0}, {0, 0, 0, 0}};
+    InertAcc a{slot, vol, 0, 0, 0, {x[0], x[1], x[2], x[3]}, {0, 0, 0, 0}, {0, 0, 0, 0, 0, 0}, 0};
     m_inert_acc.push_back(a);
   } else {
     ai = it->second;
@@ -249,11 +265,15 @@ void G4Snitch::add_inert_step(int slot, const G4Step *step, double tot, double n
   ++a.n;
   a.e += tot;
   a.niel += niel;
+  double d[4];
   for (int k = 0; k < 4; ++k) {
-    const double d = x[k] - a.ref[k];
-    a.sw[k] += tot * d;
-    a.sw2[k] += tot * d * d;
+    d[k] = x[k] - a.ref[k];
+    a.s1[k] += tot * d[k];
   }
+  static const int ci[6] = {0, 1, 2, 0, 0, 1}, cj[6] = {0, 1, 2, 1, 2, 2};
+  for (int c = 0; c < 6; ++c)
+    a.s2[c] += tot * (d[ci[c]] * d[cj[c]] + dd[ci[c]] * dd[cj[c]] / 12.0);
+  a.s2t += tot * d[3] * d[3];
 }
 
 void G4Snitch::flush_inert_sums() {
@@ -263,16 +283,19 @@ void G4Snitch::flush_inert_sums() {
     is.m_volume = a.vol;
     is.m_n_steps = a.n;
     is.m_edep.set_edep(a.e, a.niel);
-    double m[4], r[4];
-    for (int k = 0; k < 4; ++k) {
-      const double mu = a.sw[k] / a.e;
-      m[k] = a.ref[k] + mu;
-      r[k] = std::sqrt(std::max(0.0, a.sw2[k] / a.e - mu * mu));
+    double mu[4];
+    for (int k = 0; k < 4; ++k)
+      mu[k] = a.s1[k] / a.e;
+    is.m_x_mean.Set(a.ref[0] + mu[0], a.ref[1] + mu[1], a.ref[2] + mu[2]);
+    is.m_x_mean.fT = a.ref[3] + mu[3];
+    static const int ci[6] = {0, 1, 2, 0, 0, 1}, cj[6] = {0, 1, 2, 1, 2, 2};
+    for (int c = 0; c < 6; ++c) {
+      double v = a.s2[c] / a.e - mu[ci[c]] * mu[cj[c]];
+      if (c < 3 && v < 0)
+        v = 0;
+      is.m_cov[c] = v;
     }
-    is.m_x_mean.Set(m[0], m[1], m[2]);
-    is.m_x_mean.fT = m[3];
-    is.m_x_rms.Set(r[0], r[1], r[2]);
-    is.m_x_rms.fT = r[3];
+    is.m_t_rms = std::sqrt(std::max(0.0, a.s2t / a.e - mu[3] * mu[3]));
     particle_steps(a.slot).m_inert_sums.emplace_back(is);
   }
   m_inert_acc.clear();
@@ -676,6 +699,8 @@ void G4Snitch::update(const G4Step *iStep)
       }
       step.m_edep.set_edep(tot, niel);
       step.m_g4_pid = iTrk->GetTrackID();
+      step.m_pdg = iTrk->GetDefinition()->GetPDGEncoding();
+      step.m_proc = process_index(sp2->GetProcessDefinedStep());
       step.m_x0_beg = m_mat_x0;
       step.m_lambda_beg = m_mat_lambda;
       if (is_sensitive) {
