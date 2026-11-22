@@ -38,4 +38,5 @@ Run in the area's environment on uaf-4 (`/ceph/users/matevz/g4snitch-2026-11/env
   arriving at the destination hit (the module's MediumProperties radl, and the (|z|, r) grid, times p/|p.n|). GEO is
   mkFit's geometry dumped by `../geo/dump_mkfit_geo.C` (Ceph `T1/mat/mkfit_geo_D121.root`). `g4s_tkmat_sum.py
   OUT...`: per |eta| bin and per arrival at a physical layer. `g4s_tkmat_vol.py ETAMIN ETAMAX FILE...`: the true X0
-  between the first and the last hit per Geant4 volume (module parts grouped per sub-detector).
+  between the first and the last hit per Geant4 volume (module parts grouped per sub-detector). `g4s_tkmat_once.py
+  OUT...`: the per-track material with the stack value of PS/2S modules applied per sensor (as mkFit does) and once.
