@@ -55,10 +55,30 @@
 //   "Geometry", one entry per distinct geom_md5 in the file, written with the
 //   first event that has it: md5, version, and bin, the bytes of that file.
 //
+// - the origin of each hit's charge, written by writeHitOrigin() when a module
+//   gives it (TraceHitOriginTables below; cmsRun: MkFitTraceHitOrigin), keyed
+//   like the records. It needs the simulation's sim hits, sim tracks and
+//   digi-sim links, not the TrackingParticles.
+//   "TruthHitOrigin", one entry per layer: layer, n_hits (1 + the largest
+//   index of a hit in the layer), and per hit with simulated charge (at least
+//   one digi-sim link on its cluster), in index order: hit (its index, as the
+//   records use it), sim (the sim track, an index into SimTracks, of the
+//   signal SimTrack with most of the hit's charge; -1 when none or when the
+//   job had no TrackingParticles), f_own, f_sec, f_pu and f_unm (fractions of
+//   the hit's charge: ionisation by a SimTrack's own particle; by a secondary
+//   that is not a SimTrack but carries a SimTrack's id or the id of no
+//   SimTrack; by pileup, whose sim hits the job does not have; signal charge
+//   whose sim hit was not found; the rest is charge without a link, noise),
+//   cls (the largest of own, secondary and unknown = pileup + unmatched:
+//   1, 2, 3; 0 when all three are 0), sec_pdg and sec_proc (the particle type
+//   and the creating process of the secondary sim hit with most charge in the
+//   hit, 0 and 0 when none).
+//
 // "pass" counts how often the same (run, lumi, event, module) was written in
 // this job, from 0: a looper re-running an event gives passes 0, 1, ... The
 // truth tables count their passes on their own, in the order of the
-// writeTruth() calls, and so do the input tables (writeInputs()).
+// writeTruth() calls, and so do the input tables (writeInputs()) and the hit
+// origin (writeHitOrigin()).
 //
 // Writing. With Options::threads > 0, write() takes the store's seven record
 // vectors by swapping them with empty ones (the vectors are mutable members),
@@ -150,6 +170,27 @@ namespace mkfit_fwff {
     const std::vector<std::uint8_t>* geom_bin = nullptr;
   };
 
+  // The origin of each hit's charge in one traced event, for TraceRNTupleWriter::writeHitOrigin(); the RNTuple
+  // TruthHitOrigin is described above.
+  struct TraceHitOriginTables {
+    unsigned int run = 0, lumi = 0;
+    unsigned long long event = 0;
+    std::string module;  // label of the MkFitProducer the table is for
+
+    enum Class : std::uint8_t { kNone = 0, kOwn = 1, kSecondary = 2, kUnknown = 3 };
+
+    struct LayerHits {
+      int layer = -1;
+      int n_hits = 0;                 // 1 + the largest index of a hit in the layer
+      std::vector<std::int32_t> hit;  // indices of the hits with simulated charge
+      std::vector<std::int32_t> sim;  // the sim track of the signal SimTrack with most charge, -1 none
+      std::vector<float> f_own, f_sec, f_pu, f_unm;
+      std::vector<std::uint8_t> cls;
+      std::vector<std::int32_t> sec_pdg, sec_proc;
+    };
+    std::vector<LayerHits> layers;
+  };
+
   class TraceRNTupleWriter {
   public:
     static constexpr const char* kEventsName = "Events";
@@ -198,6 +239,9 @@ namespace mkfit_fwff {
     // Appends the input tables of one event, in the caller, and the geometry when its md5 is new to the file.
     // Returns their pass; geomWritten tells whether the geometry was written. Thread safe.
     int writeInputs(const TraceInputTables& inputs, bool* geomWritten = nullptr);
+
+    // Appends the hit-origin table of one event, in the caller. Returns its pass. Thread safe.
+    int writeHitOrigin(const TraceHitOriginTables& origin);
 
     // Writes the queued events, commits every RNTuple and closes the file; write() afterwards throws. Called by the
     // destructor if not called before.

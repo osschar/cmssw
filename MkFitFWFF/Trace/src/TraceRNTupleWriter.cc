@@ -99,6 +99,8 @@ namespace mkfit_fwff {
       // mkFit's inputs, in writeInputs() only; writeGeom: the Geometry RNTuple gets the tables' geometry.
       const TraceInputTables* inputs = nullptr;
       bool writeGeom = false;
+      // The hit origin, in writeHitOrigin() only.
+      const TraceHitOriginTables* origin = nullptr;
 
       Clock::time_point tCall;
       double takeMs = 0;
@@ -462,6 +464,47 @@ namespace mkfit_fwff {
       }
     };
 
+    // TruthHitOrigin: one entry per layer of the batch's hit-origin table.
+    class HitOriginTuple : public Tuple {
+    public:
+      HitOriginTuple(TDirectory& dir, const TraceRNTupleWriter::Options& o) {
+        auto model = ROOT::RNTupleModel::Create();
+        makeKeyFields(*model);
+        model->MakeField<std::int32_t>("layer");
+        model->MakeField<std::int32_t>("n_hits", "1 + the largest index of a hit in the layer");
+        model->MakeField<std::vector<std::int32_t>>("hit", "indices of the hits with simulated charge");
+        model->MakeField<std::vector<std::int32_t>>(
+            "sim", "the sim track (index into SimTracks) of the signal SimTrack with most of the charge, -1 none");
+        model->MakeField<std::vector<float>>("f_own", "charge fraction from a SimTrack's own particle");
+        model->MakeField<std::vector<float>>("f_sec", "charge fraction from a secondary that is no SimTrack");
+        model->MakeField<std::vector<float>>("f_pu", "charge fraction from pileup (no sim hits in the job)");
+        model->MakeField<std::vector<float>>("f_unm", "signal charge fraction whose sim hit was not found");
+        model->MakeField<std::vector<std::uint8_t>>("cls", "the largest of 1 own, 2 secondary, 3 unknown; 0 none");
+        model->MakeField<std::vector<std::int32_t>>("sec_pdg", "particle type of the largest secondary, 0 none");
+        model->MakeField<std::vector<std::int32_t>>("sec_proc", "its creating process (G4 subtype), 0 none");
+        open(std::move(model), "TruthHitOrigin", dir, o);
+      }
+
+    private:
+      void fillRows(const Batch& b, std::mutex& fileMutex) override {
+        bindKey(*m_entry, b);
+        for (const auto& l : b.origin->layers) {
+          m_entry->BindRawPtr("layer", &l.layer);
+          m_entry->BindRawPtr("n_hits", &l.n_hits);
+          m_entry->BindRawPtr("hit", &l.hit);
+          m_entry->BindRawPtr("sim", &l.sim);
+          m_entry->BindRawPtr("f_own", &l.f_own);
+          m_entry->BindRawPtr("f_sec", &l.f_sec);
+          m_entry->BindRawPtr("f_pu", &l.f_pu);
+          m_entry->BindRawPtr("f_unm", &l.f_unm);
+          m_entry->BindRawPtr("cls", &l.cls);
+          m_entry->BindRawPtr("sec_pdg", &l.sec_pdg);
+          m_entry->BindRawPtr("sec_proc", &l.sec_proc);
+          fillOne(fileMutex);
+        }
+      }
+    };
+
   }  // namespace
 
   struct TraceRNTupleWriter::Impl {
@@ -482,6 +525,10 @@ namespace mkfit_fwff {
     std::mutex inputMutex;
     std::map<std::tuple<std::uint32_t, std::uint32_t, std::uint64_t, std::string>, int> inputPasses;
     std::set<std::string> geomMd5s;  // the geometries in Geometry
+    // The hit-origin RNTuple, filled by writeHitOrigin() in its caller, one call at a time (originMutex).
+    std::unique_ptr<Tuple> originTuple;
+    std::mutex originMutex;
+    std::map<std::tuple<std::uint32_t, std::uint32_t, std::uint64_t, std::string>, int> originPasses;
 
     // mutex guards everything below; fileMutex the writing into the file.
     std::mutex mutex;
@@ -607,6 +654,7 @@ namespace mkfit_fwff {
     auto inHits = std::make_unique<HitsTuple>(dir, I.opt);
     auto inputs = std::make_unique<InputsTuple>(dir, I.opt);
     auto geometry = std::make_unique<GeometryTuple>(dir, I.opt);
+    auto origin = std::make_unique<HitOriginTuple>(dir, I.opt);
     I.fileOrder = {metas.get(),
                    stages.get(),
                    states.get(),
@@ -622,7 +670,8 @@ namespace mkfit_fwff {
                    truthSeeds.get(),
                    inHits.get(),
                    inputs.get(),
-                   geometry.get()};
+                   geometry.get(),
+                   origin.get()};
     I.tuples.push_back(std::move(searches));
     I.tuples.push_back(std::move(states));
     I.tuples.push_back(std::move(hits));
@@ -639,6 +688,7 @@ namespace mkfit_fwff {
     I.inputTuples.push_back(std::move(inHits));
     I.inputTuples.push_back(std::move(inputs));
     I.inputTuples.push_back(std::move(geometry));
+    I.originTuple = std::move(origin);
 
     if (I.opt.threads > 0) {
       const int n = std::min<int>(I.opt.threads, I.tuples.size());
@@ -801,6 +851,27 @@ namespace mkfit_fwff {
     return b.pass;
   }
 
+  int TraceRNTupleWriter::writeHitOrigin(const TraceHitOriginTables& origin) {
+    Impl& I = *m_impl;
+    std::lock_guard<std::mutex> originLock(I.originMutex);
+    Batch b;
+    {
+      std::lock_guard<std::mutex> lock(I.mutex);
+      if (I.closed)
+        throw std::runtime_error("TraceRNTupleWriter::writeHitOrigin after close");
+      if (I.error)
+        std::rethrow_exception(I.error);
+      b.module = origin.module;
+      b.pass = I.originPasses[{origin.run, origin.lumi, origin.event, b.module}]++;
+    }
+    b.run = origin.run;
+    b.lumi = origin.lumi;
+    b.event = origin.event;
+    b.origin = &origin;
+    I.originTuple->fill(b, I.fileMutex);
+    return b.pass;
+  }
+
   void TraceRNTupleWriter::close() {
     if (!m_impl)
       return;
@@ -819,9 +890,11 @@ namespace mkfit_fwff {
     I.workers.clear();
 
     {
-      // No writeTruth() or writeInputs() is filling their RNTuples any more: they check closed under the same locks.
+      // No writeTruth(), writeInputs() or writeHitOrigin() is filling their RNTuples any more: they check closed under
+      // the same locks.
       std::lock_guard<std::mutex> truthLock(I.truthMutex);
       std::lock_guard<std::mutex> inputLock(I.inputMutex);
+      std::lock_guard<std::mutex> originLock(I.originMutex);
       std::lock_guard<std::mutex> lock(I.fileMutex);
       TDirectory::TContext context;
       // Destroying a writer commits its RNTuple into the file.
@@ -831,6 +904,7 @@ namespace mkfit_fwff {
       I.tuples.clear();
       I.truthTuples.clear();
       I.inputTuples.clear();
+      I.originTuple.reset();
       I.file->Close();
       I.file.reset();
     }

@@ -23,8 +23,9 @@
 // RNTuples; done_ms: from the sink's call until the event was written.
 //
 // Modules in this plugin library reach the service as edm::Service<mkfit_fwff::MkFitTraceWriter>: MkFitTraceTruth
-// gives it the truth of each traced event (writeTruth()), and MkFitTraceInputs mkFit's inputs of it (writeInputs():
-// the hits, the beam spot, the dead bins, the geometry), which it writes into the same file.
+// gives it the truth of each traced event (writeTruth()), MkFitTraceInputs mkFit's inputs of it (writeInputs():
+// the hits, the beam spot, the dead bins, the geometry), and MkFitTraceHitOrigin the origin of each hit's charge
+// (writeHitOrigin()), which it writes into the same file.
 
 #include "FWCore/ParameterSet/interface/ConfigurationDescriptions.h"
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
@@ -52,6 +53,10 @@ namespace mkfit_fwff {
     // Writes mkFit's inputs of one traced event into the trace file (TraceRNTupleWriter::writeInputs()). Thread
     // safe. Throws when the writer is not open (a build without the trace).
     int writeInputs(const TraceInputTables& inputs, bool* geomWritten = nullptr);
+
+    // Writes the origin of each hit's charge of one traced event into the trace file
+    // (TraceRNTupleWriter::writeHitOrigin()). Thread safe. Throws when the writer is not open.
+    int writeHitOrigin(const TraceHitOriginTables& origin);
 
   private:
     void eventDone(const mkfit::TraceStore& records, const TraceRNTupleWriter::EventDone& done);

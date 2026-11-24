@@ -18,8 +18,11 @@
   <use name="RecoTracker/Record"/>
   <use name="SimDataFormats/Associations"/>
   <use name="SimDataFormats/EncodedEventId"/>
+  <use name="SimDataFormats/Track"/>
   <use name="SimDataFormats/TrackerDigiSimLink"/>
   <use name="SimDataFormats/TrackingAnalysis"/>
+  <use name="SimDataFormats/TrackingHit"/>
+  <use name="SimDataFormats/Vertex"/>
   <use name="SimTracker/TrackAssociation"/>
   <use name="SimTracker/TrackerHitAssociation"/>
   <flags EDM_PLUGIN="1"/>

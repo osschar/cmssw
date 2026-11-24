@@ -96,6 +96,12 @@ namespace mkfit_fwff {
     return writer_->writeInputs(inputs, geomWritten);
   }
 
+  int MkFitTraceWriter::writeHitOrigin(const TraceHitOriginTables& origin) {
+    if (!writer_)
+      throw cms::Exception("LogicError") << "MkFitTraceWriter: the trace file is not open";
+    return writer_->writeHitOrigin(origin);
+  }
+
   void MkFitTraceWriter::finish() {
     if (!writer_)
       return;
