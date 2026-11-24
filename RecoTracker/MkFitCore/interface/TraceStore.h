@@ -17,6 +17,8 @@
 #include "ROOT/REveVector.hxx"
 
 #include <cassert>
+#include <functional>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -477,6 +479,33 @@ namespace mkfit {
       return ku.id;
     }
   };
+
+  class Track;
+
+  //==============================================================================
+  // The trace sink -- how a store leaves the event. The CMSSW producer calls the
+  // registered sink at the end of each event with its stream's store and what
+  // it knows about the event; a writer outside MkFitCore registers it. MkFitCore
+  // itself does no I/O. Defined in src/TraceStore.cc (MKFIT_TRACE builds only).
+  //
+  // Not thread safe: set the sink before the first event and clear it after the
+  // last one. The sink itself is called from every stream and must lock.
+  //==============================================================================
+
+  struct TraceEventInfo {
+    unsigned int run = 0;
+    unsigned int lumi = 0;
+    unsigned long long event = 0;
+    std::string_view module;                         // label of the producing module
+    int n_seeds_in = 0;                              // seeds given to mkFit
+    const std::vector<Track> *seeds = nullptr;       // after cleaning: TrCandMeta::seed indexes these
+    const std::vector<Track> *out_tracks = nullptr;  // mkFit's output, after the duplicate cleaner
+  };
+
+  using TraceSink = std::function<void(const TraceStore &, const TraceEventInfo &)>;
+
+  void set_trace_sink(TraceSink sink);
+  const TraceSink &trace_sink();
 
 }  // namespace mkfit
 
