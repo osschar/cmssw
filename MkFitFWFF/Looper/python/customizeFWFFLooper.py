@@ -57,10 +57,10 @@ The looper forces one stream, one concurrent lumi and one concurrent run; the nu
 reopens the input and every output: a PoolOutputModule writes out.root, out001.root, ...; drop outputs that are not
 needed.
 
-A module whose type the framework resolves at run time ('X@alpaka', e.g. LST's modules) cannot be rebuilt: the
-framework's replacement factory looks up the unresolved type and returns nothing, and the job crashed in
-ModuleRegistry::replaceModule. The looper refuses such an edit (an exception in the scripted mode, an error status in
-the interactive mode).
+A module whose type the framework resolves at run time ('X@alpaka', e.g. LST's modules) can be rebuilt with the
+framework of this branch: its ModuleRegistry::replaceModule resolves the type as the module's construction did. An
+edit that changes the resolved type, e.g. the Alpaka backend through 'alpaka', is refused with an exception (an error
+status in the interactive mode). The IB's framework crashes on such a module.
 
 Interactive mode (controlDir set, edits empty): the looper is driven from outside, as a viewer would drive it.
 

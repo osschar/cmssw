@@ -546,17 +546,10 @@ edm::ParameterSet FWFFMkFitLooper::prepareModuleEdit(Edit const& edit, std::vect
       throw cms::Exception("FWFFMkFitLooper") << "no ED module with label '" << edit.moduleLabel << "' in the job";
     }
   }
-  // ModuleHolderFactory::makeReplacementModule looks the maker up by the configured type as it is. A type resolved
-  // at run time ("X@alpaka" becomes e.g. "alpaka_serial_sync::X") is not found there, the factory returns no
-  // module, and ModuleRegistry::replaceModule dereferences it (measured: a segmentation fault when rebuilding
-  // hltLST, LSTProducer@alpaka). Refuse such modules instead.
-  std::string const type = current->getParameter<std::string>("@module_type");
-  if (type.find('@') != std::string::npos) {
-    throw cms::Exception("FWFFMkFitLooper")
-        << "module '" << edit.moduleLabel << "' has the type '" << type
-        << "', which the framework resolves at run time; ModuleChanger cannot rebuild such a module (the "
-           "replacement factory looks up the unresolved type and returns nothing)";
-  }
+  // A module whose type the framework resolves at run time ("X@alpaka" becomes e.g. "alpaka_serial_sync::X") needs
+  // this branch's ModuleRegistry::replaceModule, which resolves the type as the construction did and refuses a
+  // change of the resolved type (e.g. of the Alpaka backend) with an exception; the IB's framework crashes on such a
+  // module.
 
   std::ostringstream log;
   edm::ParameterSet next;
