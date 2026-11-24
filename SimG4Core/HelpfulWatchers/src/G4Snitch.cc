@@ -117,7 +117,7 @@ G4Snitch::G4Snitch(const edm::ParameterSet &pSet)
         m_output_inert_steps(pSet.getUntrackedParameter<bool>("output_inert_steps", true)),
         m_sensitive_step_ecut(pSet.getUntrackedParameter<double>("sensitive_step_ecut", 0.0)),
         m_output_sensitive_zero_steps(pSet.getUntrackedParameter<bool>("output_sensitive_zero_steps", false)),
-        m_inert_step_ecut(pSet.getUntrackedParameter<double>("inert_step_ecut", 1e-6)),
+        m_inert_step_ecut(pSet.getUntrackedParameter<double>("inert_step_ecut", 1e-5)),
         m_inert_aggregate_descendants(pSet.getUntrackedParameter<bool>("inert_aggregate_descendants", true)),
         m_sensitive_det_id(pSet.getUntrackedParameter<bool>("sensitive_det_id", true)),
         m_no_det_id_volumes(pSet.getUntrackedParameter<std::vector<std::string>>(
@@ -133,6 +133,8 @@ G4Snitch::G4Snitch(const edm::ParameterSet &pSet)
   m_select_cone = pSet.getUntrackedParameter<std::vector<double>>("select_cone", std::vector<double>());
   m_track_ekin_cut = pSet.getUntrackedParameter<double>("track_ekin_cut", 10.0);
   m_last_state_ekin_cut = pSet.getUntrackedParameter<double>("last_state_ekin_cut", 1.0);
+  m_track_unstable_always = pSet.getUntrackedParameter<bool>("track_unstable_always", true);
+  m_positron_by_total_energy = pSet.getUntrackedParameter<bool>("positron_by_total_energy", true);
   m_pset_dump = pSet.dump();
   // 2025-04-18 Linking through BuildFile.xml no longer works (-Wl,--as-needed)
   // so we just pull the dicts in here.
@@ -502,10 +504,13 @@ void G4Snitch::write_config_tree() {
   put("select_cone", vec(m_select_cone));
   put("track_ekin_cut", num(m_track_ekin_cut) + " MeV");
   put("last_state_ekin_cut", num(m_last_state_ekin_cut) + " MeV");
+  put("track_unstable_always", b2yn(m_track_unstable_always));
+  put("positron_by_total_energy", b2yn(m_positron_by_total_energy));
   put("rule.tracked",
-      "a particle gets its own G4S_Particle if it is unstable and not a neutron (any energy), or a positron with "
-      "total energy >= track_ekin_cut, or has kinetic energy >= track_ekin_cut at creation; otherwise its steps are "
-      "filed under its nearest tracked ancestor (filter())");
+      "a particle gets its own G4S_Particle if it is unstable and not a neutron (any energy; only with "
+      "track_unstable_always), or a positron with total energy >= track_ekin_cut (only with "
+      "positron_by_total_energy), or has kinetic energy >= track_ekin_cut at creation; otherwise its steps are filed "
+      "under its nearest tracked ancestor (filter())");
   put("units", "positions cm, time ns, momenta and energies GeV, deposits MeV, field T, x0 and lambda cm");
   put("pset", m_pset_dump);
   const char *base = std::getenv("CMSSW_BASE");
@@ -546,9 +551,9 @@ bool G4Snitch::filter(const G4Track *t) const {
   // ? filter neutrinos
   // ? filter low-E neutrons (considered NOT stable)
   const G4ParticleDefinition* pd = t->GetParticleDefinition();
-  if ( ! pd->GetPDGStable() && pd->GetPDGEncoding() != 2112)
+  if (m_track_unstable_always && !pd->GetPDGStable() && pd->GetPDGEncoding() != 2112)
     return false;
-  if (pd->GetPDGEncoding() == -11 && t->GetTotalEnergy() >= m_track_ekin_cut)
+  if (m_positron_by_total_energy && pd->GetPDGEncoding() == -11 && t->GetTotalEnergy() >= m_track_ekin_cut)
     return false;
   return t->GetKineticEnergy() < m_track_ekin_cut;
 }

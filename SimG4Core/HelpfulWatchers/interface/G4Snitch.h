@@ -143,6 +143,10 @@ private:
   // filter()); below last_state_ekin_cut its m_x_last / m_p_last are no longer updated.
   double m_track_ekin_cut = 10.0;
   double m_last_state_ekin_cut = 1.0;
+  // The two rules of filter() before the energy cut: unstable particles other than neutrons are tracked at any
+  // energy (track_unstable_always); positrons are cut on total, not kinetic, energy (positron_by_total_energy).
+  bool m_track_unstable_always = true;
+  bool m_positron_by_total_energy = true;
   // The parameter set as given, written with the values in use into the configuration tree "C".
   std::string m_pset_dump;
   edm::ESGetToken<MagneticField, IdealMagneticFieldRecord> m_bfield_token;

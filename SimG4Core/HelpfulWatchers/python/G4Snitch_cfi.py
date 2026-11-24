@@ -10,6 +10,8 @@
 #   G4SNITCH_SELECT_CONE=eta,phi,dR   write only the steps and inert sums inside the cone
 #   G4SNITCH_TRACK_EKIN_CUT=MeV       kinetic energy from which a stable particle is tracked (default 10)
 #   G4SNITCH_LAST_EKIN_CUT=MeV        kinetic energy below which a particle's last state is no longer updated (default 1)
+#   G4SNITCH_TRACK_UNSTABLE=0         unstable particles (not neutrons) only by the energy cut, not at any energy
+#   G4SNITCH_POSITRON_TOTAL=0         positrons cut on kinetic energy, like the rest, not on total energy
 # Every value in use, with the code version and these environment variables, goes into the output's tree "C".
 import os
 import FWCore.ParameterSet.Config as cms
@@ -39,6 +41,8 @@ def g4snitch_watcher(env=os.environ):
 
         track_ekin_cut = cms.untracked.double(10.0),  # MeV: a stable particle from this kinetic energy is tracked
         last_state_ekin_cut = cms.untracked.double(1.0),  # MeV: below this the last state is no longer updated
+        track_unstable_always = cms.untracked.bool(True),  # unstable particles other than neutrons: tracked always
+        positron_by_total_energy = cms.untracked.bool(True),  # positrons: the cut applies to the total energy
     )
     if env.get("G4SNITCH_BFIELD", "0") == "1":
         w.output_path_bfield = True
@@ -56,6 +60,10 @@ def g4snitch_watcher(env=os.environ):
         w.track_ekin_cut = float(env["G4SNITCH_TRACK_EKIN_CUT"])
     if env.get("G4SNITCH_LAST_EKIN_CUT"):
         w.last_state_ekin_cut = float(env["G4SNITCH_LAST_EKIN_CUT"])
+    if env.get("G4SNITCH_TRACK_UNSTABLE", "1") == "0":
+        w.track_unstable_always = False
+    if env.get("G4SNITCH_POSITRON_TOTAL", "1") == "0":
+        w.positron_by_total_energy = False
     if env.get("G4SNITCH_SELECT_CONE"):
         w.select_cone = cms.untracked.vdouble([float(x) for x in env["G4SNITCH_SELECT_CONE"].split(",")])
     return w
