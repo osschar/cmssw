@@ -1,13 +1,32 @@
 #!/usr/bin/env python3
-"""g4s_mt_check.py A.root -- B.root...: the snitch's output of one job (A, e.g. one thread) against another split over
-several files (B, e.g. G4Snitch_t*.root of a multi-threaded job), event by event, matched by branch "ev" (the CMSSW
-event number). Per event it compares the counts of particles, stored sensitive and inert steps, inert sums and path
-points, the summed deposits of the sensitive and the inert steps and of the inert sums, the summed path length
-of the paths (from the points), and the particles by (PDG code, birth process name, birth position rounded to 1 um,
-momentum rounded to 1 keV); process names come from each file's own table P, so files numbered differently compare
-equal. Prints the events only in one side and every event that differs, then a summary line."""
+"""g4s_mt_check.py A.root... -- B.root...: the snitch's output of one job (A, e.g. one thread) against another, either
+split over several files (B, e.g. G4Snitch_t*.root of a multi-threaded job) or in another format (T a TTree or an
+RNTuple, read either way), event by event, matched by "ev" (the CMSSW event number). Per event it compares the counts
+of particles, stored sensitive and inert steps, inert sums and path points, the summed deposits of the sensitive and
+the inert steps and of the inert sums, the summed path length of the paths (from the points), the particles by (PDG
+code, birth process name, birth position rounded to 1 um, momentum rounded to 1 keV), and the sensitive steps by
+(volume path, sensitive-detector name). Names come from each file's own tables P, V and D, so files numbered
+differently (a snitch's own tables, or the job's shared ones) compare equal. Prints the events only in one side and
+every event that differs, then a summary line."""
 import sys, math, collections, ROOT
 ROOT.gSystem.Load("libRootG4Snitch.so")
+
+
+def events(fn, f):
+    """(ev, p, s) for each event of the file's T, a TTree or an RNTuple; p and s are valid until the next event."""
+    t = f.Get("T")
+    if isinstance(t, ROOT.TTree):
+        if not t.GetBranch("ev"):
+            sys.exit(f"{fn}: no branch ev (written before the event number was stored)")
+        for i in range(t.GetEntries()):
+            t.GetEntry(i)
+            yield int(t.ev), t.p, t.s
+    else:
+        r = ROOT.RNTupleReader.Open("T", fn)
+        e = r.CreateEntry()
+        for i in range(r.GetNEntries()):
+            r.LoadEntry(i, e)
+            yield int(e["ev"]), e["p"], e["s"]
 
 
 def summarise(files):
@@ -15,14 +34,13 @@ def summarise(files):
     for fn in files:
         f = ROOT.TFile.Open(fn)
         P = [str(x.name) for x in f.Get("P")]
-        t = f.Get("T")
-        if not t.GetBranch("ev"):
-            sys.exit(f"{fn}: no branch ev (written before the event number was stored)")
-        for ev in t:
-            p, s = ev.p, ev.s
+        D = [str(x.name) for x in f.Get("D")]
+        V = [(str(x.path), D[x.sd] if x.sd >= 0 else "") for x in f.Get("V")]
+        for key, p, s in events(fn, f):
             n_sens = n_inert = n_sums = n_path = 0
             e_sens = e_inert = e_sums = plen = 0.0
             parts = collections.Counter()
+            vols = collections.Counter()
             for k in range(p.size()):
                 q = p[k]
                 b = q.m_x_birth
@@ -37,6 +55,7 @@ def summarise(files):
                 n_path += st.m_path.size()
                 for x in st.m_steps_sensitive:
                     e_sens += x.m_edep.m_total
+                    vols[V[x.m_volume] if x.m_volume >= 0 else ""] += 1
                 for x in st.m_steps_inert:
                     e_inert += x.m_edep.m_total
                 for x in st.m_inert_sums:
@@ -45,12 +64,11 @@ def summarise(files):
                 for i in range(path.size() - 1):
                     a, c = path[i].m_x, path[i + 1].m_x
                     plen += math.sqrt((c.fX - a.fX) ** 2 + (c.fY - a.fY) ** 2 + (c.fZ - a.fZ) ** 2)
-            key = int(ev.ev)
             if key in out:
                 print(f"event {key} twice ({fn})")
             out[key] = dict(particles=p.size(), sens=n_sens, inert=n_inert, sums=n_sums, path=n_path,
                             e_sens=round(e_sens, 6), e_inert=round(e_inert, 6), e_sums=round(e_sums, 6),
-                            plen=round(plen, 3), parts=parts)
+                            plen=round(plen, 3), parts=parts, vols=vols)
         f.Close()
     return out
 
@@ -69,7 +87,7 @@ for e in sorted(set(A) & set(B)):
     d = [k for k in a if a[k] != b[k]]
     if d:
         ndiff += 1
-        print(f"event {e}: differs in {d}: " + ", ".join(f"{k} {a[k]} / {b[k]}" for k in d if k != "parts"))
+        print(f"event {e}: differs in {d}: " + ", ".join(f"{k} {a[k]} / {b[k]}" for k in d if k not in ("parts", "vols")))
 nq = len(next(iter(A.values()))) if A else 0
 print(f"{len(set(A) & set(B))} events in both ({len(A)} in A, {len(B)} in B), {nq} quantities each; "
       f"events differing: {ndiff}")
