@@ -365,6 +365,10 @@ void G4Snitch::open_file_tree() {
   }
   m_file = TFile::Open(m_output_name.c_str(), "RECREATE");
   m_tree = new TTree("T", "G4 Dump Tree of some kind");
+  // No ROOT implicit multi-threading for the snitch's trees. CMS runs Geant4 on hand-off threads outside TBB while the
+  // TBB workers wait for them in OscarMTProducer::produce, so a basket compression handed to the TBB arena from
+  // TTree::Fill never runs and every thread waits: with 4 threads the job hung at the first EndOfEvent (2026-11-23).
+  m_tree->SetImplicitMT(false);
   m_tree->Branch("ev", &m_ev_number, "ev/I");
 
   m_info.reset(new G4S_Info);
@@ -392,6 +396,7 @@ void G4Snitch::write_tree_close_file() {
   // The process table that m_birth_proc and m_death_proc index.
   {
     TTree ptree("P", "G4Snitch process table: idx, name, type (G4ProcessType), subtype");
+    ptree.SetImplicitMT(false);
     int idx = 0, type = 0, subtype = 0;
     std::string name;
     ptree.Branch("idx", &idx);
@@ -411,6 +416,7 @@ void G4Snitch::write_tree_close_file() {
     TTree vtree("V", "G4Snitch volume table: idx, path (name:copy from the world down), material, x0 (cm), density "
                      "(g/cm3), x, y, z (cm, the volume's origin in global coordinates), sd (index into tree D, -1 for "
                      "none)");
+    vtree.SetImplicitMT(false);
     int idx = 0, sd = -1;
     std::string path, material;
     double x0 = 0, lambda = 0, density = 0, x = 0, y = 0, z = 0;
@@ -441,6 +447,7 @@ void G4Snitch::write_tree_close_file() {
   // The sensitive-detector table that the volume table's column "sd" indexes.
   {
     TTree dtree("D", "G4Snitch sensitive-detector table: idx, name, class");
+    dtree.SetImplicitMT(false);
     int idx = 0;
     std::string name, cls;
     dtree.Branch("idx", &idx);
@@ -464,6 +471,7 @@ void G4Snitch::write_tree_close_file() {
 // last sync, each the commit and the dirty files), the G4SNITCH_* environment of the job, and the versions.
 void G4Snitch::write_config_tree() {
   TTree ctree("C", "G4Snitch configuration: key, value");
+  ctree.SetImplicitMT(false);
   std::string key, value;
   ctree.Branch("key", &key);
   ctree.Branch("value", &value);
