@@ -1,5 +1,6 @@
 <library file="*.cc" name="MkFitFWFFTracePlugins">
   <use name="DataFormats/Common"/>
+  <use name="DataFormats/DetId"/>
   <use name="DataFormats/Phase2TrackerCluster"/>
   <use name="DataFormats/Phase2TrackerDigi"/>
   <use name="DataFormats/SiPixelCluster"/>
@@ -12,6 +13,9 @@
   <use name="FWCore/ParameterSet"/>
   <use name="FWCore/ServiceRegistry"/>
   <use name="FWCore/Utilities"/>
+  <use name="Geometry/CommonTopologies"/>
+  <use name="Geometry/Records"/>
+  <use name="Geometry/TrackerGeometryBuilder"/>
   <use name="MkFitFWFF/Trace"/>
   <use name="RecoTracker/MkFit"/>
   <use name="RecoTracker/MkFitCore"/>

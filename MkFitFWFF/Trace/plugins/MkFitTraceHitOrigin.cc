@@ -65,6 +65,31 @@
 // hit and each sim hit behind its signal charge (MKFITHITORIGIN-HIT, -SIMHIT lines) and every sim hit of the same
 // SimTracks on the same module (-ONMODULE lines), with their local positions against the cluster's. With
 // printUnmatched > 0, up to that many unmatched signal links with the sim hits around their index (-UNMLINK).
+//
+// The per-hit list (listPrefix not empty): three CSV files, for a comparison with Geant4's own steps (G4Snitch), which
+// know the stepping track's own id, the DetId and the global step points, but not the clusters. Every row starts with
+// tag (listTag), run, lumi, event, pass (the table's pass). Lengths in cm, in the module's local frame unless named g*.
+//   <listPrefix>hits.csv       one row per listed hit (every hit with a link): layer, idx (as in the trace file),
+//     detid, subdet, is_pixel, n_chan, charge (ADC sum, or strips); the cluster's channels as edges in the topology's
+//     measurement units, rows [row0, row1) and columns [col0, col1) (an outer-tracker cluster has one column), and the
+//     same edges in local x and y (lx0, lx1, ly0, ly1, from PixelTopology::localX/localY; the charge was deposited
+//     before the drift, so allow for the Lorentz shift); the rec hit's local position and errors (hit_lx, hit_ly,
+//     hit_ex, hit_ey) and its global position (hit_gx, hit_gy, hit_gz = Surface::toGlobal of the local one); the
+//     module's frame: origin (mod_gx, mod_gy, mod_gz) and its local axes in global coordinates (ux_*, uy_*, uz_*, the
+//     rows of Surface::rotation()), so global = origin + lx ux + ly uy + lz uz and lx = ux . (global - origin); the
+//     sensor's width, length and thickness (local z within +-thickness/2); cls, mixed (own and secondary charge both
+//     above 0), f_own, f_sec (with orphans), f_orph, f_pu, f_unm, f_noise, sim; n_simhits (signal sim hits behind the
+//     charge); the sim hit with most charge (dom_*: its track id, particle type, process, class 0 own 1 secondary
+//     2 orphan, charge share, and the type of the SimTrack with its id, 0 if none) and the secondary or orphan sim hit
+//     with most charge (sec_*, track id -1 if none).
+//   <listPrefix>simhits.csv    one row per (listed hit, signal sim hit behind its charge): layer, idx, detid, the sim
+//     hit's collection and index, track id, type, process, class, charge share, energy loss (keV), momentum (GeV),
+//     time of flight (ns), local entry and exit points, and the type and creating process of the SimTrack with its id.
+//   <listPrefix>simtracks.csv  one row per SimTrack of the event: index, track id (Geant4's), type, charge, four-momentum
+//     (GeV), its vertex (index, position, time in ns, process type, the parent's track id: SimVertex::parentIndex(),
+//     -1 for a primary), the generator particle index, and its signal sim hits in the tracker collections read.
+// Process types are Geant4 sub-types (PSimHit::processType(), SimVertex::processType()). One MKFITHITLIST line per
+// event gives the counts.
 
 #include "FWCore/Framework/interface/Event.h"
 #include "FWCore/Framework/interface/EventSetup.h"
@@ -77,12 +102,17 @@
 #include "FWCore/Utilities/interface/Exception.h"
 
 #include "DataFormats/Common/interface/DetSetVector.h"
+#include "DataFormats/DetId/interface/DetId.h"
 #include "DataFormats/Phase2TrackerCluster/interface/Phase2TrackerCluster1D.h"
 #include "DataFormats/Phase2TrackerDigi/interface/Phase2TrackerDigi.h"
 #include "DataFormats/SiPixelCluster/interface/SiPixelCluster.h"
 #include "DataFormats/SiPixelDetId/interface/PixelChannelIdentifier.h"
 #include "DataFormats/TrackerRecHit2D/interface/BaseTrackerRecHit.h"
 #include "DataFormats/TrackerRecHit2D/interface/OmniClusterRef.h"
+#include "Geometry/CommonTopologies/interface/PixelGeomDetUnit.h"
+#include "Geometry/CommonTopologies/interface/PixelTopology.h"
+#include "Geometry/Records/interface/TrackerDigiGeometryRecord.h"
+#include "Geometry/TrackerGeometryBuilder/interface/TrackerGeometry.h"
 #include "SimDataFormats/Track/interface/SimTrackContainer.h"
 #include "SimDataFormats/TrackerDigiSimLink/interface/PixelDigiSimLink.h"
 #include "SimDataFormats/TrackingAnalysis/interface/TrackingParticle.h"
@@ -102,8 +132,10 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <fstream>
 #include <iostream>
 #include <map>
+#include <mutex>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -144,6 +176,12 @@ namespace mkfit_fwff {
     const int printStride_;
     const int printUnmatched_;
     const edm::ESGetToken<MkFitGeometry, TrackerRecoGeometryRecord> mkFitGeomToken_;
+    // The per-hit list: the files, written by one event at a time.
+    const std::string listPrefix_;
+    const std::string listTag_;
+    const edm::ESGetToken<TrackerGeometry, TrackerDigiGeometryRecord> trackerGeomToken_;
+    mutable std::mutex listMutex_;
+    mutable std::ofstream listHits_, listSimHits_, listSimTracks_;
   };
 
   namespace {
@@ -179,7 +217,34 @@ namespace mkfit_fwff {
         printSecondary_(iConfig.getUntrackedParameter<int>("printSecondary")),
         printStride_(std::max(1, iConfig.getUntrackedParameter<int>("printStride"))),
         printUnmatched_(iConfig.getUntrackedParameter<int>("printUnmatched")),
-        mkFitGeomToken_(esConsumes()) {
+        mkFitGeomToken_(esConsumes()),
+        listPrefix_(iConfig.getUntrackedParameter<std::string>("listPrefix")),
+        listTag_(iConfig.getUntrackedParameter<std::string>("listTag")),
+        trackerGeomToken_(esConsumes()) {
+    if (!listPrefix_.empty()) {
+      if (listTag_.find_first_of(",\"\n") != std::string::npos)
+        throw cms::Exception("Configuration") << "MkFitTraceHitOrigin: listTag must not hold a comma, quote or newline";
+      const char* key = "tag,run,lumi,event,pass,";
+      auto open = [&](std::ofstream& f, const char* name, const char* columns) {
+        f.open(listPrefix_ + name);
+        if (!f)
+          throw cms::Exception("Configuration") << "MkFitTraceHitOrigin: cannot open " << listPrefix_ << name;
+        f << key << columns << "\n";
+      };
+      open(listHits_,
+           "hits.csv",
+           "layer,idx,detid,subdet,is_pixel,n_chan,charge,row0,row1,col0,col1,lx0,lx1,ly0,ly1,hit_lx,hit_ly,hit_ex,"
+           "hit_ey,hit_gx,hit_gy,hit_gz,mod_gx,mod_gy,mod_gz,ux_x,ux_y,ux_z,uy_x,uy_y,uy_z,uz_x,uz_y,uz_z,mod_width,"
+           "mod_length,mod_thick,cls,mixed,f_own,f_sec,f_orph,f_pu,f_unm,f_noise,sim,n_simhits,dom_trackid,dom_pdg,"
+           "dom_proc,dom_class,dom_share,dom_st_pdg,sec_trackid,sec_pdg,sec_proc,sec_class,sec_share");
+      open(listSimHits_,
+           "simhits.csv",
+           "layer,idx,detid,coll,simhit,trackid,pdg,proc,class,share,eloss_keV,p_GeV,tof_ns,entry_lx,entry_ly,entry_lz,"
+           "exit_lx,exit_ly,exit_lz,st_pdg,st_proc");
+      open(listSimTracks_,
+           "simtracks.csv",
+           "index,trackid,pdg,charge,px,py,pz,e,vert,vx,vy,vz,vt_ns,vert_proc,parent_trackid,genpart,n_tk_simhits");
+    }
     for (const edm::InputTag& t : iConfig.getParameter<std::vector<edm::InputTag>>("simHits")) {
       simHitTokens_.push_back(consumes<std::vector<PSimHit>>(t));
       simHitNames_.push_back(t.instance());
@@ -230,6 +295,9 @@ namespace mkfit_fwff {
     desc.addUntracked<int>("printStride", 1)->setComment("print every printStride-th secondary-dominated hit");
     desc.addUntracked<int>("printUnmatched", 0)
         ->setComment("print up to this many signal links whose sim hit was not found, with the sim hits around");
+    desc.addUntracked<std::string>("listPrefix", "")
+        ->setComment("write the per-hit list to <listPrefix>hits.csv, simhits.csv and simtracks.csv; empty: none");
+    desc.addUntracked<std::string>("listTag", "")->setComment("the first column of every list row, e.g. the sample");
     descriptions.add("mkFitTraceHitOrigin", desc);
   }
 
@@ -262,6 +330,7 @@ namespace mkfit_fwff {
     std::vector<const std::vector<PSimHit>*> coll(simHitTokens_.size());
     std::unordered_map<std::uint64_t, std::vector<int>> hitsOfDetColl;
     std::unordered_map<std::uint64_t, std::vector<std::pair<int, int>>> hitsOfDetTrack;
+    std::unordered_map<unsigned int, int> nSimHitsOfTrack;  // for the list's simtracks.csv
     long long nSimHits = 0;
     for (int c = 0; c < (int)coll.size(); ++c) {
       coll[c] = &iEvent.get(simHitTokens_[c]);
@@ -270,6 +339,7 @@ namespace mkfit_fwff {
         const PSimHit& h = (*coll[c])[j];
         hitsOfDetColl[detKey(h.detUnitId(), c)].push_back(j);
         hitsOfDetTrack[detKey(h.detUnitId(), h.trackId())].emplace_back(c, j);
+        ++nSimHitsOfTrack[h.trackId()];
       }
     }
     auto classify = [&](const PSimHit& h, int& ist) -> SimHitClass {
@@ -351,6 +421,16 @@ namespace mkfit_fwff {
     // 1 the index out of the module's (perModule) or the collection's (global) range, 2 the sim hit at the index on
     // another module (global), 3 another track id; and whether the module has a sim hit of the link's track id.
     long long nUnm[2][4] = {{0, 0, 0, 0}, {0, 0, 0, 0}}, nUnmTrackHere[2] = {0, 0};
+
+    // The per-hit list: rows without their key (tag, run, lumi, event, pass), written at the end of the event.
+    const bool listing = !listPrefix_.empty();
+    const TrackerGeometry* tkGeom = listing ? &iSetup.getData(trackerGeomToken_) : nullptr;
+    std::vector<std::string> rowsHits, rowsSimHits, rowsSimTracks;
+    long long nListMixed = 0, nListOwnOnly = 0, nListSecOnly = 0, nListNeither = 0;
+    auto stPdg = [&](unsigned int trackId) -> int {
+      auto f = stOfId.find(trackId);
+      return f == stOfId.end() ? 0 : simTracks[f->second].type();
+    };
 
     auto doHits = [&](const MkFitClusterIndexToHit& clusterIndex,
                       const std::vector<int>& layerOf,
@@ -536,6 +616,161 @@ namespace mkfit_fwff {
         L.sec_pdg.push_back(secPdg);
         L.sec_proc.push_back(secProc);
 
+        if (listing) {
+          const bool hasOwn = own > 0, hasSec = sec + orph > 0;
+          nListMixed += hasOwn && hasSec;
+          nListOwnOnly += hasOwn && !hasSec;
+          nListSecOnly += hasSec && !hasOwn;
+          nListNeither += !hasOwn && !hasSec;
+          // The sim hit with most charge, and the secondary or orphan one with most.
+          std::pair<int, int> dom{-1, -1}, domSec{-1, -1};
+          double domQ = -1, domSecQ = -1;
+          for (const auto& [ci, q] : shCharge) {
+            int ist;
+            const SimHitClass k = classify((*coll[ci.first])[ci.second], ist);
+            if (q > domQ) {
+              domQ = q;
+              dom = ci;
+            }
+            if (k != kShOwn && q > domSecQ) {
+              domSecQ = q;
+              domSec = ci;
+            }
+          }
+          // The cluster's channel edges, in measurement units and in the local frame; the module's frame.
+          const auto* det = dynamic_cast<const PixelGeomDetUnit*>(tkGeom->idToDetUnit(DetId(detId)));
+          if (det == nullptr)
+            throw cms::Exception("LogicError")
+                << "MkFitTraceHitOrigin: DetId " << detId << " is no pixel-type det unit";
+          const PixelTopology& topo = det->specificTopology();
+          int r0, r1, c0, c1;
+          if (pixel) {
+            const SiPixelCluster& c = cl.pixelCluster();
+            r0 = c.minPixelRow();
+            r1 = c.maxPixelRow() + 1;
+            c0 = c.minPixelCol();
+            c1 = c.maxPixelCol() + 1;
+          } else {
+            const Phase2TrackerCluster1D& c = cl.phase2OTCluster();
+            r0 = c.firstRow();
+            r1 = c.firstRow() + c.size();
+            c0 = c.column();
+            c1 = c.column() + 1;
+          }
+          const float x0 = topo.localX(r0), x1 = topo.localX(r1), y0 = topo.localY(c0), y1 = topo.localY(c1);
+          const Surface& s = det->surface();
+          const GlobalPoint& o = s.position();
+          const Surface::RotationType& R = s.rotation();
+          const LocalPoint lp = rh->localPosition();
+          const LocalError le = rh->localPositionError();
+          const GlobalPoint gp = s.toGlobal(lp);
+          auto clsOf = [&](const std::pair<int, int>& ci) {
+            int ist;
+            return ci.first < 0 ? -1 : (int)classify((*coll[ci.first])[ci.second], ist);
+          };
+          auto shOf = [&](const std::pair<int, int>& ci) -> const PSimHit* {
+            return ci.first < 0 ? nullptr : &(*coll[ci.first])[ci.second];
+          };
+          const PSimHit* hd = shOf(dom);
+          const PSimHit* hs = shOf(domSec);
+          char row[1536];
+          std::snprintf(row,
+                        sizeof(row),
+                        "%d,%d,%u,%d,%d,%zu,%.0f,%d,%d,%d,%d,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,"
+                        "%.5f,%.5f,%.5f,%.7f,%.7f,%.7f,%.7f,%.7f,%.7f,%.7f,%.7f,%.7f,%.5f,%.5f,%.5f,"
+                        "%d,%d,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,%d,%zu,%lld,%d,%d,%d,%.5f,%d,%lld,%d,%d,%d,%.5f\n",
+                        ilay,
+                        i,
+                        detId,
+                        DetId(detId).subdetId(),
+                        pixel ? 1 : 0,
+                        chans.size(),
+                        tot,
+                        r0,
+                        r1,
+                        c0,
+                        c1,
+                        std::min(x0, x1),
+                        std::max(x0, x1),
+                        std::min(y0, y1),
+                        std::max(y0, y1),
+                        lp.x(),
+                        lp.y(),
+                        std::sqrt(le.xx()),
+                        std::sqrt(le.yy()),
+                        gp.x(),
+                        gp.y(),
+                        gp.z(),
+                        o.x(),
+                        o.y(),
+                        o.z(),
+                        R.xx(),
+                        R.xy(),
+                        R.xz(),
+                        R.yx(),
+                        R.yy(),
+                        R.yz(),
+                        R.zx(),
+                        R.zy(),
+                        R.zz(),
+                        s.bounds().width(),
+                        s.bounds().length(),
+                        s.bounds().thickness(),
+                        (int)cls,
+                        hasOwn && hasSec ? 1 : 0,
+                        fOwn,
+                        fSec,
+                        orph / tot,
+                        pu / tot,
+                        unm / tot,
+                        noise / tot,
+                        sim,
+                        shCharge.size(),
+                        hd ? (long long)hd->trackId() : -1LL,
+                        hd ? hd->particleType() : 0,
+                        hd ? (int)hd->processType() : -1,
+                        clsOf(dom),
+                        hd ? domQ / tot : 0.,
+                        hd ? stPdg(hd->trackId()) : 0,
+                        hs ? (long long)hs->trackId() : -1LL,
+                        hs ? hs->particleType() : 0,
+                        hs ? (int)hs->processType() : -1,
+                        clsOf(domSec),
+                        hs ? domSecQ / tot : 0.);
+          rowsHits.emplace_back(row);
+          for (const auto& [ci, q] : shCharge) {
+            const PSimHit& h = (*coll[ci.first])[ci.second];
+            int ist;
+            const SimHitClass k = classify(h, ist);
+            const Local3DPoint en = h.entryPoint(), ex = h.exitPoint();
+            std::snprintf(row,
+                          sizeof(row),
+                          "%d,%d,%u,%s,%d,%u,%d,%d,%d,%.5f,%.3f,%.6f,%.4f,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,%d,%d\n",
+                          ilay,
+                          i,
+                          detId,
+                          simHitNames_[ci.first].c_str(),
+                          ci.second,
+                          h.trackId(),
+                          h.particleType(),
+                          (int)h.processType(),
+                          (int)k,
+                          q / tot,
+                          h.energyLoss() * 1e6,
+                          h.pabs(),
+                          h.tof(),
+                          en.x(),
+                          en.y(),
+                          en.z(),
+                          ex.x(),
+                          ex.y(),
+                          ex.z(),
+                          ist >= 0 ? simTracks[ist].type() : 0,
+                          ist >= 0 ? creatorProc(ist) : -1);
+            rowsSimHits.emplace_back(row);
+          }
+        }
+
         // Evidence for the secondary class: the hit, the sim hits behind it, the sim hits of their SimTracks here.
         if (cls != TraceHitOriginTables::kSecondary)
           continue;
@@ -644,6 +879,69 @@ namespace mkfit_fwff {
     doHits(iEvent.get(stripClusterIndexToken_), iEvent.get(stripLayerToken_), phase2Links, false);
 
     const int pass = writer->writeHitOrigin(T);
+
+    if (listing) {
+      char row[512];
+      for (int ist = 0; ist < (int)simTracks.size(); ++ist) {
+        const SimTrack& t = simTracks[ist];
+        const int v = t.vertIndex();
+        const SimVertex* sv = v >= 0 && v < (int)simVertices.size() ? &simVertices[v] : nullptr;
+        auto nsh = nSimHitsOfTrack.find(t.trackId());
+        std::snprintf(row,
+                      sizeof(row),
+                      "%d,%u,%d,%g,%.6f,%.6f,%.6f,%.6f,%d,%.5f,%.5f,%.5f,%.5f,%d,%d,%d,%d\n",
+                      ist,
+                      t.trackId(),
+                      t.type(),
+                      t.charge(),
+                      t.momentum().px(),
+                      t.momentum().py(),
+                      t.momentum().pz(),
+                      t.momentum().e(),
+                      v,
+                      sv ? sv->position().x() : 0.,
+                      sv ? sv->position().y() : 0.,
+                      sv ? sv->position().z() : 0.,
+                      sv ? sv->position().t() * 1e9 : 0.,
+                      sv ? (int)sv->processType() : -1,
+                      sv ? sv->parentIndex() : -1,
+                      t.genpartIndex(),
+                      nsh == nSimHitsOfTrack.end() ? 0 : nsh->second);
+        rowsSimTracks.emplace_back(row);
+      }
+      char key[256];
+      std::snprintf(key, sizeof(key), "%s,%u,%u,%llu,%d,", listTag_.c_str(), T.run, T.lumi, T.event, pass);
+      {
+        std::lock_guard<std::mutex> lock(listMutex_);
+        for (const std::string& r : rowsHits)
+          listHits_ << key << r;
+        for (const std::string& r : rowsSimHits)
+          listSimHits_ << key << r;
+        for (const std::string& r : rowsSimTracks)
+          listSimTracks_ << key << r;
+        listHits_.flush();
+        listSimHits_.flush();
+        listSimTracks_.flush();
+      }
+      std::snprintf(row,
+                    sizeof(row),
+                    "MKFITHITLIST %u:%u:%llu %s tag=%s pass=%d hits=%zu simhits=%zu simtracks=%zu own_only=%lld "
+                    "sec_only=%lld mixed=%lld neither=%lld\n",
+                    T.run,
+                    T.lumi,
+                    T.event,
+                    module_.c_str(),
+                    listTag_.c_str(),
+                    pass,
+                    rowsHits.size(),
+                    rowsSimHits.size(),
+                    rowsSimTracks.size(),
+                    nListOwnOnly,
+                    nListSecOnly,
+                    nListMixed,
+                    nListNeither);
+      std::cout << row;
+    }
 
     const double qTot = qOwn + qSec + qOrph + qPu + qUnm + qNoise;
     auto share = [&](double q) { return qTot > 0 ? q / qTot : 0.; };
