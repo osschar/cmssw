@@ -33,7 +33,8 @@ with "[i..j]" keys for array ranges, e.g. '{"m_layer_configs": [{"[0..3]": {"m_s
 keys stop the job. The patches accumulate too. Fields that MkFitIterationConfigESProducer sets from its own PSet after
 reading the file (minPtCut, maxClusterSize, the backward search, the low-pT duplicate cleaning, the v2p2 PSet) are
 overwritten there, so patching them in the JSON has no effect. A non-empty jsonPatch ('{}' included) has the
-framework reset TrackerRecoGeometryRecord and its dependent records before the next loop.
+framework reset MkFitIterationConfigRecord before the next loop. That record holds only the iteration configurations
+(this branch moved MkFitIterationConfigESProducer there from TrackerRecoGeometryRecord), so the geometries are kept.
 
 The JSON file: the looper rewrites the file at jsonPath, so it must be a scratch copy that
 MkFitIterationConfigESProducer reads instead of the original. edm::FileInPath accepts only files under $CMSSW_BASE,

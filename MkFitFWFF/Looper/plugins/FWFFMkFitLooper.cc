@@ -11,8 +11,8 @@
 //  - rebuild an ED module (usually MkFitProducer) from its current PSet with 'overrides' copied over it, through
 //    ModuleChanger (moduleLabel non-empty; empty overrides rebuild the module unchanged);
 //  - patch the mkFit iteration JSON at 'jsonPath' with 'jsonPatch' (mkFit's ConfigJsonPatcher syntax) and have the
-//    framework reset TrackerRecoGeometryRecord before the next loop, so that MkFitIterationConfigESProducer reads the
-//    file again;
+//    framework reset MkFitIterationConfigRecord before the next loop, so that MkFitIterationConfigESProducer reads the
+//    file again (the record holds only the iteration configurations);
 //  - do neither (re-run unchanged).
 // Module and JSON edits are cumulative: each applies to the state left by the previous ones. An edit is applied as a
 // whole or not at all: both parts are prepared and checked before either is committed.
@@ -51,7 +51,7 @@
 #include "FWCore/Utilities/interface/UnixSignalHandlers.h"
 
 #include "RecoTracker/MkFitCore/interface/IterationConfig.h"
-#include "RecoTracker/Record/interface/TrackerRecoGeometryRecord.h"
+#include "RecoTracker/MkFit/interface/MkFitIterationConfigRecord.h"
 
 #include "FWFFLoopCounter.h"
 
@@ -342,7 +342,7 @@ private:
 };
 
 FWFFMkFitLooper::FWFFMkFitLooper(edm::ParameterSet const& iConfig)
-    : recordKey_{edm::eventsetup::EventSetupRecordKey::makeKey<TrackerRecoGeometryRecord>()},
+    : recordKey_{edm::eventsetup::EventSetupRecordKey::makeKey<MkFitIterationConfigRecord>()},
       t0_{Clock::now()},
       tLast_{t0_},
       controlDir_{iConfig.getParameter<std::string>("controlDir")},
@@ -433,7 +433,7 @@ void FWFFMkFitLooper::fillDescriptions(edm::ConfigurationDescriptions& descripti
       ->setComment(
           "patch in mkFit's ConfigJsonPatcher syntax (a JSON object; keys may be JSON pointers, '[i..j]' selects "
           "array ranges), applied to the iteration JSON at jsonPath; non-empty (also '{}') resets "
-          "TrackerRecoGeometryRecord before the next loop");
+          "MkFitIterationConfigRecord before the next loop");
 
   edm::ParameterSetDescription desc;
   desc.addVPSet("edits", edit, std::vector<edm::ParameterSet>())

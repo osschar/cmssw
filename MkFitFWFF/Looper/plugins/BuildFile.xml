@@ -9,7 +9,7 @@
   <use name="FWCore/ParameterSet"/>
   <use name="FWCore/PythonParameterSet"/>
   <use name="FWCore/Utilities"/>
+  <use name="RecoTracker/MkFit"/>
   <use name="RecoTracker/MkFitCore"/>
-  <use name="RecoTracker/Record"/>
   <flags EDM_PLUGIN="1"/>
 </library>
