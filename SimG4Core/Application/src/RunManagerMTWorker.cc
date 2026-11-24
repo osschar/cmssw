@@ -551,6 +551,8 @@ std::vector<std::shared_ptr<SimProducer>>& RunManagerMTWorker::producers() {
 
 void RunManagerMTWorker::initializeRun() {
   m_tls->currentRun = new G4Run();
+  // Several runs per job (a looper's loops): this run is not terminated yet.
+  m_tls->runTerminated = false;
   G4StateManager::GetStateManager()->SetNewState(G4State_GeomClosed);
   if (nullptr != m_tls->userRunAction) {
     m_tls->userRunAction->BeginOfRunAction(m_tls->currentRun);
@@ -577,9 +579,9 @@ void RunManagerMTWorker::terminateRun() {
       }
     }
   }
+  // The run action stays for the next run of the job (a looper's next loop), which signals its BeginOfRun.
   if (m_tls->userRunAction) {
     m_tls->userRunAction->EndOfRunAction(m_tls->currentRun);
-    m_tls->userRunAction.reset();
   }
   m_tls->currentEvent.reset();
   if (m_tls->kernel) {
@@ -599,7 +601,8 @@ TmpSimEvent* RunManagerMTWorker::produce(const edm::Event& inpevt,
 
   assert(m_tls != nullptr and m_tls->threadInitialized);
   // Initialize run
-  if (inpevt.id().run() != m_tls->currentRunNumber) {
+  // A new run also after endRun() terminated the last one with the same number (a looper's next loop).
+  if (inpevt.id().run() != m_tls->currentRunNumber || m_tls->runTerminated) {
     edm::LogVerbatim("SimG4CoreApplication")
         << "RunManagerMTWorker::produce: RunID= " << inpevt.id().run() << "  TLS RunID= " << m_tls->currentRunNumber;
     if (m_tls->currentRunNumber != 0 && !m_tls->runTerminated) {

@@ -58,17 +58,18 @@ OscarMTMasterThread::OscarMTMasterThread(const edm::ParameterSet& iConfig)
         m_runManagerMaster->initG4(m_pDDD, m_pDD4hep, m_pTable);
         isG4Alive = true;
       } else if (m_masterThreadState == ThreadState::EndRun) {
-        // Stop Geant4
-        edm::LogVerbatim("OscarMTMasterThread") << "Master thread: Stopping Geant4";
-        m_runManagerMaster->stopG4();
-        G4PhysicalVolumeStore::Clean();
-        isG4Alive = false;
+        // Geant4 stays alive for a following run of the job (a looper's next loop): the workers start their own
+        // runs, and the master's geometry and physics stay as initG4() left them. It stops at Destruct.
+        edm::LogVerbatim("OscarMTMasterThread") << "Master thread: End of run, Geant4 kept for a following run";
       } else if (m_masterThreadState == ThreadState::Destruct) {
-        // Stop master thread started
+        // Stop Geant4, then the master thread
+        if (isG4Alive) {
+          edm::LogVerbatim("OscarMTMasterThread") << "Master thread: Stopping Geant4";
+          m_runManagerMaster->stopG4();
+          G4PhysicalVolumeStore::Clean();
+          isG4Alive = false;
+        }
         edm::LogVerbatim("OscarMTMasterThread") << "Master thread: Breaking out of state loop";
-        if (isG4Alive)
-          throw cms::Exception("LogicError") << "OscarMTMasterThread: Geant4 is still alive, master thread "
-                                             << "state must be set to EndRun before Destruct";
         break;
       } else {
         throw cms::Exception("LogicError")
