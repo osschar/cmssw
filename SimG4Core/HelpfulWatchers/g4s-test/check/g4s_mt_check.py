@@ -9,34 +9,21 @@ code, birth process name, birth position rounded to 1 um, momentum rounded to 1 
 differently (a snitch's own tables, or the job's shared ones) compare equal. Prints the events only in one side and
 every event that differs, then a summary line."""
 import sys, math, collections, ROOT
-ROOT.gSystem.Load("libRootG4Snitch.so")
-
-
-def events(fn, f):
-    """(ev, p, s) for each event of the file's T, a TTree or an RNTuple; p and s are valid until the next event."""
-    t = f.Get("T")
-    if isinstance(t, ROOT.TTree):
-        if not t.GetBranch("ev"):
-            sys.exit(f"{fn}: no branch ev (written before the event number was stored)")
-        for i in range(t.GetEntries()):
-            t.GetEntry(i)
-            yield int(t.ev), t.p, t.s
-    else:
-        r = ROOT.RNTupleReader.Open("T", fn)
-        e = r.CreateEntry()
-        for i in range(r.GetNEntries()):
-            r.LoadEntry(i, e)
-            yield int(e["ev"]), e["p"], e["s"]
+from g4s_read import SnitchFile
 
 
 def summarise(files):
     out = {}
     for fn in files:
-        f = ROOT.TFile.Open(fn)
+        sf = SnitchFile(fn)
+        if "ev" not in sf.fields:
+            sys.exit(f"{fn}: no ev (written before the event number was stored)")
+        f = sf.f
         P = [str(x.name) for x in f.Get("P")]
         D = [str(x.name) for x in f.Get("D")]
         V = [(str(x.path), D[x.sd] if x.sd >= 0 else "") for x in f.Get("V")]
-        for key, p, s in events(fn, f):
+        for e in sf:
+            key, p, s = int(e.ev), e.p, e.s
             n_sens = n_inert = n_sums = n_path = 0
             e_sens = e_inert = e_sums = plen = 0.0
             parts = collections.Counter()

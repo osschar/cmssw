@@ -6,7 +6,7 @@ The subtree is laid out as G4Snitch::select_output() writes it: slot 0 the admin
 daughters as one contiguous block, breadth first. Compared exactly: the particles, and per particle its steps, inert
 sums and path points."""
 import sys, ROOT
-ROOT.gSystem.Load("libRootG4Snitch.so")
+from g4s_read import SnitchFile
 
 def subtree(p, root):
     order = [0, root]; parent = {root: 0}; k = 1
@@ -37,7 +37,7 @@ def skey(ps, P, V):
             [(x.m_x.fX, x.m_x.fZ, x.m_p.fT, x.m_x0, x.m_lambda) for x in ps.m_path])
 
 if sys.argv[1] == "pick":
-    f = ROOT.TFile.Open(sys.argv[2]); t = f.Get("T"); t.GetEntry(int(sys.argv[3])); p = t.p
+    sf = SnitchFile(sys.argv[2]); p = sf.entry(int(sys.argv[3])).p
     nprim = p[0].m_daughters_end - p[0].m_daughters_begin
     best, bid = 0, 0
     for i in range(1, p.size()):
@@ -47,9 +47,9 @@ if sys.argv[1] == "pick":
     print(bid)
     sys.exit(0)
 
-fo = ROOT.TFile.Open(sys.argv[1]); to = fo.Get("T"); to.GetEntry(int(sys.argv[2])); po, so = to.p, to.s
+sfo = SnitchFile(sys.argv[1]); fo = sfo.f; to = sfo.entry(int(sys.argv[2])); po, so = to.p, to.s
 gid = int(sys.argv[3])
-fs = ROOT.TFile.Open(sys.argv[4]); ts = fs.Get("T"); ts.GetEntry(0); ps_, ss = ts.p, ts.s
+sfs = SnitchFile(sys.argv[4]); fs = sfs.f; ts = sfs.entry(0); ps_, ss = ts.p, ts.s
 Po, Vo = tables(fo); Ps, Vs = tables(fs)
 root = next(i for i in range(1, po.size()) if po[i].m_was_tracked and po[i].m_g4_id == gid)
 order, parent = subtree(po, root)
