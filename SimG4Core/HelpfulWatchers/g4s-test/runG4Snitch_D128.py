@@ -202,6 +202,37 @@ elif os.environ.get("G4SNITCH_GUN", "") == "cms":
         AddAntiParticle = cms.bool(True),
         firstRun = cms.untracked.uint32(1)
     )
+# G4SNITCH_GUN=pm: one shower in each HGCal endcap. One e- and one pi+ per event from the origin, pT 20-50 GeV, eta
+# uniform in -2.6..2.6, phi uniform; a generator-level filter (twoEndcapFilter, MCParticlePairFilter) keeps the events
+# with one of them at eta 1.8..2.6 and the other at -2.6..-1.8 (about 4.7 % of them), so which kind is in which endcap
+# is random from event to event. The job stops after G4SNITCH_NOUT accepted events (default 20); G4SNITCH_NEVT bounds
+# the generated ones (set it to about 25 times that).
+elif os.environ.get("G4SNITCH_GUN", "") == "pm":
+    process.generator = cms.EDProducer("FlatRandomPtGunProducer",
+        PGunParameters = cms.PSet(
+            MinPt = cms.double(20.0),
+            MaxPt = cms.double(50.0),
+            PartID = cms.vint32(11, 211),
+            MinEta = cms.double(-2.6),
+            MaxEta = cms.double(2.6),
+            MinPhi = cms.double(-3.14159265359),
+            MaxPhi = cms.double(3.14159265359),
+        ),
+        Verbosity = cms.untracked.int32(0),
+        psethack = cms.string('e- and pi+ from the origin, pt 20-50, one in each HGCal endcap'),
+        AddAntiParticle = cms.bool(False),
+        firstRun = cms.untracked.uint32(1)
+    )
+    process.twoEndcapFilter = cms.EDFilter("MCParticlePairFilter",
+        ParticleID1 = cms.untracked.vint32(11, 211),
+        ParticleID2 = cms.untracked.vint32(11, 211),
+        MinEta = cms.untracked.vdouble(1.8, -2.6),
+        MaxEta = cms.untracked.vdouble(2.6, -1.8),
+        MinPt = cms.untracked.vdouble(0.0, 0.0),
+        MinP = cms.untracked.vdouble(0.0, 0.0),
+        Status = cms.untracked.vint32(0, 0),
+    )
+    process.maxEvents.output = cms.untracked.int32(int(os.environ.get("G4SNITCH_NOUT", "20")))
 # G4SNITCH_GUN=minbias: one inelastic pp interaction per event at 14 TeV (Pythia8 CP5, SoftQCD:inelastic, the
 # fragment phase-2 pileup is mixed from), with the HL-LHC luminous region of VtxSmearedHLLHC14TeV in place of the
 # CloseBy smearing (zero width) that the other guns use.
@@ -236,6 +267,8 @@ associatePatAlgosToolsTask(process)
 # filter all path with the production filter sequence
 for path in process.paths:
 	getattr(process,path).insert(0, process.generator)
+	if hasattr(process, "twoEndcapFilter"):
+		getattr(process,path).insert(1, process.twoEndcapFilter)
 
 
 
