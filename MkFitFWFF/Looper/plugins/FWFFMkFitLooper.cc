@@ -13,9 +13,12 @@
 //  - patch the mkFit iteration JSON at 'jsonPath' with 'jsonPatch' (mkFit's ConfigJsonPatcher syntax) and have the
 //    framework reset MkFitIterationConfigRecord before the next loop, so that MkFitIterationConfigESProducer reads the
 //    file again (the record holds only the iteration configurations);
-//  - do neither (re-run unchanged).
-// Module and JSON edits are cumulative: each applies to the state left by the previous ones. An edit is applied as a
-// whole or not at all: both parts are prepared and checked before either is committed.
+//  - set mkFit's V2p2 knobs (RecoTracker/MkFitCore/src/V2p2Config.h) by name, from 'knobs' (one PSet per knob
+//    group, see FWFFKnobs.h); only in a build with -DMKFIT_V2P2_MUTABLE, where the knobs are mutable globals; the
+//    knobs are set at the end of the loop, when no event is in flight, and act from the next loop on;
+//  - do none of these (re-run unchanged).
+// Module, JSON and knob edits are cumulative: each applies to the state left by the previous ones. An edit is applied
+// as a whole or not at all: all its parts are prepared and checked before any is committed.
 //
 // Two modes:
 //  - scripted (controlDir empty): entry k of 'edits' is applied at the end of loop k; when the entries are used up,
@@ -53,6 +56,7 @@
 #include "RecoTracker/MkFitCore/interface/IterationConfig.h"
 #include "RecoTracker/MkFit/interface/MkFitIterationConfigRecord.h"
 
+#include "FWFFKnobs.h"
 #include "FWFFLoopCounter.h"
 
 #include "nlohmann/json.hpp"
@@ -87,6 +91,7 @@ namespace {
     std::string moduleLabel;
     edm::ParameterSet overrides;
     std::string jsonPatch;
+    edm::ParameterSet knobs;
   };
 
   // FNV-1a, to identify the contents of the JSON file in the log.
@@ -225,11 +230,11 @@ namespace {
 
   // The 'edit' PSet of an interactive command: the fields of an entry of 'edits', each optional, nothing else.
   Edit editFromCommandPSet(edm::ParameterSet const& p, std::string const& defaultName) {
-    static std::set<std::string> const allowed{"name", "moduleLabel", "overrides", "jsonPatch"};
+    static std::set<std::string> const allowed{"name", "moduleLabel", "overrides", "jsonPatch", "knobs"};
     for (auto const& n : p.getParameterNames()) {
       if (allowed.count(n) == 0) {
-        throw cms::Exception("FWFFMkFitLooper")
-            << "the edit has an unknown parameter '" << n << "'; allowed: name, moduleLabel, overrides, jsonPatch";
+        throw cms::Exception("FWFFMkFitLooper") << "the edit has an unknown parameter '" << n
+                                                << "'; allowed: name, moduleLabel, overrides, jsonPatch, knobs";
       }
     }
     auto str = [&p](char const* n, std::string const& def) -> std::string {
@@ -252,6 +257,14 @@ namespace {
         e.overrides = p.getUntrackedParameter<edm::ParameterSet>("overrides");
       else
         throw cms::Exception("FWFFMkFitLooper") << "the edit's 'overrides' must be a cms.PSet";
+    }
+    if (p.exists("knobs")) {
+      if (p.existsAs<edm::ParameterSet>("knobs", true))
+        e.knobs = p.getParameter<edm::ParameterSet>("knobs");
+      else if (p.existsAs<edm::ParameterSet>("knobs", false))
+        e.knobs = p.getUntrackedParameter<edm::ParameterSet>("knobs");
+      else
+        throw cms::Exception("FWFFMkFitLooper") << "the edit's 'knobs' must be a cms.PSet";
     }
     if (e.moduleLabel.empty() && !e.overrides.getParameterNames().empty())
       throw cms::Exception("FWFFMkFitLooper") << "the edit has overrides but no moduleLabel";
@@ -353,7 +366,8 @@ FWFFMkFitLooper::FWFFMkFitLooper(edm::ParameterSet const& iConfig)
     Edit e{p.getParameter<std::string>("name"),
            p.getParameter<std::string>("moduleLabel"),
            p.getParameter<edm::ParameterSet>("overrides"),
-           p.getParameter<std::string>("jsonPatch")};
+           p.getParameter<std::string>("jsonPatch"),
+           p.getParameter<edm::ParameterSet>("knobs")};
     if (e.moduleLabel.empty() && !e.overrides.getParameterNames().empty()) {
       throw cms::Exception("Configuration")
           << "FWFFMkFitLooper: edit " << edits_.size() << " ('" << e.name << "') has overrides but no moduleLabel";
@@ -379,6 +393,9 @@ FWFFMkFitLooper::FWFFMkFitLooper(edm::ParameterSet const& iConfig)
 
   std::ostringstream os;
   os << "edits=" << edits_.size();
+  // The V2p2 knobs: settable only in a -DMKFIT_V2P2_MUTABLE build.
+  os << " knobs="
+     << (fwff::v2p2KnobsMutable() ? "mutable(" + std::to_string(fwff::knobValues().size()) + ")" : "constexpr");
   if (anyJson) {
     jsonPath_ = resolveJsonPath(jsonPath);
     // Load the file as MkFitIterationConfigESProducer does, then keep it in the patcher as JSON.
@@ -410,7 +427,7 @@ FWFFMkFitLooper::FWFFMkFitLooper(edm::ParameterSet const& iConfig)
     auto const& e = edits_[i];
     std::cout << "FWFFLOOP   edit " << i << " -> loop " << i + 1 << ": name='" << e.name << "' module='"
               << e.moduleLabel << "' overrides=" << e.overrides.getParameterNames().size() << " jsonPatch='"
-              << e.jsonPatch << "'\n";
+              << e.jsonPatch << "' knobGroups=" << e.knobs.getParameterNames().size() << "\n";
   }
   std::cout << std::flush;
   if (interactive)
@@ -434,6 +451,12 @@ void FWFFMkFitLooper::fillDescriptions(edm::ConfigurationDescriptions& descripti
           "patch in mkFit's ConfigJsonPatcher syntax (a JSON object; keys may be JSON pointers, '[i..j]' selects "
           "array ranges), applied to the iteration JSON at jsonPath; non-empty (also '{}') resets "
           "MkFitIterationConfigRecord before the next loop");
+  edm::ParameterSetDescription knobs;
+  knobs.setAllowAnything();
+  edit.add<edm::ParameterSetDescription>("knobs", knobs)
+      ->setComment(
+          "mkFit V2p2 knobs to set, one PSet per group, e.g. Window = cms.PSet(dphi_trk_fac = cms.double(1.5)); bool "
+          "knobs take cms.bool, int knobs cms.int32, float knobs cms.double; only in a -DMKFIT_V2P2_MUTABLE build");
 
   edm::ParameterSetDescription desc;
   desc.addVPSet("edits", edit, std::vector<edm::ParameterSet>())
@@ -587,15 +610,25 @@ std::vector<std::string> FWFFMkFitLooper::applyEdit(Edit const& edit) {
   std::vector<std::string> changes;
   bool const doModule = !edit.moduleLabel.empty();
   bool const doJson = !edit.jsonPatch.empty();
+  bool const doKnobs = !edit.knobs.getParameterNames().empty();
   if (doJson && !jsonState_) {
     throw cms::Exception("FWFFMkFitLooper")
         << "the edit '" << edit.name << "' has a jsonPatch, but the looper has no jsonPath";
   }
 
-  // 1. Prepare both parts; nothing in the job changes yet.
+  // 1. Prepare every part; nothing in the job changes yet.
   edm::ParameterSet next;
   if (doModule)
     next = prepareModuleEdit(edit, changes);
+  std::vector<fwff::KnobChange> knobChanges;
+  if (doKnobs) {
+    try {
+      knobChanges = fwff::prepareKnobs(edit.knobs);
+    } catch (cms::Exception& e) {
+      e.addContext("FWFFMkFitLooper: the knobs of the edit '" + edit.name + "'");
+      throw;
+    }
+  }
 
   nlohmann::json backup;
   std::string text;
@@ -626,7 +659,7 @@ std::vector<std::string> FWFFMkFitLooper::applyEdit(Edit const& edit) {
     changes.push_back("json " + edit.jsonPatch + ": replaced " + std::to_string(nReplaced));
   }
 
-  // 2. Commit: the module first (its rebuild can still fail), then the JSON file.
+  // 2. Commit: the module first (its rebuild can still fail), then the JSON file, then the knobs.
   if (doModule) {
     for (auto const& c : changes) {
       if (c.compare(0, 4, "set ") == 0)
@@ -650,6 +683,18 @@ std::vector<std::string> FWFFMkFitLooper::applyEdit(Edit const& edit) {
     mark("jsonPatch.end",
          "replaced=" + std::to_string(nReplaced) + " bytes=" + std::to_string(text.size()) +
              " jsonHash=" + hex16(fnv1a(text)));
+  }
+  if (doKnobs) {
+    // No event is in flight here (one stream, between loops), so the next loop is the first to see the new values.
+    mark("knobs.begin", "n=" + std::to_string(knobChanges.size()));
+    std::ostringstream os;
+    for (auto const& l : fwff::applyKnobs(knobChanges)) {
+      os << "FWFFLOOP   knob " << l << "\n";
+      os << "MKFITKNOB looper loop=" << loop_ + 1 << " set " << l << "\n";
+      changes.push_back("knob " + l);
+    }
+    std::cout << os.str() << std::flush;
+    mark("knobs.end", "n=" + std::to_string(knobChanges.size()));
   }
   return changes;
 }
@@ -697,6 +742,17 @@ void FWFFMkFitLooper::writeStatus(std::string const& state, int loop, std::strin
   s["epoch"] = std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count();
   s["commands"] = nCommands_;
   s["jsonPath"] = jsonPath_;
+  // The V2p2 knobs' current values (a -DMKFIT_V2P2_MUTABLE build), or null.
+  if (fwff::v2p2KnobsMutable()) {
+    nlohmann::json k = nlohmann::json::object();
+    for (auto const& kv : fwff::knobValues()) {
+      auto const eq = kv.find('=');
+      k[kv.substr(0, eq)] = kv.substr(eq + 1);
+    }
+    s["knobs"] = k;
+  } else {
+    s["knobs"] = nullptr;
+  }
   if (!lastCommand_.is_null())
     s["command"] = lastCommand_;
   if (!error.empty())
@@ -841,6 +897,7 @@ edm::EDLooper::Status FWFFMkFitLooper::interactiveEndOfLoop(unsigned int iLoop) 
       if (cmd.kind == CommandKind::kEdit) {
         a["moduleLabel"] = cmd.edit.moduleLabel;
         a["jsonPatch"] = cmd.edit.jsonPatch;
+        a["knobGroups"] = cmd.edit.knobs.getParameterNames();
         a["changes"] = changes;
       }
       applied_.push_back(a);

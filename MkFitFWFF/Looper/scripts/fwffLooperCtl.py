@@ -7,8 +7,11 @@
     fwffLooperCtl.py DIR stop                    end the job
     fwffLooperCtl.py DIR send FILE               send a command file as it is (Python or 'rerun' / 'stop')
     fwffLooperCtl.py DIR edit [--name N] [--module LABEL] [--set PARAM=PYEXPR ...] [--json PATCH]
+                              [--knob GROUP.KNOB=PYEXPR ...]
                                                  send an edit made with fwffEdit(); PYEXPR is a cms-typed Python
-                                                 value, e.g. --set "buildingRoutine=cms.string('cloneEngine')"
+                                                 value, e.g. --set "buildingRoutine=cms.string('cloneEngine')";
+                                                 for --knob a plain value also works (1.5, 3, False), e.g.
+                                                 --knob Window.dphi_trk_fac=1.5 (a -DMKFIT_V2P2_MUTABLE build)
 
 Options: --timeout S (default 600) for the whole wait, --poll S (default 0.05) between looks at status.json,
 --log FILE to append the result as one JSON line.
@@ -49,10 +52,18 @@ def wait_for(d, pred, timeout, poll):
         time.sleep(poll)
 
 
-def edit_text(name, module, sets, patch):
+def edit_text(name, module, sets, patch, knobs=()):
     args = [repr(name), repr(module or '')]
     if patch:
         args.append('jsonPatch = %r' % patch)
+    if knobs:
+        items = []
+        for s in knobs:
+            k, eq, v = s.partition('=')
+            if not eq or '.' not in k:
+                raise SystemExit('--knob needs GROUP.KNOB=PYEXPR, got %r' % s)
+            items.append('%r: %s' % (k.strip(), v.strip()))
+        args.append('knobs = {%s}' % ', '.join(items))
     for s in sets:
         k, eq, v = s.partition('=')
         if not eq or not k.strip():
@@ -90,6 +101,8 @@ def main():
     ap.add_argument('--module', default='')
     ap.add_argument('--set', action='append', default=[], dest='sets')
     ap.add_argument('--json', default='', help='edit: a ConfigJsonPatcher patch of the iteration JSON')
+    ap.add_argument('--knob', action='append', default=[], dest='knobs',
+                    help='edit: a V2p2 knob, GROUP.KNOB=PYEXPR (a -DMKFIT_V2P2_MUTABLE build)')
     ap.add_argument('--timeout', type=float, default=600.)
     ap.add_argument('--poll', type=float, default=0.05)
     ap.add_argument('--log', default='', help='append the result as one JSON line to this file')
@@ -120,7 +133,7 @@ def main():
             raise SystemExit('send needs a FILE')
         text = open(a.file).read()
     else:
-        text = edit_text(a.name or 'edit', a.module, a.sets, a.json)
+        text = edit_text(a.name or 'edit', a.module, a.sets, a.json, a.knobs)
 
     seq0 = s['seq']
     tmp = os.path.join(d, '.command.%d.tmp' % os.getpid())

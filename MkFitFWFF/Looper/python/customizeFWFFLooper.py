@@ -49,6 +49,18 @@ before cmsRun, copy the original afresh for every job and put its top first in t
 and pass the same relative path as the ESProducer's 'config' as jsonPath. The looper prints the resolved path and a
 hash of the file on its 'construct' line.
 
+V2p2 knob edits ('knobs', a build with USER_CXXFLAGS=-DMKFIT_V2P2_MUTABLE only): mkFit's V2p2 knobs
+(RecoTracker/MkFitCore/src/V2p2Config.h, listed in interface/V2p2Knobs.h's table) by name, one PSet per group:
+
+    fwffEdit('narrow', knobs = {'Window.dphi_trk_fac': 1.5, 'Policy.use_wsr': False})
+    fwffEdit('narrow', knobs = cms.PSet(Window = cms.PSet(dphi_trk_fac = cms.double(1.5))))
+
+A bool knob takes a bool (cms.bool), an int knob an int (cms.int32), a float knob a float (cms.double): 2 for a float
+knob is an error, write 2.0. Unknown names and other types are errors, as for module overrides. The knobs are set at
+the end of the loop and act from the next loop on; they accumulate like the other edits. In the normal build the knobs
+are constexpr and any knob edit is refused. The service MkFitV2p2Knobs (same PSet, parameter 'knobs') sets knobs at
+the start of a job, for a fresh job to compare with.
+
 Output: lines starting with FWFFLOOP (the looper's transitions, with t_ms since construction and dt_ms since the
 previous FWFFLOOP line; the applied changes on the lines after changeModule.begin and jsonPatch.begin) and with
 MKFITDIGEST (one per event: counts and order-independent hashes of the candidates and tracks, and the loop number).
@@ -73,7 +85,7 @@ command to <controlDir>/commands/cmd-NNNN.py and reads it:
   - 'rerun' or 'stop' as the whole content (plain words);
   - otherwise Python, read with FWCore/PythonParameterSet's readPSetsFrom (a fresh interpreter per command), which
     must define exactly one of the PSets 'edit', 'rerun' or 'stop' at top level. 'edit' has the fields of an entry of
-    'edits', each optional (name, moduleLabel, overrides, jsonPatch); fwffEdit() from this module makes one:
+    'edits', each optional (name, moduleLabel, overrides, jsonPatch, knobs); fwffEdit() from this module makes one:
 
         import FWCore.ParameterSet.Config as cms
         from MkFitFWFF.Looper.customizeFWFFLooper import fwffEdit
@@ -90,9 +102,11 @@ status.json fields:
   waiting   true when the looper waits for a command (states waiting and error)
   loop      the loop just finished (waiting, error, stopped) or about to start (running)
   pid, t_ms (looper clock), epoch (wall clock, s), commands (number taken), jsonPath
+  knobs     the current value of every V2p2 knob, by name (a -DMKFIT_V2P2_MUTABLE build), else null
   command   the last command taken: id, file, kind (edit, rerun, stop, invalid), name, text
   error     the reason a command was refused (state error), or why the looper stopped without a stop command
-  applied   every command applied so far, in order: loop, command, kind, name, moduleLabel, jsonPatch, changes
+  applied   every command applied so far, in order: loop, command, kind, name, moduleLabel, jsonPatch, knobGroups,
+            changes
   lastLoop  the loop just finished: loop, edit, events, digest (its MKFITDIGEST lines), times_ms with
             wait (status 'waiting' or 'error' to the command seen), apply (command seen to applied),
             next (applied to the loop's start), runLumi, event, end (event done to the end of the loop),
@@ -103,12 +117,37 @@ SIGUSR2 (cmsRun's graceful-stop signal) or idleTimeout end the wait with state '
 import FWCore.ParameterSet.Config as cms
 
 
-def fwffEdit(name, moduleLabel='', jsonPatch='', **overrides):
+def fwffKnobs(knobs):
+    """The 'knobs' PSet of an edit, or of the service MkFitV2p2Knobs, from a cms.PSet (returned as it is) or a dict
+    {'<group>.<knob>': value}; a plain bool becomes cms.bool, an int cms.int32, a float cms.double, and a cms-typed value
+    stays as it is."""
+    if knobs is None:
+        return cms.PSet()
+    if isinstance(knobs, cms.PSet):
+        return knobs
+    groups = {}
+    for full, v in knobs.items():
+        if '.' not in full:
+            raise ValueError("fwffKnobs: '%s' is not '<group>.<knob>'" % full)
+        g, k = full.split('.', 1)
+        if isinstance(v, bool):
+            v = cms.bool(v)
+        elif isinstance(v, int):
+            v = cms.int32(v)
+        elif isinstance(v, float):
+            v = cms.double(v)
+        groups.setdefault(g, {})[k] = v
+    return cms.PSet(**{g: cms.PSet(**kv) for g, kv in groups.items()})
+
+
+def fwffEdit(name, moduleLabel='', jsonPatch='', knobs=None, **overrides):
     """One entry of FWFFMkFitLooper.edits: the edit applied at the end of a loop, before the next.
 
     name        printed on the FWFFLOOP lines of the loop this edit starts
     moduleLabel ED module to rebuild through ModuleChanger ('' for none)
     jsonPatch   ConfigJsonPatcher patch of the iteration JSON at the looper's jsonPath ('' for none)
+    knobs       V2p2 knobs to set (a -DMKFIT_V2P2_MUTABLE build): a dict {'<group>.<knob>': value} or a cms.PSet,
+                see fwffKnobs()
     overrides   parameters of the module to replace, as cms-typed values
     """
     if overrides and not moduleLabel:
@@ -118,6 +157,7 @@ def fwffEdit(name, moduleLabel='', jsonPatch='', **overrides):
         moduleLabel = cms.string(moduleLabel),
         overrides = cms.PSet(**overrides),
         jsonPatch = cms.string(jsonPatch),
+        knobs = fwffKnobs(knobs),
     )
 
 
