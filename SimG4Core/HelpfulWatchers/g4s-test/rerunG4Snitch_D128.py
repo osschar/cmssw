@@ -3,6 +3,7 @@
 # with the G4Snitch watcher on. The engine states are restored, so Geant4 repeats the original simulation exactly.
 #   G4SNITCH_INPUT=path/step1.root      the sample (required)
 #   G4SNITCH_EVENTS=1:5[,1:9]           run:event ranges to re-simulate (default all)
+#   G4SNITCH_LOOPS=N                    process them N times, with a looper (IterateNTimesLooper)
 #   and the watcher's G4SNITCH_* settings (SimG4Core/HelpfulWatchers/python/G4Snitch_cfi.py), e.g. G4SNITCH_SELECT_ID.
 # Output: rerun.root with only this process's g4SimHits products, and G4Snitch.root.
 import os
@@ -32,6 +33,11 @@ process.options = cms.untracked.PSet(numberOfThreads = cms.untracked.uint32(int(
 
 # Restore the engine states the original job saved at the start of each event.
 process.RandomNumberGeneratorService.restoreStateLabel = cms.untracked.string('randomEngineStateProducer')
+
+# G4SNITCH_LOOPS=N: process the input N times with the framework's IterateNTimesLooper (a looper runs one stream;
+# each loop is a new run for Geant4 and the snitch).
+if int(os.environ.get('G4SNITCH_LOOPS', '0')) > 0:
+    process.looper = cms.Looper("IterateNTimesLooper", nTimes = cms.uint32(int(os.environ['G4SNITCH_LOOPS'])))
 
 from SimG4Core.HelpfulWatchers.G4Snitch_cfi import g4snitch_watchers
 process.g4SimHits.Watchers = g4snitch_watchers()
