@@ -4,6 +4,7 @@
 # -3..3, phi uniform, D128 (tracker T35 = D121's), field branch on, no step log. mu- at pT 1, 2, 5, 10, 100 GeV and
 # pi+ at pT 1, 10 GeV; each configuration in 4 jobs of different G4SNITCH_SEED (250 mu or 125 pi events each), in
 # $G/T1/<name>_pt<pT>_s<seed>/. All 28 jobs in parallel.
+# TTree output (G4SNITCH_FORMAT, default ttree here): the analysis scripts in ana/ read tree T as a TTree.
 G=/ceph/users/matevz/g4snitch-2026-11
 pgrep -u $USER -x cmsRun > /dev/null && { echo "cmsRun is running; not starting"; exit 1; }
 mkdir -p $G/T1
@@ -13,7 +14,7 @@ for spec in mu:13:250:1,2,5,10,100 pi:211:125:1,10; do
     for seed in 1 2 3 4; do
       d=$G/T1/${name}_pt${pt}_s$seed
       G4SNITCH_GUN=single G4SNITCH_PDG=$pdg G4SNITCH_PT=$pt G4SNITCH_ETAMIN=-3 G4SNITCH_ETAMAX=3 \
-        G4SNITCH_NEVT=$n G4SNITCH_SEED=$((1000 * pt + seed)) G4SNITCH_BFIELD=1 G4SNITCH_VERBOSE=0 \
+        G4SNITCH_NEVT=$n G4SNITCH_SEED=$((1000 * pt + seed)) G4SNITCH_BFIELD=1 G4SNITCH_VERBOSE=0 G4SNITCH_FORMAT=${G4SNITCH_FORMAT:-ttree} \
         bash $G/run20.sh $d > $d.log 2>&1 &
     done
   done

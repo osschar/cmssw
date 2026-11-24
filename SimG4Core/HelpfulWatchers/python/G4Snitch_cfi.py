@@ -12,10 +12,11 @@
 #   G4SNITCH_LAST_EKIN_CUT=MeV        kinetic energy below which a particle's last state is no longer updated (default 1)
 #   G4SNITCH_TRACK_UNSTABLE=0         unstable particles (not neutrons) only by the energy cut, not at any energy
 #   G4SNITCH_POSITRON_TOTAL=0         positrons cut on kinetic energy, like the rest, not on total energy
-#   G4SNITCH_NTHREADS=N               (read by the run configurations) N framework threads; above 1 each thread's
-#                                     snitch writes G4Snitch_t<thread>.root (output_per_thread)
-#   G4SNITCH_FORMAT=rntuple           the events as an RNTuple in one file for all threads (G4Snitch.root); =both:
-#                                     the TTree files as without, and the RNTuple in G4Snitch_rnt.root
+#   G4SNITCH_NTHREADS=N               (read by the run configurations) N framework threads; above 1, with TTree
+#                                     output, each thread's snitch writes G4Snitch_t<thread>.root (output_per_thread)
+#   G4SNITCH_FORMAT=ttree             the events as a TTree, one file per thread (the default is an RNTuple in one
+#                                     file for all threads, G4Snitch.root); =both: the TTree files, and the RNTuple
+#                                     in G4Snitch_rnt.root
 # Every value in use, with the code version and these environment variables, goes into the output's tree "C".
 import os
 import FWCore.ParameterSet.Config as cms
@@ -48,8 +49,8 @@ def g4snitch_watcher(env=os.environ):
         track_unstable_always = cms.untracked.bool(True),  # unstable particles other than neutrons: tracked always
         positron_by_total_energy = cms.untracked.bool(True),  # positrons: the cut applies to the total energy
         output_file = cms.untracked.string("G4Snitch.root"),
-        output_per_thread = cms.untracked.bool(False),  # one file per framework thread, "_t<thread>" before ".root"
-        output_format = cms.untracked.string("ttree"),  # ttree, rntuple (one file shared by the threads) or both
+        output_per_thread = cms.untracked.bool(False),  # TTree output: one file per thread, "_t<thread>" before ".root"
+        output_format = cms.untracked.string("rntuple"),  # rntuple (one file shared by the threads), ttree or both
     )
     if env.get("G4SNITCH_BFIELD", "0") == "1":
         w.output_path_bfield = True

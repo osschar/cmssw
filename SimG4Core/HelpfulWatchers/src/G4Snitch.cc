@@ -171,7 +171,7 @@ G4Snitch::G4Snitch(const edm::ParameterSet &pSet)
   m_positron_by_total_energy = pSet.getUntrackedParameter<bool>("positron_by_total_energy", true);
   m_output_file = pSet.getUntrackedParameter<std::string>("output_file", "G4Snitch.root");
   m_output_per_thread = pSet.getUntrackedParameter<bool>("output_per_thread", false);
-  m_output_format = pSet.getUntrackedParameter<std::string>("output_format", "ttree");
+  m_output_format = pSet.getUntrackedParameter<std::string>("output_format", "rntuple");
   if (m_output_format != "ttree" && m_output_format != "rntuple" && m_output_format != "both")
     throw cms::Exception("Configuration") << "G4Snitch: output_format is ttree, rntuple or both, not '"
                                           << m_output_format << "'";

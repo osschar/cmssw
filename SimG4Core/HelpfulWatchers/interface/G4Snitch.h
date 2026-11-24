@@ -186,11 +186,11 @@ private:
   // "_t<Geant4 thread id>" before ".root" (G4Snitch_t0.root, ...); events are matched across files by branch "ev".
   std::string m_output_file = "G4Snitch.root";
   bool m_output_per_thread = false;
-  // The format of the event data: "ttree" (tree T, a file per snitch), "rntuple" (RNTuple T in one file shared by the
-  // snitches of all threads, written in parallel), or "both" (the TTree files as with "ttree", and the RNTuple file
-  // with "_rnt" inserted before ".root"; the same objects feed both). With an RNTuple the tables are shared by all
-  // snitches of the job, in both outputs.
-  std::string m_output_format = "ttree";
+  // The format of the event data: "rntuple" (the default: RNTuple T in one file shared by the snitches of all
+  // threads, written in parallel), "ttree" (tree T, a file per snitch), or "both" (the TTree files as with "ttree",
+  // and the RNTuple file with "_rnt" inserted before ".root"; the same objects feed both). With an RNTuple the tables
+  // are shared by all snitches of the job, in both outputs.
+  std::string m_output_format = "rntuple";
   bool m_write_ttree = true, m_write_rntuple = false;
   std::shared_ptr<ROOT::RNTupleFillContext> m_rnt_fill;
   std::unique_ptr<ROOT::Detail::RRawPtrWriteEntry> m_rnt_entry;
