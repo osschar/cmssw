@@ -6,8 +6,8 @@
 # - each loop's hits, SimTracks and SimVertices (rerun.root, rerun001.root, ...) equal check-hgcal-rerun's (event 5
 #   re-simulated once);
 # - the snitch's step log of each loop equals the first loop's (the log cut at each "++ signal BeginOfRun");
-# - the snitch's output, which the last loop writes, equals loop2-ttree/G4Snitch.root (event 5 re-simulated once,
-#   without the patch), when that file is there.
+# - the snitch's output of each loop (G4Snitch.root, then G4Snitch_run<k>.root) equals loop2-ttree/G4Snitch.root
+#   (event 5 re-simulated once, without the patch), when that file is there.
 G=/ceph/users/matevz/g4snitch-2026-11
 C=$G/CMSSW_20_1_0_pre5/src/SimG4Core/HelpfulWatchers/g4s-test/check
 N=${1:-2}
@@ -31,7 +31,10 @@ awk -v d=$D '/^\+\+ signal BeginOfRun/ {n++} n > 0 {print > (d "/o.loop" n)}' $D
 for k in $(seq 2 $N); do
   cmp $D/o.loop1 $D/o.loop$k && echo "step log of loop $k identical to loop 1's ($(wc -l < $D/o.loop1) lines)"
 done
+ls $D/G4Snitch*.root
 if [ -f loop2-ttree/G4Snitch.root ]; then
-  echo "== the snitch's output (last loop) against loop2-ttree/G4Snitch.root (one pass, without the patch)"
-  python3 $C/g4s_mt_check.py loop2-ttree/G4Snitch.root -- $D/G4Snitch.root 2>&1 | grep -v -i warning | tail -2
+  for f in $(cd $D && ls G4Snitch*.root); do
+    echo "== the snitch's $f against loop2-ttree/G4Snitch.root (one pass, without the patch)"
+    python3 $C/g4s_mt_check.py loop2-ttree/G4Snitch.root -- $D/$f 2>&1 | grep -v -i warning | tail -2
+  done
 fi

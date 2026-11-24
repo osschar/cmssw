@@ -196,6 +196,8 @@ private:
   std::unique_ptr<ROOT::Detail::RRawPtrWriteEntry> m_rnt_entry;
   std::string m_output_name;
   int m_thread_id = -1;
+  // This snitch's runs so far in the job (a looper runs one per loop); the k-th run's file has "_run<k>" from k = 2.
+  int m_run_in_job = 0;
   int m_ev_number = -1;  // the Geant4 event id, which CMS sets to the CMSSW event number; branch "ev" of tree T
   // The parameter set as given, written with the values in use into the configuration tree "C".
   std::string m_pset_dump;

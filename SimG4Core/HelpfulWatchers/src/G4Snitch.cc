@@ -116,6 +116,12 @@ namespace {
 
   const char* b2yn(bool b) { return b ? "yes" : "no"; }
 
+  // The file name with tag inserted before ".root" (appended if there is none).
+  std::string with_tag(std::string name, const std::string &tag) {
+    const auto dot = name.rfind(".root");
+    return dot == std::string::npos ? name + tag : name.insert(dot, tag);
+  }
+
   // A lock on the mutex if there is one (the shared tables), none otherwise (a snitch's own tables).
   std::unique_lock<std::mutex> lock_if(std::mutex *m) {
     return m ? std::unique_lock<std::mutex>(*m) : std::unique_lock<std::mutex>();
@@ -131,6 +137,7 @@ namespace {
     G4SnitchTables tables;
     int n_open = 0;   // snitches between their BeginOfRun and their EndOfRun
     int n_users = 0;  // snitches that have filled into the current file
+    int n_runs = 0;   // files opened so far in the job, one per run (a looper's loops)
     TFile *file = nullptr;
     std::unique_ptr<ROOT::RNTupleParallelWriter> writer;
     std::string name;
@@ -459,12 +466,13 @@ void G4Snitch::open_file_tree() {
   steps_reserve(m_vec_capacity);
 
   if (m_write_ttree) {
+    // One file per run: the k-th run of the job (a looper's k-th loop) writes "_run<k>" from k = 2 on.
+    ++m_run_in_job;
     m_output_name = m_output_file;
-    if (m_output_per_thread) {
-      const std::string tag = "_t" + std::to_string(m_thread_id);
-      const auto dot = m_output_name.rfind(".root");
-      m_output_name = dot == std::string::npos ? m_output_name + tag : m_output_name.insert(dot, tag);
-    }
+    if (m_output_per_thread)
+      m_output_name = with_tag(m_output_name, "_t" + std::to_string(m_thread_id));
+    if (m_run_in_job > 1)
+      m_output_name = with_tag(m_output_name, "_run" + std::to_string(m_run_in_job));
     m_file = TFile::Open(m_output_name.c_str(), "RECREATE");
     m_tree = new TTree("T", "G4 Dump Tree of some kind");
     // No ROOT implicit multi-threading for the snitch's trees. CMS runs Geant4 on hand-off threads outside TBB while
@@ -486,11 +494,10 @@ void G4Snitch::open_shared_rntuple() {
   SharedRNTuple &sh = g_shared_rnt;
   std::lock_guard<std::mutex> lock(sh.mutex);
   if (sh.n_open++ == 0) {
-    sh.name = m_output_file;
-    if (m_write_ttree) {
-      const auto dot = sh.name.rfind(".root");
-      sh.name = dot == std::string::npos ? sh.name + "_rnt" : sh.name.insert(dot, "_rnt");
-    }
+    ++sh.n_runs;
+    sh.name = m_write_ttree ? with_tag(m_output_file, "_rnt") : m_output_file;
+    if (sh.n_runs > 1)
+      sh.name = with_tag(sh.name, "_run" + std::to_string(sh.n_runs));
     // TFile::Open makes the new file this thread's current directory; the context restores the previous one.
     TDirectory::TContext context;
     sh.file = TFile::Open(sh.name.c_str(), "RECREATE");
@@ -718,9 +725,11 @@ void G4Snitch::write_config_tree(bool shared_file) {
     put("output_name", g_shared_rnt.name);
     put("thread_id", "shared");
     put("snitches", std::to_string(g_shared_rnt.n_users));
+    put("run_in_job", std::to_string(g_shared_rnt.n_runs));
   } else {
     put("output_name", m_output_name);
     put("thread_id", std::to_string(m_thread_id));
+    put("run_in_job", std::to_string(m_run_in_job));
   }
   put("track_unstable_always", b2yn(m_track_unstable_always));
   put("positron_by_total_energy", b2yn(m_positron_by_total_energy));
