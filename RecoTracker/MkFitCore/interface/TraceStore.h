@@ -345,29 +345,16 @@ struct TrKalmanUpdate {
 namespace mkfit {
 
   //==============================================================================
-  // TraceStore -- the seven record vectors of one event and the calls the hooks
-  // make to append and reach records. Each append sets the record's id to its
-  // index. Not thread safe within an event: one store per event in flight. The
-  // vectors are mutable and the calls const, so that a hook holding a const
-  // pointer can append.
-  //
-  // The standalone Event derives from TraceStore. The hooks also need a few
-  // things outside the records: the event number, the seeds' labels and the sim
-  // truth of seeds and hits. They ask for these through the virtual functions
-  // below. TraceStore answers "unknown", and the standalone Event answers from its
-  // own sim information.
+  // TraceTruthSource -- what the hooks need beyond the records: the event
+  // number, the seeds' labels and the sim truth of seeds and hits. The four
+  // tr_* calls the hooks make are here; tr_mc_hit_id() is not asked by any hook
+  // (they read the hit's mcHitID themselves) and serves apply_trace_truth(). The
+  // defaults answer "unknown".
   //==============================================================================
 
-  class TraceStore {
+  class TraceTruthSource {
   public:
-    TraceStore() = default;
-    TraceStore(const TraceStore &) = default;
-    TraceStore(TraceStore &&) = default;
-    TraceStore &operator=(const TraceStore &) = default;
-    TraceStore &operator=(TraceStore &&) = default;
-    virtual ~TraceStore() = default;
-
-    // ---- Record-time information beyond the records.
+    virtual ~TraceTruthSource() = default;
 
     // The event number written into TrCandMeta::event.
     virtual int tr_event_id() const { return -1; }
@@ -379,6 +366,31 @@ namespace mkfit {
     // The sim track that made the hit with sim index mc_hit_id, -2 when not
     // resolved, for TrBkFitUpdate::mc_track_id.
     virtual int tr_mc_track_id(int mc_hit_id) const { return -2; }
+    // The sim index (Hit::mcHitID()) of hit hit_idx of layer layer, the index
+    // the records keep (TrHitMatch::hit, TrBkFitUpdate::hit); -1 when not known.
+    virtual int tr_mc_hit_id(int layer, int hit_idx) const { return -1; }
+  };
+
+  //==============================================================================
+  // TraceStore -- the seven record vectors of one event and the calls the hooks
+  // make to append and reach records. Each append sets the record's id to its
+  // index. Not thread safe within an event: one store per event in flight. The
+  // vectors are mutable and the calls const, so that a hook holding a const
+  // pointer can append.
+  //
+  // The standalone Event derives from TraceStore. The hooks ask the store the
+  // questions of TraceTruthSource. A plain TraceStore answers "unknown", and the
+  // standalone Event answers from its own sim information.
+  //==============================================================================
+
+  class TraceStore : public TraceTruthSource {
+  public:
+    TraceStore() = default;
+    TraceStore(const TraceStore &) = default;
+    TraceStore(TraceStore &&) = default;
+    TraceStore &operator=(const TraceStore &) = default;
+    TraceStore &operator=(TraceStore &&) = default;
+    ~TraceStore() override = default;
 
     // ---- The records.
 
@@ -479,6 +491,28 @@ namespace mkfit {
       return ku.id;
     }
   };
+
+  //==============================================================================
+  // apply_trace_truth -- sets the record fields the hooks fill from the store's
+  // TraceTruthSource answers, from truth instead, through the same four calls
+  // and from each record's own content:
+  //   TrCandMeta::event        = tr_event_id(), every meta;
+  //   TrCandMeta::global_seed  = tr_seed_label(meta.seed), every meta with
+  //                              cand >= 0: the export hook asks for the label
+  //                              exactly when it sets cand
+  //                              (MkBuilder::export_best_comb_cands()); the other
+  //                              metas keep theirs;
+  //   TrHitMatch::mc_match     = tr_mc_match(seed, tr_mc_hit_id(layer, hit)), with
+  //                              seed the meta's seed of the match's state;
+  //   TrBkFitUpdate::mc_track_id = tr_mc_track_id(tr_mc_hit_id(layer, hit)).
+  // A trace recorded through a store without truth and then given the same
+  // truth here equals the trace recorded with that truth. This holds as long as
+  // the export hook is the last writer of global_seed for an exported meta (no
+  // backward fit traced after the export in the same event).
+  // Defined in src/TraceStore.cc (MKFIT_TRACE builds only).
+  //==============================================================================
+
+  void apply_trace_truth(TraceStore &store, const TraceTruthSource &truth);
 
   class Track;
 
