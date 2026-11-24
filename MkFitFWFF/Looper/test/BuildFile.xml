@@ -1,0 +1,6 @@
+<library file="FWFFTransitionCheckers.cc" name="MkFitFWFFLooperTestCheckers">
+  <use name="FWCore/Framework"/>
+  <use name="FWCore/ParameterSet"/>
+  <use name="FWCore/Utilities"/>
+  <flags EDM_PLUGIN="1"/>
+</library>
