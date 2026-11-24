@@ -140,6 +140,9 @@ G4Snitch::G4Snitch(const edm::ParameterSet &pSet)
   m_positron_by_total_energy = pSet.getUntrackedParameter<bool>("positron_by_total_energy", true);
   m_output_file = pSet.getUntrackedParameter<std::string>("output_file", "G4Snitch.root");
   m_output_per_thread = pSet.getUntrackedParameter<bool>("output_per_thread", false);
+  // CMS runs a watcher on more than one thread only if it says it can (RunManagerMTWorker::createWatchers); the
+  // snitch can when each thread writes its own file.
+  setMT(m_output_per_thread);
   m_pset_dump = pSet.dump();
   // 2025-04-18 Linking through BuildFile.xml no longer works (-Wl,--as-needed)
   // so we just pull the dicts in here.
