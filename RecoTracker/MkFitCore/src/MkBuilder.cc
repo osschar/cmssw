@@ -507,8 +507,9 @@ namespace mkfit {
 #ifdef MKFIT_TRACE
         // Only the v2p2 path assigns trace states (MkFinderV2p2,
         // findTracksStandardv2p2()); for the other finders m_trace_state_id
-        // stays -1, and tr_candstate() does not check its index.
-        if (bcand.m_trace_state_id >= 0) {
+        // stays -1, and tr_candstate() does not check its index. Without a
+        // store no state has an id.
+        if (m_trace && bcand.m_trace_state_id >= 0) {
           auto &cs = m_trace->tr_candstate(bcand.m_trace_state_id);
           auto &cm = m_trace->tr_candmeta(cs.meta_id);
           cm.global_seed = m_trace->tr_seed_label(cm.seed);
@@ -888,7 +889,9 @@ namespace mkfit {
     EventOfCombCandidates &eoccs = m_event_of_comb_cands;
 
 #ifdef MKFIT_TRACE
-    trace_begin_v2p2_search(m_trace, eoccs, iteration_dir);
+    // Without a store the hooks record nothing: the states keep their id -1.
+    if (m_trace)
+      trace_begin_v2p2_search(m_trace, eoccs, iteration_dir);
 #endif
 
     TBB_PARALLEL_FOR_EACH(m_job->regions_begin(), m_job->regions_end(), [&](int region) {
@@ -975,7 +978,8 @@ namespace mkfit {
 #endif
 
 #ifdef MKFIT_TRACE
-    trace_end_v2p2_search(m_trace, eoccs, iteration_dir);
+    if (m_trace)
+      trace_end_v2p2_search(m_trace, eoccs, iteration_dir);
 #endif
 
     // debug = false;

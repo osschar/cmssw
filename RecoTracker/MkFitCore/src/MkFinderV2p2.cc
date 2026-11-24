@@ -16,9 +16,14 @@
 //#define DEBUG
 #include "Debug.h"
 
-// Counters of the current TrLayerSearch, empty without MKFIT_TRACE.
+// Counters of the current TrLayerSearch, empty without MKFIT_TRACE. Every trace
+// hook in this file does nothing when no store is set (mp_trace null).
 #ifdef MKFIT_TRACE
-#define V2P2_TR_LS_COUNT(ls_id, field) (++mp_trace->tr_layersearch(ls_id).field)
+#define V2P2_TR_LS_COUNT(ls_id, field)         \
+  do {                                         \
+    if (mp_trace)                              \
+      ++mp_trace->tr_layersearch(ls_id).field; \
+  } while (0)
 #else
 #define V2P2_TR_LS_COUNT(ls_id, field) ((void)0)
 #endif
@@ -573,7 +578,7 @@ namespace mkfit {
     H.calculate_coeffs(B.m_sp1, B.m_sp2, B.m_isp.inv_k);
 
 #ifdef MKFIT_TRACE
-    for (int i = 0; i < N_proc; ++i) {
+    for (int i = 0; i < N_proc && mp_trace; ++i) {
       const CandIncoming& cand = *cand_ptrs[i];
       TrLayerSearch ls;
       ls.state_id = cand.tcand().m_trace_state_id;
@@ -612,7 +617,8 @@ namespace mkfit {
                 std::sqrt(dev.Mag2()), B.m_sp1.dalpha[i], B.m_sp2.dalpha[i], H.m_Hderfac[i]);
         // clang-format on
 #ifdef MKFIT_TRACE
-        mp_trace->tr_layersearch(tr_layersearch_ids[i]).hermite_mid_dev = dev;
+        if (mp_trace)
+          mp_trace->tr_layersearch(tr_layersearch_ids[i]).hermite_mid_dev = dev;
 #endif
       }
     }
@@ -950,18 +956,26 @@ namespace mkfit {
       module_norm.copyIn(h, mi.zdir.Array());
 
       h3d.copyIn(h, H, cand_idcs[h]);
-
-#ifdef MKFIT_TRACE
-      CandIncoming& cand = *cand_ptrs[cand_idcs[h]];
-      TrHitMatch hm = make_hitmatch(mp_trace, cand.ccand().seed_origin_index(), L, hit_orig_idcs[h], is_sec_layer);
-      hm.state_id = cand.tcand().m_trace_state_id;
-      hm.search_id = tr_layersearch_ids[cand_idcs[h]];
-      tr_hitmatch_ids[h] = mp_trace->trace_hitmatch(std::move(hm)).id;
-#endif
     }
     pad_free_lanes(N_proc_hits, module_pos, module_norm);
     for (int h = N_proc_hits; h < NN; ++h)
       h3d.copyIn(h, h3d, 0);
+
+#ifdef MKFIT_TRACE
+    // In a loop of its own, so that the extraction above stays as in a build
+    // without the trace (in the extraction loop, the LTO link of a trace build
+    // warned that pad_free_lanes() may copy an uninitialised lane 0).
+    for (int h = 0; h < N_proc_hits; ++h) {
+      tr_hitmatch_ids[h] = -1;
+      if (mp_trace) {
+        CandIncoming& cand = *cand_ptrs[cand_idcs[h]];
+        TrHitMatch hm = make_hitmatch(mp_trace, cand.ccand().seed_origin_index(), L, hit_orig_idcs[h], is_sec_layer);
+        hm.state_id = cand.tcand().m_trace_state_id;
+        hm.search_id = tr_layersearch_ids[cand_idcs[h]];
+        tr_hitmatch_ids[h] = mp_trace->trace_hitmatch(std::move(hm)).id;
+      }
+    }
+#endif
 
 #ifdef MKFIT_TRACE_PROP_COMPARE
     is_plex.propagate_to_plane(mp::PA_Line, module_pos, module_norm, h_plex, true);
@@ -1047,24 +1061,26 @@ namespace mkfit {
 #endif
 
 #ifdef MKFIT_TRACE
-      // h3_state is the state the cut above was taken on.
-      TrHitMatch& hm = mp_trace->tr_hitmatch(tr_hitmatch_ids[h]);
-      fill_hitmatch_presel(hm,
-                           h3_state,
-                           h,
-                           h3dop.m_T[h],
-                           d3[h],
-                           L,
-                           hit_orig_idcs[h],
-                           ddphi,
-                           ddq,
-                           L.hit_q_half_length(hit_idcs[h]),
-                           dqdphi_presel);
+        if (mp_trace) {
+          // h3_state is the state the cut above was taken on.
+          TrHitMatch& hm = mp_trace->tr_hitmatch(tr_hitmatch_ids[h]);
+          fill_hitmatch_presel(hm,
+                               h3_state,
+                               h,
+                               h3dop.m_T[h],
+                               d3[h],
+                               L,
+                               hit_orig_idcs[h],
+                               ddphi,
+                               ddq,
+                               L.hit_q_half_length(hit_idcs[h]),
+                               dqdphi_presel);
 #ifdef MKFIT_TRACE_PROP_COMPARE
-      hm.kine_on_plane_cmp = statep2bivec3(h_plex, h);
+          hm.kine_on_plane_cmp = statep2bivec3(h_plex, h);
 #endif
-      if (dqdphi_presel)
-        V2P2_TR_LS_COUNT(tr_layersearch_ids[cand_idcs[h]], n_hits_presel);
+          if (dqdphi_presel)
+            V2P2_TR_LS_COUNT(tr_layersearch_ids[cand_idcs[h]], n_hits_presel);
+        }
 #endif
 
       if (!dqdphi_presel)
@@ -1104,7 +1120,9 @@ namespace mkfit {
     for (int i = 0; i < N_proc; ++i) {
       CandIncoming& cand = *cand_ptrs[i];
 #ifdef MKFIT_TRACE
-      mp_trace->tr_layersearch(tr_layersearch_ids[i]).n_hits_pqueue = cand.m_pqueue[0].size() + cand.m_pqueue[1].size();
+      if (mp_trace)
+        mp_trace->tr_layersearch(tr_layersearch_ids[i]).n_hits_pqueue =
+            cand.m_pqueue[0].size() + cand.m_pqueue[1].size();
 #endif
       for (int sl = 0; sl < 2; ++sl) {
         for (const auto& e : cand.m_pqueue[sl])
@@ -1140,7 +1158,7 @@ namespace mkfit {
     // Ranks by the pre-selection's ddphi, 1 = best: sub_rank within the hit's
     // sub-layer, full_rank across both. Counted rather than sorted, so
     // m_layer_hits keeps its path order.
-    for (int i = 0; i < N_proc; ++i) {
+    for (int i = 0; i < N_proc && mp_trace; ++i) {
       CandIncoming& cand = *cand_ptrs[i];
       for (const auto& e : cand.m_layer_hits) {
         int better = 0, better_sub = 0;
@@ -1506,14 +1524,17 @@ namespace mkfit {
             nc.incOverlapCount();  // a second hit in one layer: an overlap, or the sister sensor of a paired entry
           }
 #ifdef MKFIT_TRACE
-          int pid = nc.m_trace_state_id;
-          int id = mp_trace->trace_new_cand_state(pid, (*mp_steeringparams_iter)->m_layer, track2bivec3(nc), n.m_state);
-          if (n.m_tr_hitmatch_id >= 0) {
-            auto& ku = mp_trace->tr_kalmanupdate(mp_trace->tr_hitmatch(n.m_tr_hitmatch_id).kalman_id);
-            ku.accepted = true;
-            ku.state_id_out = id;
+          if (mp_trace) {
+            int pid = nc.m_trace_state_id;
+            int id =
+                mp_trace->trace_new_cand_state(pid, (*mp_steeringparams_iter)->m_layer, track2bivec3(nc), n.m_state);
+            if (n.m_tr_hitmatch_id >= 0) {
+              auto& ku = mp_trace->tr_kalmanupdate(mp_trace->tr_hitmatch(n.m_tr_hitmatch_id).kalman_id);
+              ku.accepted = true;
+              ku.state_id_out = id;
+            }
+            nc.m_trace_state_id = id;
           }
-          nc.m_trace_state_id = id;
 #endif
         }
         nc.setState(m_node_arena[e.node_idx].m_state);
@@ -1541,9 +1562,11 @@ namespace mkfit {
           nc.setStopReason(TrackCand::SR_TooManyHoles);
         nc.addHitIdx(e.fake_hit, m_rz_limits.layer_info_1().layer_id(), 0.0f);
 #ifdef MKFIT_TRACE
-        int pid = nc.m_trace_state_id;
-        nc.m_trace_state_id =
-            mp_trace->trace_new_cand_state(pid, (*mp_steeringparams_iter)->m_layer, track2bivec3(nc), nc.state());
+        if (mp_trace) {
+          int pid = nc.m_trace_state_id;
+          nc.m_trace_state_id =
+              mp_trace->trace_new_cand_state(pid, (*mp_steeringparams_iter)->m_layer, track2bivec3(nc), nc.state());
+        }
 #endif
       }
 

@@ -4,6 +4,13 @@
 
 // Convert TBB execution to simple loops for debugging, perfomance measeurements.
 
+// The trace store is appended to without a lock, and the hooks hold references
+// into it across appends, so a trace build runs the event serially, in the
+// order of the standalone's trace build (EVENT_RDF_TRACE sets both macros).
+#if defined(MKFIT_TRACE) && !defined(TBB_DEBUG)
+#define TBB_DEBUG
+#endif
+
 #ifdef TBB_DEBUG
 
 #include "oneapi/tbb/blocked_range.h"

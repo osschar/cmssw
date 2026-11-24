@@ -87,32 +87,35 @@ namespace mkfit {
 
     for (int i = 0; i < N_filled; ++i) {
 #ifdef MKFIT_TRACE
-      // Create TrKalmanUpdate for EVERY hit that went through Kalman
-      int hm_id = tr_hitmatch_ids[i];
-      TrHitMatch& hm = mp_trace->tr_hitmatch(hm_id);
+      // Create TrKalmanUpdate for EVERY hit that went through Kalman; nothing
+      // without a store.
+      if (mp_trace) {
+        int hm_id = tr_hitmatch_ids[i];
+        TrHitMatch& hm = mp_trace->tr_hitmatch(hm_id);
 
-      TrKalmanUpdate& ku = mp_trace->trace_kalmanupdate({-1, hm_id, hm.state_id});
-      ku.chi2 = tsChi2[i];
-      ku.chi2_acc = tsChi2Acc[i];
-      // accepted and state_id_out are set when a path is materialised.
+        TrKalmanUpdate& ku = mp_trace->trace_kalmanupdate({-1, hm_id, hm.state_id});
+        ku.chi2 = tsChi2[i];
+        ku.chi2_acc = tsChi2Acc[i];
+        // accepted and state_id_out are set when a path is materialised.
 
 #ifdef MKFIT_TRACE_KALMAN_DEBUG
-      // Full pre- and post-update states, for every hit including the rejected
-      // ones (for an accepted hit the post-update state is also reachable as
-      // trCandStates_[state_id_out].state).
-      // Charges straddle the update on purpose: pre-update on the propagated
-      // state, post-update on the updated one.
-      propPar.copyOut(i, ku.propagated_state.parArray_nc());
-      propErr.copyOut(i, ku.propagated_state.errArray_nc());
-      ku.propagated_state.charge = chg_pre_update[i];
+        // Full pre- and post-update states, for every hit including the rejected
+        // ones (for an accepted hit the post-update state is also reachable as
+        // trCandStates_[state_id_out].state).
+        // Charges straddle the update on purpose: pre-update on the propagated
+        // state, post-update on the updated one.
+        propPar.copyOut(i, ku.propagated_state.parArray_nc());
+        propErr.copyOut(i, ku.propagated_state.errArray_nc());
+        ku.propagated_state.charge = chg_pre_update[i];
 
-      tsPar.copyOut(i, ku.updated_state.parArray_nc());
-      tsErr.copyOut(i, ku.updated_state.errArray_nc());
-      ku.updated_state.charge = tsChg[i];
+        tsPar.copyOut(i, ku.updated_state.parArray_nc());
+        tsErr.copyOut(i, ku.updated_state.errArray_nc());
+        ku.updated_state.charge = tsChg[i];
 #endif
 
-      // Link forward from HitMatch
-      hm.kalman_id = ku.id;
+        // Link forward from HitMatch
+        hm.kalman_id = ku.id;
+      }
 #endif
 
       if (mp_out) {
