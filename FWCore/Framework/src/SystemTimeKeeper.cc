@@ -110,7 +110,7 @@ void SystemTimeKeeper::removeModuleIfExists(ModuleDescription const& module) {
   // The deletion of a module is signaled to all (Sub)Processes, even
   // though the module exists in only one of them.
   auto found = std::lower_bound(m_modules.begin(), m_modules.end(), &module, lessModuleDescription);
-  if (*found == &module) {
+  if (found != m_modules.end() and *found == &module) {
     m_modules.erase(found);
   }
 }

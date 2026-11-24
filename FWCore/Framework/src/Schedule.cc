@@ -879,6 +879,16 @@ namespace edm {
       return false;
     }
 
+    if (wantSummary_) {
+      // The summary keepers hold the address of each module's ModuleDescription and drop a module only on the
+      // PreModuleDestruction signal. The replacement below destroys the old module, and its ModuleDescription,
+      // without that signal. Drop the old module from the keepers while its description is still alive, so that
+      // the end-of-job summary does not read freed memory. The summary then omits the replaced module.
+      ModuleDescription const& oldDescription = *found->description();
+      summaryTimeKeeper_->removeModuleIfExists(oldDescription);
+      summaryTriggerResultsKeeper_->removeModuleIfExists(oldDescription);
+    }
+
     auto newMod = moduleRegistry_->replaceModule(iLabel, iPSet, preallocConfig_);
 
     globalSchedule_->replaceModule(newMod, iLabel);

@@ -103,7 +103,7 @@ SystemTriggerReportKeeper::SystemTriggerReportKeeper(unsigned int iNumStreams,
 //
 void SystemTriggerReportKeeper::removeModuleIfExists(ModuleDescription const& module) {
   auto found = std::lower_bound(m_modules.begin(), m_modules.end(), &module, lessModuleDescription);
-  if (*found == &module) {
+  if (found != m_modules.end() and *found == &module) {
     m_modules.erase(found);
   }
 }
