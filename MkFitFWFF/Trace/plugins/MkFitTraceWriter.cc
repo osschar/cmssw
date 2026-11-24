@@ -1,36 +1,16 @@
-// -*- C++ -*-
-//
 // Package:    MkFitFWFF/Trace
 // Class:      MkFitTraceWriter
 //
-// A service that writes the mkFit V2p2 trace of every MkFitProducer in the job into one ROOT file of plain RNTuples
-// (TraceRNTupleWriter.h has the layout). It registers mkFit's trace sink (MkFitCore/interface/TraceStore.h), which
-// each MkFitProducer calls at the end of its event with its stream's store. With writerThreads > 0 the sink takes the
-// store's record vectors by swap and returns; the writer's threads write them (TraceRNTupleWriter.h). The producer
-// clears its store at the start of each event and does not read it after the sink. The file is closed at the end of
-// the job, after the queued events are written.
-//
-// Needs a build with -DMKFIT_TRACE in MkFitCore, MkFitCMS and RecoTracker/MkFit; without it the service refuses to
-// start.
-//
-// With printDigest, it also prints for each event and record vector a digest line computed from the store in
-// memory, in the format mkFitTraceDigest prints from the file:
-//   MKFITTRACE digest <run>:<lumi>:<event> <module> pass=<p> <vector> <size> <hash>
-// and one line per event, once it is written:
-//   MKFITTRACE event <run>:<lumi>:<event> <module> pass=<p> records=<n> sink_ms=<s> write_ms=<w> done_ms=<d>
-// sink_ms: the time the producer spent in the sink; write_ms: the time spent writing the event, summed over the
-// RNTuples; done_ms: from the sink's call until the event was written.
+// The service; its description is in MkFitTraceWriter.h.
+
+#include "MkFitFWFF/Trace/plugins/MkFitTraceWriter.h"
 
 #include "FWCore/MessageLogger/interface/MessageLogger.h"
-#include "FWCore/ParameterSet/interface/ConfigurationDescriptions.h"
-#include "FWCore/ParameterSet/interface/ParameterSet.h"
 #include "FWCore/ParameterSet/interface/ParameterSetDescription.h"
-#include "FWCore/ServiceRegistry/interface/ActivityRegistry.h"
 #include "FWCore/ServiceRegistry/interface/ServiceMaker.h"
 #include "FWCore/Utilities/interface/Exception.h"
 
 #include "MkFitFWFF/Trace/interface/TraceFileDigest.h"
-#include "MkFitFWFF/Trace/interface/TraceRNTupleWriter.h"
 #include "RecoTracker/MkFitCore/interface/TraceStore.h"
 
 #include <cstdio>
@@ -41,24 +21,6 @@
 #include <string>
 
 namespace mkfit_fwff {
-
-  class MkFitTraceWriter {
-  public:
-    MkFitTraceWriter(edm::ParameterSet const& iPS, edm::ActivityRegistry& iAR);
-    ~MkFitTraceWriter();
-
-    static void fillDescriptions(edm::ConfigurationDescriptions& descriptions);
-
-  private:
-    void eventDone(const mkfit::TraceStore& records, const TraceRNTupleWriter::EventDone& done);
-    void finish();
-
-    const std::string fileName_;
-    const bool printDigest_;
-    TraceRNTupleWriter::Options options_;
-    std::unique_ptr<TraceRNTupleWriter> writer_;
-    std::mutex printMutex_;
-  };
 
   MkFitTraceWriter::MkFitTraceWriter(edm::ParameterSet const& iPS, [[maybe_unused]] edm::ActivityRegistry& iAR)
       : fileName_(iPS.getUntrackedParameter<std::string>("fileName")),
@@ -120,6 +82,12 @@ namespace mkfit_fwff {
     os << buf << "\n";
     std::lock_guard<std::mutex> lock(printMutex_);
     std::cout << os.str() << std::flush;
+  }
+
+  int MkFitTraceWriter::writeTruth(const TraceTruthTables& truth) {
+    if (!writer_)
+      throw cms::Exception("LogicError") << "MkFitTraceWriter: the trace file is not open";
+    return writer_->writeTruth(truth);
   }
 
   void MkFitTraceWriter::finish() {

@@ -17,6 +17,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
+#include <cstring>
 #include <deque>
 #include <exception>
 #include <map>
@@ -37,6 +38,44 @@ namespace mkfit_fwff {
       return std::chrono::duration<double, std::milli>(Clock::now() - t0).count();
     }
 
+    // A track as the RNTuples Seeds, Tracks and SimTracks keep it.
+    struct TrackRow {
+      std::int32_t idx = 0;
+      std::int32_t label = -1;
+      mkfit::TrackState state;
+      float chi2 = 0, score = 0;
+      std::uint32_t status = 0;
+      std::int32_t nFound = 0;
+      std::vector<std::int32_t> hitLyr, hitIdx;
+
+      void set(int i, const mkfit::Track& t) {
+        static_assert(sizeof(mkfit::Track::Status) == sizeof(std::uint32_t));
+        idx = i;
+        label = t.label();
+        state = t.state();
+        chi2 = t.chi2();
+        score = t.score();
+        const mkfit::Track::Status st = t.getStatus();
+        std::memcpy(&status, &st, sizeof(status));
+        nFound = t.nFoundHits();
+        const int n = t.nTotalHits();
+        hitLyr.resize(n);
+        hitIdx.resize(n);
+        for (int h = 0; h < n; ++h) {
+          const mkfit::HitOnTrack hot = t.getHitOnTrack(h);
+          hitLyr[h] = hot.layer;
+          hitIdx[h] = hot.index;
+        }
+      }
+    };
+
+    void setRows(std::vector<TrackRow>& rows, const std::vector<mkfit::Track>* tracks) {
+      const std::size_t n = tracks ? tracks->size() : 0;
+      rows.resize(n);
+      for (std::size_t i = 0; i < n; ++i)
+        rows[i].set(i, (*tracks)[i]);
+    }
+
     // One event as the RNTuples see it: the key, the Events fields, and where its records are.
     struct Batch {
       // The records, swapped out of the caller's store (threads > 0). Unused when writing in the caller.
@@ -51,6 +90,11 @@ namespace mkfit_fwff {
       std::int32_t nSeedsIn = 0, nSeeds = 0, nTracks = 0;
       std::int32_t nRec[7] = {};
       std::vector<std::int32_t> outLabels;
+      // The cleaned seeds and the output tracks, copied in write().
+      std::vector<TrackRow> seeds, tracks;
+      // The truth, in writeTruth() only: the tables, and their sim tracks as rows.
+      const TraceTruthTables* truth = nullptr;
+      std::vector<TrackRow> simTracks;
 
       Clock::time_point tCall;
       double takeMs = 0;
@@ -61,6 +105,8 @@ namespace mkfit_fwff {
         // Keeps the capacity: the vectors go back into a store at a later write().
         recs.clear_trace();
         outLabels.clear();
+        seeds.clear();
+        tracks.clear();
         src = nullptr;
         writeNs = 0;
       }
@@ -198,6 +244,108 @@ namespace mkfit_fwff {
       }
     };
 
+    // Seeds, Tracks or SimTracks: one entry per TrackRow of the batch member.
+    class TrackTuple : public Tuple {
+    public:
+      using Member = std::vector<TrackRow> Batch::*;
+
+      TrackTuple(
+          const char* name, const char* what, Member member, TDirectory& dir, const TraceRNTupleWriter::Options& o)
+          : m_member(member) {
+        auto model = ROOT::RNTupleModel::Create();
+        makeKeyFields(*model);
+        model->MakeField<std::int32_t>("idx", what);
+        model->MakeField<std::int32_t>("label");
+        model->MakeField<mkfit::TrackState>("state");
+        model->MakeField<float>("chi2");
+        model->MakeField<float>("score");
+        model->MakeField<std::uint32_t>("status", "mkfit::Track::Status as its 32 bits");
+        model->MakeField<std::int32_t>("n_found", "found hits, as Track::nFoundHits()");
+        model->MakeField<std::vector<std::int32_t>>("hit_lyr", "HitOnTrack::layer of the hits on the track, in order");
+        model->MakeField<std::vector<std::int32_t>>("hit_idx", "HitOnTrack::index of the hits on the track, in order");
+        open(std::move(model), name, dir, o);
+        for (int i = 0; i < 9; ++i)
+          m_tok[i] = m_entry->GetToken(kNames[i]);
+      }
+
+    private:
+      static constexpr const char* kNames[9] = {
+          "idx", "label", "state", "chi2", "score", "status", "n_found", "hit_lyr", "hit_idx"};
+
+      void fillRows(const Batch& b, std::mutex& fileMutex) override {
+        bindKey(*m_entry, b);
+        for (const TrackRow& r : b.*m_member) {
+          m_entry->BindRawPtr(m_tok[0], &r.idx);
+          m_entry->BindRawPtr(m_tok[1], &r.label);
+          m_entry->BindRawPtr(m_tok[2], &r.state);
+          m_entry->BindRawPtr(m_tok[3], &r.chi2);
+          m_entry->BindRawPtr(m_tok[4], &r.score);
+          m_entry->BindRawPtr(m_tok[5], &r.status);
+          m_entry->BindRawPtr(m_tok[6], &r.nFound);
+          m_entry->BindRawPtr(m_tok[7], &r.hitLyr);
+          m_entry->BindRawPtr(m_tok[8], &r.hitIdx);
+          fillOne(fileMutex);
+        }
+      }
+
+      Member m_member;
+      ROOT::RFieldToken m_tok[9];
+    };
+
+    // TruthHits: one entry per layer of the batch's truth.
+    class TruthHitsTuple : public Tuple {
+    public:
+      TruthHitsTuple(TDirectory& dir, const TraceRNTupleWriter::Options& o) {
+        auto model = ROOT::RNTupleModel::Create();
+        makeKeyFields(*model);
+        model->MakeField<std::int32_t>("layer");
+        model->MakeField<std::int32_t>("n_hits", "1 + the largest index of a hit in the layer");
+        model->MakeField<std::vector<std::int32_t>>("hit", "indices of the hits that have a sim track");
+        model->MakeField<std::vector<std::int32_t>>("sim", "their sim track, an index into SimTracks");
+        open(std::move(model), "TruthHits", dir, o);
+      }
+
+    private:
+      void fillRows(const Batch& b, std::mutex& fileMutex) override {
+        bindKey(*m_entry, b);
+        for (const auto& l : b.truth->layers) {
+          m_entry->BindRawPtr("layer", &l.layer);
+          m_entry->BindRawPtr("n_hits", &l.n_hits);
+          m_entry->BindRawPtr("hit", &l.hit);
+          m_entry->BindRawPtr("sim", &l.sim);
+          fillOne(fileMutex);
+        }
+      }
+    };
+
+    // TruthSeeds: one entry per input seed of the batch's truth.
+    class TruthSeedsTuple : public Tuple {
+    public:
+      TruthSeedsTuple(TDirectory& dir, const TraceRNTupleWriter::Options& o) {
+        auto model = ROOT::RNTupleModel::Create();
+        makeKeyFields(*model);
+        model->MakeField<std::int32_t>("seed", "index in the input seed collection, the mkFit seed's label");
+        model->MakeField<std::int32_t>("sim", "best sim track of the seed-to-TrackingParticle association, -1 none");
+        model->MakeField<float>("sim_frac", "its quality, the shared fraction");
+        model->MakeField<std::int32_t>("best_sim", "sim track with most of the seed's clusters, at least 3; -1 none");
+        model->MakeField<float>("best_frac", "the fraction of the seed's clusters it has");
+        open(std::move(model), "TruthSeeds", dir, o);
+      }
+
+    private:
+      void fillRows(const Batch& b, std::mutex& fileMutex) override {
+        bindKey(*m_entry, b);
+        for (const auto& t : b.truth->seeds) {
+          m_entry->BindRawPtr("seed", &t.seed);
+          m_entry->BindRawPtr("sim", &t.sim);
+          m_entry->BindRawPtr("sim_frac", &t.sim_frac);
+          m_entry->BindRawPtr("best_sim", &t.best_sim);
+          m_entry->BindRawPtr("best_frac", &t.best_frac);
+          fillOne(fileMutex);
+        }
+      }
+    };
+
   }  // namespace
 
   struct TraceRNTupleWriter::Impl {
@@ -209,6 +357,10 @@ namespace mkfit_fwff {
     std::vector<std::unique_ptr<Tuple>> tuples;
     // The same in the file's order: created and committed in it.
     std::vector<Tuple*> fileOrder;
+    // The truth RNTuples, filled by writeTruth() in its caller, one call at a time (truthMutex).
+    std::vector<std::unique_ptr<Tuple>> truthTuples;
+    std::mutex truthMutex;
+    std::map<std::tuple<std::uint32_t, std::uint32_t, std::uint64_t, std::string>, int> truthPasses;
 
     // mutex guards everything below; fileMutex the writing into the file.
     std::mutex mutex;
@@ -323,8 +475,27 @@ namespace mkfit_fwff {
     auto kalman = std::make_unique<RecordTuple<TrKalmanUpdate>>("TrKalmanUpdate", &TS::trKalmanUpdates_, dir, I.opt);
     auto bkfit = std::make_unique<RecordTuple<TrBkFitUpdate>>("TrBkFitUpdate", &TS::trBkFitUpdates_, dir, I.opt);
     auto events = std::make_unique<EventsTuple>(dir, I.opt);
-    I.fileOrder = {
-        metas.get(), stages.get(), states.get(), searches.get(), hits.get(), kalman.get(), bkfit.get(), events.get()};
+    auto seeds = std::make_unique<TrackTuple>(
+        "Seeds", "the seed's index after mkFit's seed cleaning, TrCandMeta::seed", &Batch::seeds, dir, I.opt);
+    auto tracks =
+        std::make_unique<TrackTuple>("Tracks", "the track's index in mkFit's output", &Batch::tracks, dir, I.opt);
+    auto truthHits = std::make_unique<TruthHitsTuple>(dir, I.opt);
+    auto simTracks = std::make_unique<TrackTuple>(
+        "SimTracks", "the sim track's index, also its label", &Batch::simTracks, dir, I.opt);
+    auto truthSeeds = std::make_unique<TruthSeedsTuple>(dir, I.opt);
+    I.fileOrder = {metas.get(),
+                   stages.get(),
+                   states.get(),
+                   searches.get(),
+                   hits.get(),
+                   kalman.get(),
+                   bkfit.get(),
+                   events.get(),
+                   seeds.get(),
+                   tracks.get(),
+                   truthHits.get(),
+                   simTracks.get(),
+                   truthSeeds.get()};
     I.tuples.push_back(std::move(searches));
     I.tuples.push_back(std::move(states));
     I.tuples.push_back(std::move(hits));
@@ -333,6 +504,11 @@ namespace mkfit_fwff {
     I.tuples.push_back(std::move(stages));
     I.tuples.push_back(std::move(metas));
     I.tuples.push_back(std::move(events));
+    I.tuples.push_back(std::move(seeds));
+    I.tuples.push_back(std::move(tracks));
+    I.truthTuples.push_back(std::move(truthHits));
+    I.truthTuples.push_back(std::move(simTracks));
+    I.truthTuples.push_back(std::move(truthSeeds));
 
     if (I.opt.threads > 0) {
       const int n = std::min<int>(I.opt.threads, I.tuples.size());
@@ -412,6 +588,8 @@ namespace mkfit_fwff {
       for (const auto& t : *info.out_tracks)
         b->outLabels.push_back(t.label());
     }
+    setRows(b->seeds, info.seeds);
+    setRows(b->tracks, info.out_tracks);
     ++I.nEvents;
     const int pass = b->pass;
 
@@ -443,6 +621,29 @@ namespace mkfit_fwff {
     return pass;
   }
 
+  int TraceRNTupleWriter::writeTruth(const TraceTruthTables& truth) {
+    Impl& I = *m_impl;
+    std::lock_guard<std::mutex> truthLock(I.truthMutex);
+    Batch b;
+    {
+      std::lock_guard<std::mutex> lock(I.mutex);
+      if (I.closed)
+        throw std::runtime_error("TraceRNTupleWriter::writeTruth after close");
+      if (I.error)
+        std::rethrow_exception(I.error);
+      b.module = truth.module;
+      b.pass = I.truthPasses[{truth.run, truth.lumi, truth.event, b.module}]++;
+    }
+    b.run = truth.run;
+    b.lumi = truth.lumi;
+    b.event = truth.event;
+    b.truth = &truth;
+    setRows(b.simTracks, &truth.simTracks);
+    for (auto& t : I.truthTuples)
+      t->fill(b, I.fileMutex);
+    return b.pass;
+  }
+
   void TraceRNTupleWriter::close() {
     if (!m_impl)
       return;
@@ -461,6 +662,8 @@ namespace mkfit_fwff {
     I.workers.clear();
 
     {
+      // No writeTruth() is filling the truth RNTuples any more: it checks closed under the same locks.
+      std::lock_guard<std::mutex> truthLock(I.truthMutex);
       std::lock_guard<std::mutex> lock(I.fileMutex);
       TDirectory::TContext context;
       // Destroying a writer commits its RNTuple into the file.
@@ -468,6 +671,7 @@ namespace mkfit_fwff {
         t->commit();
       I.fileOrder.clear();
       I.tuples.clear();
+      I.truthTuples.clear();
       I.file->Close();
       I.file.reset();
     }
