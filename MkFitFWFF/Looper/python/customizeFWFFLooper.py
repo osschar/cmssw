@@ -56,6 +56,47 @@ Both go to std::cout.
 The looper forces one stream, one concurrent lumi and one concurrent run; the number of threads stays. Each loop
 reopens the input and every output: a PoolOutputModule writes out.root, out001.root, ...; drop outputs that are not
 needed.
+
+A module whose type the framework resolves at run time ('X@alpaka', e.g. LST's modules) cannot be rebuilt: the
+framework's replacement factory looks up the unresolved type and returns nothing, and the job crashed in
+ModuleRegistry::replaceModule. The looper refuses such an edit (an exception in the scripted mode, an error status in
+the interactive mode).
+
+Interactive mode (controlDir set, edits empty): the looper is driven from outside, as a viewer would drive it.
+
+    process = customizeFWFFLooper(process, controlDir = '/some/dir', jsonPath = '...', candidates = ..., tracks = ...)
+
+After each loop the looper writes <controlDir>/status.json (written to status.json.tmp, then renamed) and waits for
+the file <controlDir>/command, looking every pollMs milliseconds (a sleep between looks, no busy loop). It moves the
+command to <controlDir>/commands/cmd-NNNN.py and reads it:
+  - 'rerun' or 'stop' as the whole content (plain words);
+  - otherwise Python, read with FWCore/PythonParameterSet's readPSetsFrom (a fresh interpreter per command), which
+    must define exactly one of the PSets 'edit', 'rerun' or 'stop' at top level. 'edit' has the fields of an entry of
+    'edits', each optional (name, moduleLabel, overrides, jsonPatch); fwffEdit() from this module makes one:
+
+        import FWCore.ParameterSet.Config as cms
+        from MkFitFWFF.Looper.customizeFWFFLooper import fwffEdit
+        edit = fwffEdit('ce', 'hltInitialStepTrackCandidatesMkFit', buildingRoutine = cms.string('cloneEngine'))
+
+An edit is applied as a whole or not at all. A command that cannot be read or applied (a Python error, an unknown
+parameter, a type mismatch, a bad JSON patch, a module that cannot be rebuilt) leaves the job as it was: the looper
+writes the error into status.json with state 'error' and waits for the next command. A client writes the command to
+a temporary name in controlDir and renames it to 'command', then waits for the next status.json whose state is not
+'running'. scripts/fwffLooperCtl.py does that and prints the result; it is also the reference for a viewer.
+
+status.json fields:
+  seq       increases with every write;  state  starting | running | waiting | error | stopped | ended
+  waiting   true when the looper waits for a command (states waiting and error)
+  loop      the loop just finished (waiting, error, stopped) or about to start (running)
+  pid, t_ms (looper clock), epoch (wall clock, s), commands (number taken), jsonPath
+  command   the last command taken: id, file, kind (edit, rerun, stop, invalid), name, text
+  error     the reason a command was refused (state error), or why the looper stopped without a stop command
+  applied   every command applied so far, in order: loop, command, kind, name, moduleLabel, jsonPatch, changes
+  lastLoop  the loop just finished: loop, edit, events, digest (its MKFITDIGEST lines), times_ms with
+            wait (status 'waiting' or 'error' to the command seen), apply (command seen to applied),
+            next (applied to the loop's start), runLumi, event, end (event done to the end of the loop),
+            loop (applied to the end of the loop), result (command seen to the end of the loop)
+SIGUSR2 (cmsRun's graceful-stop signal) or idleTimeout end the wait with state 'stopped'.
 """
 
 import FWCore.ParameterSet.Config as cms
@@ -79,12 +120,15 @@ def fwffEdit(name, moduleLabel='', jsonPatch='', **overrides):
     )
 
 
-def customizeFWFFLooper(process, edits, jsonPath='', candidates='initialStepTrackCandidates', tracks='', tag='',
-                        event=None):
+def customizeFWFFLooper(process, edits=(), jsonPath='', candidates='initialStepTrackCandidates', tracks='', tag='',
+                        event=None, controlDir='', pollMs=None, idleTimeout=None):
     """Adds the looper as process.looper and the digest on its own EndPath.
 
-    edits      list of fwffEdit(...) PSets, one per loop after the first
+    edits      list of fwffEdit(...) PSets, one per loop after the first (scripted mode)
     jsonPath   iteration JSON the looper patches (see the module docstring); '' when no edit has a jsonPatch
+    controlDir directory for the interactive mode (then edits must be empty); '' for the scripted mode
+    pollMs     interactive mode: interval between looks for the command file (default 100)
+    idleTimeout interactive mode: stop after this many seconds without a command (default 0: wait forever)
     candidates TrackCandidateCollection to digest ('' for none)
     tracks     reco::TrackCollection to digest ('' for none)
     tag        string printed on every MKFITDIGEST line
@@ -94,10 +138,17 @@ def customizeFWFFLooper(process, edits, jsonPath='', candidates='initialStepTrac
     from MkFitFWFF.Looper.fwffMkFitLooper_cfi import fwffMkFitLooper
     from MkFitFWFF.Looper.mkFitOutputDigest_cfi import mkFitOutputDigest
 
+    if controlDir and len(edits):
+        raise ValueError('customizeFWFFLooper: edits and controlDir exclude each other')
     process.looper = fwffMkFitLooper.clone(
         edits = cms.VPSet(*edits),
         jsonPath = jsonPath,
+        controlDir = controlDir,
     )
+    if pollMs is not None:
+        process.looper.pollMs = pollMs
+    if idleTimeout is not None:
+        process.looper.idleTimeout = float(idleTimeout)
     process.mkFitOutputDigest = mkFitOutputDigest.clone(
         candidates = candidates,
         tracks = tracks,

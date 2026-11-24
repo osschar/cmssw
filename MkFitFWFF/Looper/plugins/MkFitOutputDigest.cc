@@ -14,7 +14,8 @@
 // raw index); a track hashes its five parameters rounded to 1e-6, its charge and ndof, and its hits the same way
 // when its TrackExtra is available. The collection hash is the sum of the per-element hashes, so it does not depend
 // on the order of the collection. 'loop' is FWFFMkFitLooper's loop number, -1 without the looper. Fields of a
-// collection that is not configured print '-'.
+// collection that is not configured print '-'. With the looper, each line is also handed to the looper, which puts
+// the lines of a loop into its status file in the interactive mode.
 
 #include "DataFormats/TrackCandidate/interface/TrackCandidateCollection.h"
 #include "DataFormats/TrackReco/interface/Track.h"
@@ -166,6 +167,8 @@ void MkFitOutputDigest::analyze(edm::StreamID, edm::Event const& iEvent, edm::Ev
     os << " tracks=- trackHits=- trackHash=-";
   }
 
+  if (fwff::currentLoop().load() >= 0)
+    fwff::addDigestLine(os.str());
   os << "\n";
   std::cout << os.str() << std::flush;
 }
