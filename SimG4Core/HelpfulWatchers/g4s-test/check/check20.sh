@@ -12,7 +12,10 @@
 G=/ceph/users/matevz/g4snitch-2026-11
 GUN=${1:-cms}; [ "$GUN" = hgcal ] && GUNV= || GUNV=$GUN
 C=$G/CMSSW_20_1_0_pre5/src/SimG4Core/HelpfulWatchers/g4s-test/check
-pgrep -u $USER -x cmsRun > /dev/null && { echo "cmsRun is running; not starting"; exit 1; }
+# Only this area's jobs count (other sessions run cmsRun under the same account elsewhere on uaf-4).
+for p in $(pgrep -u $USER -x cmsRun); do
+  case $(readlink /proc/$p/cwd) in $G/*) echo "cmsRun $p is running in $G; not starting"; exit 1 ;; esac
+done
 STDBUF=1 G4SNITCH_GUN=$GUNV G4SNITCH_BFIELD=1 bash $G/run20.sh $G/check-$GUN > $G/check-$GUN.log 2>&1 &
 STDBUF=1 G4SNITCH_GUN=$GUNV G4SNITCH_BFIELD=1 G4SNITCH_DETID=0 bash $G/run20.sh $G/check-$GUN-0 > $G/check-$GUN-0.log 2>&1 &
 G4SNITCH_GUN=$GUNV G4SNITCH_OFF=1 bash $G/run20.sh $G/check-$GUN-nosnitch > $G/check-$GUN-nosnitch.log 2>&1 &
