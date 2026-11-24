@@ -114,10 +114,4 @@ def customizeFWFFLooper(process, edits, jsonPath='', candidates='initialStepTrac
     process.options.numberOfStreams = 1
     process.options.numberOfConcurrentLuminosityBlocks = 1
     process.options.numberOfConcurrentRuns = 1
-    # With wantSummary the schedule keeps raw ModuleDescription pointers for the end-of-job trigger and time
-    # reports, and drops a module only on the pre-module-destruction signal (FWCore/Framework/src/Schedule.cc,
-    # the summary keepers). ModuleRegistry::replaceModule destroys the old module without that signal, so after
-    # any changeModule the trigger report reads freed memory at end of job (bad_alloc, length_error or a
-    # segfault, measured on uaf-4 2026-11-24). The FWFFLOOP lines and FastTimerService cover the timing.
-    process.options.wantSummary = False
     return process
