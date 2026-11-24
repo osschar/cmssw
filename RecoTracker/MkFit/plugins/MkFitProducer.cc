@@ -24,6 +24,9 @@
 #include "RecoTracker/MkFitCMS/interface/runFunctions.h"
 #include "RecoTracker/MkFitCore/interface/IterationConfig.h"
 #include "RecoTracker/MkFitCore/interface/MkBuilderWrapper.h"
+#ifdef MKFIT_TRACE
+#include "RecoTracker/MkFitCore/interface/TraceStore.h"
+#endif
 
 // TBB includes
 #include "oneapi/tbb/task_arena.h"
@@ -44,6 +47,13 @@ private:
   void produce(edm::StreamID, edm::Event& iEvent, const edm::EventSetup& iSetup) const override;
 
   void stripClusterChargeCut(const std::vector<float>& stripClusterCharge, std::vector<bool>& mask) const;
+#ifdef MKFIT_TRACE
+  void sendTrace(const edm::Event& iEvent,
+                 const mkfit::TraceStore& trace,
+                 int nSeedsIn,
+                 const mkfit::TrackVec* seeds,
+                 const mkfit::TrackVec* tracks) const;
+#endif
 
   const edm::EDGetTokenT<MkFitHitWrapper> pixelHitsToken_;
   const edm::EDGetTokenT<MkFitHitWrapper> stripHitsToken_;
@@ -148,7 +158,19 @@ void MkFitProducer::produce(edm::StreamID iID, edm::Event& iEvent, const edm::Ev
   const auto& stripHits = iEvent.get(stripHitsToken_);
   const auto& eventOfHits = iEvent.get(eventOfHitsToken_);
   const auto& seeds = iEvent.get(seedToken_);
+#ifdef MKFIT_TRACE
+  // The trace of this event: the stream's store, cleared here, filled by the
+  // hooks and handed to the registered sink at the end (TraceStore.h).
+  mkfit::TraceStore& trace = streamCache(iID)->trace();
+  trace.clear_trace();
+  mkfit::TraceStore* const traceStore = &trace;
+#else
+  mkfit::TraceStore* const traceStore = nullptr;
+#endif
   if (seeds.seeds().empty()) {
+#ifdef MKFIT_TRACE
+    sendTrace(iEvent, trace, 0, nullptr, nullptr);
+#endif
     iEvent.emplace(putToken_, mkfit::TrackVec(), not backwardFitInCMSSW_);
     return;
   }
@@ -210,7 +232,8 @@ void MkFitProducer::produce(edm::StreamID iID, edm::Event& iEvent, const edm::Ev
                             seedCleaning_,
                             not backwardFitInCMSSW_,
                             removeDuplicates_,
-                            useV2p2_);
+                            useV2p2_,
+                            traceStore);
   };
 
   if (limitConcurrency_) {
@@ -219,6 +242,17 @@ void MkFitProducer::produce(edm::StreamID iID, edm::Event& iEvent, const edm::Ev
   } else {
     tbb::this_task_arena::isolate(std::move(lambda));
   }
+
+#ifdef MKFIT_TRACE
+  // A plain store knows no seed labels. The label of a seed is its index in the
+  // input seed collection (MkFitSeedConverter), and TrCandMeta::seed indexes the
+  // cleaned seeds.
+  for (auto& cm : trace.trCandMetas_) {
+    if (cm.seed >= 0 && cm.seed < (int)seeds_mutable.size())
+      cm.global_seed = seeds_mutable[cm.seed].label();
+  }
+  sendTrace(iEvent, trace, seeds.seeds().size(), &seeds_mutable, &tracks);
+#endif
 
   iEvent.emplace(putToken_, std::move(tracks), not backwardFitInCMSSW_);
 }
@@ -233,5 +267,26 @@ void MkFitProducer::stripClusterChargeCut(const std::vector<float>& stripCluster
     mask[i] = mask[i] || (stripClusterCharge[i] <= minGoodStripCharge_);
   }
 }
+
+#ifdef MKFIT_TRACE
+void MkFitProducer::sendTrace(const edm::Event& iEvent,
+                              const mkfit::TraceStore& trace,
+                              int nSeedsIn,
+                              const mkfit::TrackVec* seeds,
+                              const mkfit::TrackVec* tracks) const {
+  const auto& sink = mkfit::trace_sink();
+  if (!sink)
+    return;
+  mkfit::TraceEventInfo info;
+  info.run = iEvent.id().run();
+  info.lumi = iEvent.id().luminosityBlock();
+  info.event = iEvent.id().event();
+  info.module = moduleDescription().moduleLabel();
+  info.n_seeds_in = nSeedsIn;
+  info.seeds = seeds;
+  info.out_tracks = tracks;
+  sink(trace, info);
+}
+#endif
 
 DEFINE_FWK_MODULE(MkFitProducer);
