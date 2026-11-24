@@ -8,6 +8,9 @@
 #   G4SNITCH_DETID=0          do not ask the sensitive detectors for DetIds
 #   G4SNITCH_SELECT_ID=N      write only the subtree of the tracked particle with Geant4 track id N
 #   G4SNITCH_SELECT_CONE=eta,phi,dR   write only the steps and inert sums inside the cone
+#   G4SNITCH_TRACK_EKIN_CUT=MeV       kinetic energy from which a stable particle is tracked (default 10)
+#   G4SNITCH_LAST_EKIN_CUT=MeV        kinetic energy below which a particle's last state is no longer updated (default 1)
+# Every value in use, with the code version and these environment variables, goes into the output's tree "C".
 import os
 import FWCore.ParameterSet.Config as cms
 
@@ -33,6 +36,9 @@ def g4snitch_watcher(env=os.environ):
         path_max_angle = cms.untracked.double(0.05),  # rad
         path_max_length = cms.untracked.double(5.0),  # cm
         output_path_bfield = cms.untracked.bool(False),  # the field at each path point, in branch "b"
+
+        track_ekin_cut = cms.untracked.double(10.0),  # MeV: a stable particle from this kinetic energy is tracked
+        last_state_ekin_cut = cms.untracked.double(1.0),  # MeV: below this the last state is no longer updated
     )
     if env.get("G4SNITCH_BFIELD", "0") == "1":
         w.output_path_bfield = True
@@ -46,6 +52,10 @@ def g4snitch_watcher(env=os.environ):
         w.sensitive_det_id = False
     if env.get("G4SNITCH_SELECT_ID"):
         w.select_track_id = cms.untracked.int32(int(env["G4SNITCH_SELECT_ID"]))
+    if env.get("G4SNITCH_TRACK_EKIN_CUT"):
+        w.track_ekin_cut = float(env["G4SNITCH_TRACK_EKIN_CUT"])
+    if env.get("G4SNITCH_LAST_EKIN_CUT"):
+        w.last_state_ekin_cut = float(env["G4SNITCH_LAST_EKIN_CUT"])
     if env.get("G4SNITCH_SELECT_CONE"):
         w.select_cone = cms.untracked.vdouble([float(x) for x in env["G4SNITCH_SELECT_CONE"].split(",")])
     return w

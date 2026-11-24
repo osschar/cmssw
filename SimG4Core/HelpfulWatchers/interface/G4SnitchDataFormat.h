@@ -7,6 +7,10 @@
 #include <cstdint>
 #include <limits>
 
+// The output file: tree T (one entry per event: branches i (G4S_Info), p (particles), s (their steps), b (the field
+// at path points, optional)), and the tables P (processes), V (volumes), D (sensitive detectors) and C (the
+// configuration the file was made with: key, value strings; see G4Snitch::write_config_tree()).
+
 // Information about the event
 
 struct G4S_Info {

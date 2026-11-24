@@ -99,6 +99,7 @@ public:
 private:
   void open_file_tree();
   void write_tree_close_file();
+  void write_config_tree();
   void reset_output_structs();
 
   bool filter(const G4Track *t) const;
@@ -138,6 +139,12 @@ private:
   void add_path_point(int id, const double *pos_mm, double t_ns, const double *mom_MeV, double e_MeV);
   // The field Geant4 used at each path point, in the separate branch "b" (off by default).
   bool m_output_path_bfield = false;
+  // Kinetic energies (MeV): from track_ekin_cut at creation a stable particle is tracked as its own G4S_Particle (see
+  // filter()); below last_state_ekin_cut its m_x_last / m_p_last are no longer updated.
+  double m_track_ekin_cut = 10.0;
+  double m_last_state_ekin_cut = 1.0;
+  // The parameter set as given, written with the values in use into the configuration tree "C".
+  std::string m_pset_dump;
   edm::ESGetToken<MagneticField, IdealMagneticFieldRecord> m_bfield_token;
   const MagneticField *m_bfield = nullptr;
 

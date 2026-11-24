@@ -17,8 +17,12 @@ Description: Outputs a ROOT tree of kinematics.
 #include <cmath>
 #include <cstdlib>
 #include <cxxabi.h>
+#include <fstream>
 #include <iostream>
+#include <sstream>
+#include <type_traits>
 #include <typeinfo>
+#include <unistd.h>
 
 // user include files
 #include "SimG4Core/HelpfulWatchers/interface/G4Snitch.h"
@@ -28,6 +32,7 @@ Description: Outputs a ROOT tree of kinematics.
 #include "G4ParticleDefinition.hh"
 #include "G4Step.hh"
 #include "G4VProcess.hh"
+#include "G4Version.hh"
 
 #include "G4VPhysicalVolume.hh"
 #include "G4LogicalVolume.hh"
@@ -53,13 +58,8 @@ Description: Outputs a ROOT tree of kinematics.
 
 namespace {
 
-  // Cuts in G4 units
-  // Minimum kinetic energy at particle creation for that particle to be tracked.
-  // Unstable particles are treated correctly, see filter().
-  constexpr double E_cut = 10.0;
-  // Kinetic energy below which the end position/momentum of a particle
-  // are no longer updated in the G4S_Particle structure.
-  constexpr double E_final_cut = 1.0;
+  // The energy cuts that decide what is tracked and the last state are parameters: track_ekin_cut and
+  // last_state_ekin_cut (G4Snitch::m_track_ekin_cut, m_last_state_ekin_cut).
 
   // Conversion to TTree units, all printouts are in G4 units
   constexpr double Pos_fac = 0.1;   // mm => cm
@@ -131,6 +131,9 @@ G4Snitch::G4Snitch(const edm::ParameterSet &pSet)
   m_path_cos_max_angle = std::cos(m_path_max_angle);
   m_select_track_id = pSet.getUntrackedParameter<int>("select_track_id", 0);
   m_select_cone = pSet.getUntrackedParameter<std::vector<double>>("select_cone", std::vector<double>());
+  m_track_ekin_cut = pSet.getUntrackedParameter<double>("track_ekin_cut", 10.0);
+  m_last_state_ekin_cut = pSet.getUntrackedParameter<double>("last_state_ekin_cut", 1.0);
+  m_pset_dump = pSet.dump();
   // 2025-04-18 Linking through BuildFile.xml no longer works (-Wl,--as-needed)
   // so we just pull the dicts in here.
   gSystem->Load("libRootG4Snitch.so");
@@ -432,8 +435,96 @@ void G4Snitch::write_tree_close_file() {
     }
     dtree.Write();
   }
+  write_config_tree();
   m_file->Close();
   delete m_file;
+}
+
+// The configuration tree "C" (key, value): what decides what this file holds. The parameters as used (defaults
+// included), the rules of filter() in words, the units, the parameter set as given, the code (the stamps the
+// Ceph area's build.sh and sync20.sh leave in $CMSSW_BASE: COMMIT.built at the last successful build, COMMIT at the
+// last sync, each the commit and the dirty files), the G4SNITCH_* environment of the job, and the versions.
+void G4Snitch::write_config_tree() {
+  TTree ctree("C", "G4Snitch configuration: key, value");
+  std::string key, value;
+  ctree.Branch("key", &key);
+  ctree.Branch("value", &value);
+  auto put = [&](const std::string &k, const std::string &v) {
+    key = k;
+    value = v;
+    ctree.Fill();
+  };
+  auto num = [](double x) {
+    std::ostringstream o;
+    o.precision(10);
+    o << x;
+    return o.str();
+  };
+  auto vec = [&](const auto &v) {
+    std::string r;
+    for (const auto &x : v) {
+      if (!r.empty())
+        r += ",";
+      if constexpr (std::is_same_v<std::decay_t<decltype(x)>, std::string>)
+        r += x;
+      else
+        r += num(x);
+    }
+    return r;
+  };
+  auto file = [](const std::string &path) {
+    std::ifstream f(path);
+    if (!f)
+      return std::string("(missing: ") + path + ")";
+    std::ostringstream o;
+    o << f.rdbuf();
+    return o.str();
+  };
+  put("format", "trees T (events: i, p, s, b), P (processes), V (volumes), D (sensitive detectors), C (this)");
+  put("verbose", b2yn(m_verbose));
+  put("verbose_stack_level", b2yn(m_verbose_stack_level));
+  put("verbose_transport", b2yn(m_verbose_transport));
+  put("verbose_skip", b2yn(m_verbose_skip));
+  put("verbose_skip_with_ids", b2yn(m_verbose_skip_with_ids));
+  put("output_sensitive_steps", b2yn(m_output_sensitive_steps));
+  put("output_inert_steps", b2yn(m_output_inert_steps));
+  put("sensitive_step_ecut", num(m_sensitive_step_ecut) + " MeV");
+  put("output_sensitive_zero_steps", b2yn(m_output_sensitive_zero_steps));
+  put("inert_step_ecut", num(m_inert_step_ecut) + " MeV");
+  put("inert_aggregate_descendants", b2yn(m_inert_aggregate_descendants));
+  put("sensitive_det_id", b2yn(m_sensitive_det_id));
+  put("no_det_id_volumes", vec(m_no_det_id_volumes));
+  put("output_path", b2yn(m_output_path));
+  put("path_max_angle", num(m_path_max_angle) + " rad");
+  put("path_max_length", num(m_path_max_length) + " cm");
+  put("output_path_bfield", b2yn(m_output_path_bfield));
+  put("select_track_id", std::to_string(m_select_track_id));
+  put("select_cone", vec(m_select_cone));
+  put("track_ekin_cut", num(m_track_ekin_cut) + " MeV");
+  put("last_state_ekin_cut", num(m_last_state_ekin_cut) + " MeV");
+  put("rule.tracked",
+      "a particle gets its own G4S_Particle if it is unstable and not a neutron (any energy), or a positron with "
+      "total energy >= track_ekin_cut, or has kinetic energy >= track_ekin_cut at creation; otherwise its steps are "
+      "filed under its nearest tracked ancestor (filter())");
+  put("units", "positions cm, time ns, momenta and energies GeV, deposits MeV, field T, x0 and lambda cm");
+  put("pset", m_pset_dump);
+  const char *base = std::getenv("CMSSW_BASE");
+  put("code.built", base ? file(std::string(base) + "/COMMIT.built") : "(no CMSSW_BASE)");
+  put("code.synced", base ? file(std::string(base) + "/COMMIT") : "(no CMSSW_BASE)");
+  const char *ver = std::getenv("CMSSW_VERSION");
+  put("cmssw_version", ver ? ver : "");
+  put("geant4_version", G4Version);
+  char host[256] = {0};
+  gethostname(host, sizeof(host) - 1);
+  put("host", host);
+  for (char **e = environ; e && *e; ++e) {
+    const std::string kv(*e);
+    if (kv.rfind("G4SNITCH_", 0) == 0) {
+      const auto eq = kv.find('=');
+      put("env." + kv.substr(0, eq), eq == std::string::npos ? "" : kv.substr(eq + 1));
+    }
+  }
+  ctree.Write();
 }
 
 void G4Snitch::reset_output_structs() {
@@ -457,9 +548,9 @@ bool G4Snitch::filter(const G4Track *t) const {
   const G4ParticleDefinition* pd = t->GetParticleDefinition();
   if ( ! pd->GetPDGStable() && pd->GetPDGEncoding() != 2112)
     return false;
-  if (pd->GetPDGEncoding() == -11 && t->GetTotalEnergy() >= E_cut)
+  if (pd->GetPDGEncoding() == -11 && t->GetTotalEnergy() >= m_track_ekin_cut)
     return false;
-  return t->GetKineticEnergy() < E_cut;
+  return t->GetKineticEnergy() < m_track_ekin_cut;
 }
 
 //------------------------------------------------------------------------------
@@ -762,7 +853,7 @@ void G4Snitch::update(const G4Step *iStep)
   G4ProcessType pt2(p2 ? p2->GetProcessType() : fNotDefined);
   std::string pn2(p2 ? p2->GetProcessName() : "null");
 
-  if (iTrk->GetKineticEnergy() > E_final_cut) {
+  if (iTrk->GetKineticEnergy() > m_last_state_ekin_cut) {
     g4_pos_mom_to_cms_last(iTrk, particle(m_id));
   }
 
