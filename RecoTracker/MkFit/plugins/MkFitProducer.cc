@@ -160,10 +160,11 @@ void MkFitProducer::produce(edm::StreamID iID, edm::Event& iEvent, const edm::Ev
   const auto& seeds = iEvent.get(seedToken_);
 #ifdef MKFIT_TRACE
   // The trace of this event: the stream's store, cleared here, filled by the
-  // hooks and handed to the registered sink at the end (TraceStore.h).
+  // hooks and handed to the registered sink at the end (TraceStore.h). Without
+  // a sink nothing takes the trace, and the hooks get no store.
   mkfit::TraceStore& trace = streamCache(iID)->trace();
   trace.clear_trace();
-  mkfit::TraceStore* const traceStore = &trace;
+  mkfit::TraceStore* const traceStore = mkfit::trace_sink() ? &trace : nullptr;
 #else
   mkfit::TraceStore* const traceStore = nullptr;
 #endif
