@@ -9,8 +9,10 @@ namespace mkfit {
 
   class IterationConfig;
   class MkBuilder;
+  class TraceStore;
 
   // nullptr is a valid mask ... means no mask for these layers.
+  // trace: the store of the MKFIT_TRACE hooks; nullptr records nothing.
   void run_OneIteration(const TrackerInfo &trackerInfo,
                         const IterationConfig &itconf,
                         const EventOfHits &eoh,
@@ -21,7 +23,8 @@ namespace mkfit {
                         bool do_seed_clean,
                         bool do_backward_fit,
                         bool do_remove_duplicates,
-                        bool use_v2p2);
+                        bool use_v2p2,
+                        TraceStore *trace = nullptr);
 
   void run_MkFitFit(const TrackerInfo &trackerInfo,
                     const IterationConfig &itconf,

@@ -34,7 +34,8 @@ namespace mkfit {
                         bool do_seed_clean,
                         bool do_backward_fit,
                         bool do_remove_duplicates,
-                        bool use_v2p2) {
+                        bool use_v2p2,
+                        TraceStore *trace) {
     const MkBuilder::FindTracks_foo FindTracks =
         use_v2p2 ? &MkBuilder::findTracksStandardv2p2 : &MkBuilder::findTracksCloneEngine;
 
@@ -42,7 +43,7 @@ namespace mkfit {
 
     MkJob job({trackerInfo, itconf, eoh, eoh.refBeamSpot(), &it_mask_ifc});
 
-    builder.begin_event(&job, nullptr, __func__);
+    builder.begin_event(&job, nullptr, __func__, trace);
 
     // Seed cleaning not done on all iterations.
     do_seed_clean = do_seed_clean && itconf.m_seed_cleaner;
