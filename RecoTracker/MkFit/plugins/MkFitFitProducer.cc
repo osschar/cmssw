@@ -15,6 +15,7 @@
 #include "RecoTracker/MkFit/interface/MkFitSeedWrapper.h"
 #include "RecoTracker/MkFit/interface/MkFitOutputWrapper.h"
 #include "RecoTracker/MkFit/interface/MkFitGeometry.h"
+#include "RecoTracker/MkFit/interface/MkFitIterationConfigRecord.h"
 #include "RecoTracker/Record/interface/TrackerRecoGeometryRecord.h"
 
 //CPE
@@ -51,7 +52,7 @@ private:
 
   const edm::EDGetTokenT<MkFitEventOfHits> eventOfHitsToken_;
   const edm::ESGetToken<MkFitGeometry, TrackerRecoGeometryRecord> mkFitGeomToken_;
-  const edm::ESGetToken<mkfit::IterationConfig, TrackerRecoGeometryRecord> mkFitIterConfigToken_;
+  const edm::ESGetToken<mkfit::IterationConfig, MkFitIterationConfigRecord> mkFitIterConfigToken_;
   const edm::ESGetToken<PixelClusterParameterEstimator, TkPixelCPERecord> pixelCPEToken_;
   const edm::EDGetTokenT<MkFitClusterIndexToHit> pixelClusterIndexToHitToken_;
   const edm::EDGetTokenT<MkFitOutputWrapper> tracksToken_;

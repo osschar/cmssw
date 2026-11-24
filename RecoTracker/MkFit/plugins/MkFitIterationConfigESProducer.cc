@@ -4,6 +4,7 @@
 #include "FWCore/Utilities/interface/Exception.h"
 
 #include "RecoTracker/Record/interface/TrackerRecoGeometryRecord.h"
+#include "RecoTracker/MkFit/interface/MkFitIterationConfigRecord.h"
 
 #include "RecoTracker/MkFit/interface/MkFitGeometry.h"
 
@@ -107,7 +108,7 @@ public:
 
   static void fillDescriptions(edm::ConfigurationDescriptions &descriptions);
 
-  std::unique_ptr<mkfit::IterationConfig> produce(const TrackerRecoGeometryRecord &iRecord);
+  std::unique_ptr<mkfit::IterationConfig> produce(const MkFitIterationConfigRecord &iRecord);
 
 private:
   const edm::ESGetToken<MkFitGeometry, TrackerRecoGeometryRecord> geomToken_;
@@ -218,7 +219,7 @@ void MkFitIterationConfigESProducer::fillDescriptions(edm::ConfigurationDescript
 }
 
 std::unique_ptr<mkfit::IterationConfig> MkFitIterationConfigESProducer::produce(
-    const TrackerRecoGeometryRecord &iRecord) {
+    const MkFitIterationConfigRecord &iRecord) {
   mkfit::ConfigJson cj;
   auto it_conf = cj.load_File(configFile_);
   it_conf->m_params.minPtCut = minPtCut_;

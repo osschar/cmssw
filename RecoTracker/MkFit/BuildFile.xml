@@ -1,7 +1,9 @@
 <use name="DataFormats/Common"/>
 <use name="DataFormats/Provenance" source_only="1"/>
 <use name="DataFormats/TrackerCommon"/>
+<use name="FWCore/Framework"/>
 <use name="Geometry/TrackerGeometryBuilder"/>
+<use name="RecoTracker/Record"/>
 <use name="RecoTracker/TkDetLayers"/>
 <use name="RecoTracker/MkFitCore"/>
 <use name="RecoTracker/MkFitCMS"/>
