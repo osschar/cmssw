@@ -3,6 +3,12 @@
 The looper runs the whole input once per loop: loop 0 as configured, then one loop per entry of 'edits'. Give it an
 input of one event (a pick-events skim, or PoolSource.eventsToProcess) so that every loop re-runs that event.
 
+Every loop closes the input file and opens it again, and the reopen costs time quadratic in the number of products in
+the file (two lookups by branch name per product): about 0.45 s for a file of 1322 products. A one-event file with
+only the products the job reads makes that about 25 ms. To make one: run the job once on the full file with a job
+report (cmsRun -j fjr.xml ...); its <ReadBranches> lists the branches read from the input; then copy the event with a
+PoolOutputModule whose outputCommands are 'drop *' and 'keep <branch name without the final dot>' for each.
+
 Example, the offline phase-2 initialStep with mkFit (trackingMkFitInitialStep), at the end of a cmsDriver config:
 
     import FWCore.ParameterSet.Config as cms
