@@ -5,8 +5,10 @@
 //
 // A service that writes the mkFit V2p2 trace of every MkFitProducer in the job into one ROOT file of plain RNTuples
 // (TraceRNTupleWriter.h has the layout). It registers mkFit's trace sink (MkFitCore/interface/TraceStore.h), which
-// each MkFitProducer calls at the end of its event with its stream's store; the sink appends the store under a mutex.
-// The file is closed at the end of the job.
+// each MkFitProducer calls at the end of its event with its stream's store. With writerThreads > 0 the sink takes the
+// store's record vectors by swap and returns; the writer's threads write them (TraceRNTupleWriter.h). The producer
+// clears its store at the start of each event and does not read it after the sink. The file is closed at the end of
+// the job, after the queued events are written.
 //
 // Needs a build with -DMKFIT_TRACE in MkFitCore, MkFitCMS and RecoTracker/MkFit; without it the service refuses to
 // start.
@@ -14,8 +16,10 @@
 // With printDigest, it also prints for each event and record vector a digest line computed from the store in
 // memory, in the format mkFitTraceDigest prints from the file:
 //   MKFITTRACE digest <run>:<lumi>:<event> <module> pass=<p> <vector> <size> <hash>
-// and one line per event with the writing time:
-//   MKFITTRACE event <run>:<lumi>:<event> <module> pass=<p> records=<n> write_ms=<t>
+// and one line per event, once it is written:
+//   MKFITTRACE event <run>:<lumi>:<event> <module> pass=<p> records=<n> sink_ms=<s> write_ms=<w> done_ms=<d>
+// sink_ms: the time the producer spent in the sink; write_ms: the time spent writing the event, summed over the
+// RNTuples; done_ms: from the sink's call until the event was written.
 
 #include "FWCore/MessageLogger/interface/MessageLogger.h"
 #include "FWCore/ParameterSet/interface/ConfigurationDescriptions.h"
@@ -29,7 +33,6 @@
 #include "MkFitFWFF/Trace/interface/TraceRNTupleWriter.h"
 #include "RecoTracker/MkFitCore/interface/TraceStore.h"
 
-#include <chrono>
 #include <cstdio>
 #include <iostream>
 #include <memory>
@@ -47,11 +50,12 @@ namespace mkfit_fwff {
     static void fillDescriptions(edm::ConfigurationDescriptions& descriptions);
 
   private:
-    void write(const mkfit::TraceStore& store, const mkfit::TraceEventInfo& info);
+    void eventDone(const mkfit::TraceStore& records, const TraceRNTupleWriter::EventDone& done);
     void finish();
 
     const std::string fileName_;
     const bool printDigest_;
+    TraceRNTupleWriter::Options options_;
     std::unique_ptr<TraceRNTupleWriter> writer_;
     std::mutex printMutex_;
   };
@@ -59,51 +63,60 @@ namespace mkfit_fwff {
   MkFitTraceWriter::MkFitTraceWriter(edm::ParameterSet const& iPS, [[maybe_unused]] edm::ActivityRegistry& iAR)
       : fileName_(iPS.getUntrackedParameter<std::string>("fileName")),
         printDigest_(iPS.getUntrackedParameter<bool>("printDigest")) {
+    options_.compression = iPS.getUntrackedParameter<int>("compression");
+    options_.maxUnzippedPageSize = iPS.getUntrackedParameter<unsigned int>("maxPageSize");
+    options_.threads = iPS.getUntrackedParameter<int>("writerThreads");
 #ifndef MKFIT_TRACE
     throw cms::Exception("Configuration")
         << "MkFitTraceWriter: this build has no mkFit trace. Build MkFitCore, MkFitCMS, RecoTracker/MkFit and "
            "MkFitFWFF/Trace with -DMKFIT_TRACE (e.g. scram b USER_CXXFLAGS=-DMKFIT_TRACE in an area of its own).";
 #else
     try {
-      writer_ = std::make_unique<TraceRNTupleWriter>(fileName_);
+      writer_ = std::make_unique<TraceRNTupleWriter>(
+          fileName_, options_, [this](const mkfit::TraceStore& r, const TraceRNTupleWriter::EventDone& d) {
+            eventDone(r, d);
+          });
     } catch (std::exception const& e) {
       throw cms::Exception("Configuration") << "MkFitTraceWriter: " << e.what();
     }
     if (mkfit::trace_sink())
       throw cms::Exception("Configuration") << "MkFitTraceWriter: another mkFit trace sink is registered";
-    mkfit::set_trace_sink([this](const mkfit::TraceStore& s, const mkfit::TraceEventInfo& i) { write(s, i); });
+    mkfit::set_trace_sink([this](const mkfit::TraceStore& s, const mkfit::TraceEventInfo& i) { writer_->write(s, i); });
     iAR.watchPostEndJob(this, &MkFitTraceWriter::finish);
-    edm::LogInfo("MkFitTraceWriter") << "writing the mkFit trace to " << fileName_;
+    edm::LogInfo("MkFitTraceWriter") << "writing the mkFit trace to " << fileName_ << " (compression "
+                                     << options_.compression << ", pages up to " << options_.maxUnzippedPageSize
+                                     << " B, " << options_.threads << " writer threads)";
 #endif
   }
 
-  MkFitTraceWriter::~MkFitTraceWriter() { finish(); }
+  MkFitTraceWriter::~MkFitTraceWriter() {
+    try {
+      finish();
+    } catch (std::exception const& e) {
+      edm::LogError("MkFitTraceWriter") << "closing " << fileName_ << ": " << e.what();
+    }
+  }
 
-  void MkFitTraceWriter::write(const mkfit::TraceStore& store, const mkfit::TraceEventInfo& info) {
-    const auto t0 = std::chrono::steady_clock::now();
-    const int pass = writer_->write(store, info);
-    const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
-
-    const std::size_t nRec = store.trCandMetas_.size() + store.trCandStages_.size() + store.trCandStates_.size() +
-                             store.trLayerSearches_.size() + store.trHitMatches_.size() +
-                             store.trKalmanUpdates_.size() + store.trBkFitUpdates_.size();
+  void MkFitTraceWriter::eventDone(const mkfit::TraceStore& records, const TraceRNTupleWriter::EventDone& d) {
     std::ostringstream os;
     if (printDigest_) {
-      for (auto const& d : trace_digest::digest_store(store))
-        os << digestLine(info.run, info.lumi, info.event, info.module, pass, d) << "\n";
+      for (auto const& dg : trace_digest::digest_store(records))
+        os << digestLine(d.run, d.lumi, d.event, d.module, d.pass, dg) << "\n";
     }
-    char buf[256];
+    char buf[320];
     std::snprintf(buf,
                   sizeof(buf),
-                  "MKFITTRACE event %u:%u:%llu %.*s pass=%d records=%zu write_ms=%.1f",
-                  info.run,
-                  info.lumi,
-                  (unsigned long long)info.event,
-                  (int)info.module.size(),
-                  info.module.data(),
-                  pass,
-                  nRec,
-                  ms);
+                  "MKFITTRACE event %u:%u:%llu %.*s pass=%d records=%zu sink_ms=%.1f write_ms=%.1f done_ms=%.1f",
+                  d.run,
+                  d.lumi,
+                  (unsigned long long)d.event,
+                  (int)d.module.size(),
+                  d.module.data(),
+                  d.pass,
+                  d.n_records,
+                  d.take_ms,
+                  d.write_ms,
+                  d.done_ms);
     os << buf << "\n";
     std::lock_guard<std::mutex> lock(printMutex_);
     std::cout << os.str() << std::flush;
@@ -126,6 +139,12 @@ namespace mkfit_fwff {
     desc.addUntracked<std::string>("fileName", "mkfit-trace.root")->setComment("the ROOT file of the trace RNTuples");
     desc.addUntracked<bool>("printDigest", false)
         ->setComment("print a digest line per event and record vector, computed from the store in memory");
+    desc.addUntracked<int>("compression", 501)
+        ->setComment("ROOT compression setting, 100 * algorithm + level; 501 is zstd at level 1, 505 ROOT's default");
+    desc.addUntracked<unsigned int>("maxPageSize", 4 * 1024 * 1024)
+        ->setComment("the size in bytes up to which an uncompressed RNTuple page grows; ROOT's default is 1 MiB");
+    desc.addUntracked<int>("writerThreads", 4)
+        ->setComment("threads that write the trace in the background; 0 writes in the producer's call");
     descriptions.add("MkFitTraceWriter", desc);
   }
 

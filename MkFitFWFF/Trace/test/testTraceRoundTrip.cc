@@ -1,7 +1,8 @@
 // testMkFitFWFFTraceRoundTrip [file]
 //
-// Writes synthetic trace stores with TraceRNTupleWriter (three events, one of them twice, one empty), reads the file
-// back with readTraceFile() and compares each event's digest from the file with the digest of the store in memory.
+// Writes synthetic trace stores with TraceRNTupleWriter (three events, one of them twice, one empty), in the caller
+// (into <file stem>-sync.root) and with writer threads (into file), reads each file back with readTraceFile() and
+// compares each event's digest from the file and from the writer's report with the digest of the store in memory.
 // Every field of every record type gets a value that differs between records, so a field the I/O dropped or mangled
 // changes a hash. Exit 0 when all digests and keys agree.
 
@@ -146,58 +147,76 @@ int main(int argc, char* argv[]) {
                                {1, 3, 201, "initialStepTrackCandidatesMkFit", 50},
                                {1, 3, 201, "hltInitialStepTrackCandidatesMkFit", 7}};
 
-  std::vector<std::string> memLines;
-  {
-    TraceRNTupleWriter w(file);
-    for (const auto& e : evs) {
-      mkfit::TraceStore s;
-      fill(s, e.n, e.n);
-      std::vector<mkfit::Track> tracks(3);
-      for (int t = 0; t < 3; ++t)
-        tracks[t].setLabel(2 * (100 * e.n + 2 * t + 1));
-      mkfit::TraceEventInfo info;
-      info.run = e.run;
-      info.lumi = e.lumi;
-      info.event = e.event;
-      info.module = e.module;
-      info.n_seeds_in = e.n + 1;
-      info.out_tracks = &tracks;
-      const int pass = w.write(s, info);
-      for (auto const& d : trace_digest::digest_store(s))
-        memLines.push_back(digestLine(e.run, e.lumi, e.event, e.module, pass, d));
-    }
-    w.close();
-  }
-
-  const auto fevs = readTraceFile(file);
-  std::vector<std::string> fileLines;
+  // The same events written in the caller (threads 0) and by writer threads, which take the store's records. One
+  // store is reused for every event, as MkFitProducer reuses its stream's store.
   int bad = 0;
-  for (const auto& fe : fevs) {
-    for (int r = 0; r < 7; ++r) {
-      fileLines.push_back(digestLine(fe.run, fe.lumi, fe.event, fe.module, fe.pass, fe.digest[r]));
-      if ((std::size_t)fe.n_rec[r] != fe.digest[r].size)
-        ++bad;
+  for (int threads : {0, 4}) {
+    const std::string fname = threads ? file : file.substr(0, file.rfind(".root")) + "-sync.root";
+    std::printf("== %s, %d writer threads\n", fname.c_str(), threads);
+    std::vector<std::string> memLines, doneLines;
+    {
+      TraceRNTupleWriter::Options opt;
+      opt.threads = threads;
+      TraceRNTupleWriter w(fname, opt, [&](const mkfit::TraceStore& r, const TraceRNTupleWriter::EventDone& d) {
+        for (auto const& dg : trace_digest::digest_store(r))
+          doneLines.push_back(digestLine(d.run, d.lumi, d.event, d.module, d.pass, dg));
+      });
+      mkfit::TraceStore s;
+      for (const auto& e : evs) {
+        s.clear_trace();
+        fill(s, e.n, e.n);
+        std::vector<mkfit::Track> tracks(3);
+        for (int t = 0; t < 3; ++t)
+          tracks[t].setLabel(2 * (100 * e.n + 2 * t + 1));
+        mkfit::TraceEventInfo info;
+        info.run = e.run;
+        info.lumi = e.lumi;
+        info.event = e.event;
+        info.module = e.module;
+        info.n_seeds_in = e.n + 1;
+        info.out_tracks = &tracks;
+        const auto mem = trace_digest::digest_store(s);
+        const int pass = w.write(s, info);
+        for (auto const& d : mem)
+          memLines.push_back(digestLine(e.run, e.lumi, e.event, e.module, pass, d));
+        const std::size_t left = s.trCandMetas_.size() + s.trCandStates_.size() + s.trBkFitUpdates_.size();
+        if (threads && left) {
+          std::printf("DIFF the writer threads left %zu records in the store\n", left);
+          ++bad;
+        }
+      }
+      w.close();
     }
-    std::printf("event %u:%u:%llu %s pass=%d metas=%zu exported=%d out_matched=%d/%zu\n",
-                fe.run,
-                fe.lumi,
-                (unsigned long long)fe.event,
-                fe.module.c_str(),
-                fe.pass,
-                fe.digest[0].size,
-                fe.n_exported,
-                fe.n_out_matched,
-                fe.out_labels.size());
+
+    const auto fevs = readTraceFile(fname);
+    std::vector<std::string> fileLines;
+    for (const auto& fe : fevs) {
+      for (int r = 0; r < 7; ++r) {
+        fileLines.push_back(digestLine(fe.run, fe.lumi, fe.event, fe.module, fe.pass, fe.digest[r]));
+        if ((std::size_t)fe.n_rec[r] != fe.digest[r].size)
+          ++bad;
+      }
+      std::printf("event %u:%u:%llu %s pass=%d metas=%zu exported=%d out_matched=%d/%zu\n",
+                  fe.run,
+                  fe.lumi,
+                  (unsigned long long)fe.event,
+                  fe.module.c_str(),
+                  fe.pass,
+                  fe.digest[0].size,
+                  fe.n_exported,
+                  fe.n_out_matched,
+                  fe.out_labels.size());
+    }
+    if (fileLines.size() != memLines.size() || doneLines.size() != memLines.size())
+      ++bad;
+    for (std::size_t i = 0; i < memLines.size() && i < fileLines.size() && i < doneLines.size(); ++i) {
+      const bool eq = memLines[i] == fileLines[i] && memLines[i] == doneLines[i];
+      bad += !eq;
+      std::printf("%s %s\n", eq ? "same" : "DIFF", memLines[i].c_str());
+      if (!eq)
+        std::printf("     file: %s\n     done: %s\n", fileLines[i].c_str(), doneLines[i].c_str());
+    }
   }
-  if (fileLines.size() != memLines.size())
-    ++bad;
-  for (std::size_t i = 0; i < memLines.size() && i < fileLines.size(); ++i) {
-    const bool eq = memLines[i] == fileLines[i];
-    bad += !eq;
-    std::printf("%s %s\n", eq ? "same" : "DIFF", memLines[i].c_str());
-    if (!eq)
-      std::printf("     file: %s\n", fileLines[i].c_str());
-  }
-  std::printf("%s: %d mismatches over %zu digest lines\n", bad ? "FAILED" : "PASSED", bad, memLines.size());
+  std::printf("%s: %d mismatches\n", bad ? "FAILED" : "PASSED", bad);
   return bad ? 1 : 0;
 }
