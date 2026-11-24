@@ -1,0 +1,9 @@
+<library file="*.cc" name="MkFitFWFFTracePlugins">
+  <use name="FWCore/MessageLogger"/>
+  <use name="FWCore/ParameterSet"/>
+  <use name="FWCore/ServiceRegistry"/>
+  <use name="FWCore/Utilities"/>
+  <use name="MkFitFWFF/Trace"/>
+  <use name="RecoTracker/MkFitCore"/>
+  <flags EDM_PLUGIN="1"/>
+</library>

@@ -1,0 +1,4 @@
+<bin file="testTraceRoundTrip.cc" name="testMkFitFWFFTraceRoundTrip">
+  <use name="MkFitFWFF/Trace"/>
+  <use name="RecoTracker/MkFitCore"/>
+</bin>

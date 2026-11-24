@@ -1,0 +1,3 @@
+<bin file="mkFitTraceDigest.cc" name="mkFitTraceDigest">
+  <use name="MkFitFWFF/Trace"/>
+</bin>

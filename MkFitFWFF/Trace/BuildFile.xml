@@ -1,0 +1,11 @@
+<use name="RecoTracker/MkFitCore"/>
+<use name="rootcore"/>
+<use name="rootrio"/>
+<use name="rootntuple"/>
+<use name="rootsmatrix"/>
+<!-- The records' positions and momenta are ROOT::Experimental::REveVectorT<float>; their dictionary is in libROOTEve,
+     which no scram tool provides. -->
+<lib name="ROOTEve"/>
+<export>
+  <lib name="MkFitFWFFTrace"/>
+</export>

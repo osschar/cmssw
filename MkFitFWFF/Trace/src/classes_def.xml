@@ -1,0 +1,15 @@
+<!-- Dictionaries for the mkFit V2p2 trace records written by TraceRNTupleWriter. The records hold
+     ROOT::Experimental::REveVectorT<float> (dictionary in libROOTEve) and, through mkfit::TrackState,
+     ROOT::Math::SVector<float,6> and SMatrix<float,6,6,MatRepSym<float,6> > (dictionaries in libSmatrix). -->
+<lcgdict>
+  <class name="EBiVec3"/>
+  <class name="PropInfo"/>
+  <class name="mkfit::TrackState"/>
+  <class name="TrCandMeta"/>
+  <class name="TrCandStage"/>
+  <class name="TrCandState"/>
+  <class name="TrLayerSearch"/>
+  <class name="TrHitMatch"/>
+  <class name="TrKalmanUpdate"/>
+  <class name="TrBkFitUpdate"/>
+</lcgdict>
