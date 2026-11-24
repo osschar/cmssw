@@ -22,8 +22,8 @@
 #endif
 
 #ifdef MKFIT_TRACE
-#include "RecoTracker/MkFitCore/standalone/DataFormats/RntStructs.h"
-#include "RecoTracker/MkFitCore/standalone/DataFormats/RntConversions.h"
+#include "RecoTracker/MkFitCore/interface/TraceStore.h"
+#include "TraceConversions.h"
 #endif
 
 //#define DEBUG
@@ -74,7 +74,7 @@ namespace mkfit {
 
   namespace {
     // Before the search: a new stage per seed, rooted at the seed's single TrackCand.
-    void trace_begin_v2p2_search(Event *ev, EventOfCombCandidates &eoccs, SteeringParams::IterationType_e dir) {
+    void trace_begin_v2p2_search(TraceStore *tr, EventOfCombCandidates &eoccs, SteeringParams::IterationType_e dir) {
       // trace_end_v2p2_search() marks the best candidate of the backward search as final. The gate can
       // replace that candidate afterwards, in the post-search filter, and the trace would describe a track
       // that is not exported.
@@ -85,28 +85,28 @@ namespace mkfit {
         CombCandidate &cc = eoccs[i];
         assert(cc.size() == 1 && "CombCandidate expected to have a single TrackCand at this point");
         if (cc.m_trace_meta_id == -1)
-          cc.m_trace_meta_id = ev->trace_new_cand_meta(ev->evtID(), cc.seed_origin_index());
+          cc.m_trace_meta_id = tr->trace_new_cand_meta(tr->tr_event_id(), cc.seed_origin_index());
         TrackCand &tc = cc.front();
-        auto [stage_id, state_id] = ev->trace_new_cand_stage_and_state(
+        auto [stage_id, state_id] = tr->trace_new_cand_stage_and_state(
             cc.m_trace_meta_id, cc.m_trace_stage_id, dir, cc.pickupLayer(), track2bivec3(tc), tc.state());
         cc.m_trace_stage_id = stage_id;
         tc.m_trace_state_id = state_id;
-        ev->tr_candmeta(cc.m_trace_meta_id).stage_ids[dir] = stage_id;
+        tr->tr_candmeta(cc.m_trace_meta_id).stage_ids[dir] = stage_id;
       }
     }
 
     // After the search: mark each seed's best candidate and its ancestry as the final path; after the
     // forward search also record the candidate's rank history, stop reason and hits in the meta.
-    void trace_end_v2p2_search(Event *ev, EventOfCombCandidates &eoccs, SteeringParams::IterationType_e dir) {
+    void trace_end_v2p2_search(TraceStore *tr, EventOfCombCandidates &eoccs, SteeringParams::IterationType_e dir) {
       for (int i = 0; i < eoccs.size(); ++i) {
         CombCandidate &cc = eoccs[i];
         assert(!cc.empty());
         const TrackCand &bcand = cc.front();
-        auto &cstate = ev->tr_candstate(bcand.m_trace_state_id);
-        ev->tr_candstage(cc.m_trace_stage_id).final_state_id = cstate.id;
+        auto &cstate = tr->tr_candstate(bcand.m_trace_state_id);
+        tr->tr_candstage(cc.m_trace_stage_id).final_state_id = cstate.id;
         cstate.on_final_path = true;
         if (dir == SteeringParams::IT_FwdSearch) {
-          auto &cmeta = ev->tr_candmeta(cstate.meta_id);
+          auto &cmeta = tr->tr_candmeta(cstate.meta_id);
           cmeta.fwd_rank_max = bcand.m_rank_max;
           cmeta.fwd_rank_max_layer = bcand.m_rank_max_layer;
           cmeta.fwd_rank_over_layer = bcand.m_rank_over_layer;
@@ -114,7 +114,7 @@ namespace mkfit {
           cmeta.fwd_hits_hash = hits_hash(bcand.exportTrack());
         }
         for (int pid = cstate.parent_id; pid >= 0;) {
-          auto &pstate = ev->tr_candstate(pid);
+          auto &pstate = tr->tr_candstate(pid);
           pstate.on_final_path = true;
           pid = pstate.parent_id;
         }
@@ -292,12 +292,17 @@ namespace mkfit {
   // Common functions
   //------------------------------------------------------------------------------
 
-  void MkBuilder::begin_event(MkJob *job, Event *ev, const char *build_type) {
+  void MkBuilder::begin_event(MkJob *job, Event *ev, const char *build_type, TraceStore *trace) {
     m_cands_from_v2p2 = false;
     m_nan_n_silly_per_layer_count = 0;
 
     m_job = job;
     m_event = ev;
+    m_trace = trace;
+#if defined(MKFIT_TRACE) && defined(MKFIT_STANDALONE)
+    if (m_trace == nullptr)
+      m_trace = ev;
+#endif
 
     m_seedEtaSeparators.resize(m_job->num_regions());
     m_seedMinLastLayer.resize(m_job->num_regions());
@@ -319,6 +324,7 @@ namespace mkfit {
   void MkBuilder::end_event() {
     m_job = nullptr;
     m_event = nullptr;
+    m_trace = nullptr;
   }
 
   void MkBuilder::release_memory() {
@@ -503,9 +509,9 @@ namespace mkfit {
         // findTracksStandardv2p2()); for the other finders m_trace_state_id
         // stays -1, and tr_candstate() does not check its index.
         if (bcand.m_trace_state_id >= 0) {
-          auto &cs = m_event->tr_candstate(bcand.m_trace_state_id);
-          auto &cm = m_event->tr_candmeta(cs.meta_id);
-          cm.global_seed = m_event->currentSeed(cm.seed).label();
+          auto &cs = m_trace->tr_candstate(bcand.m_trace_state_id);
+          auto &cm = m_trace->tr_candmeta(cs.meta_id);
+          cm.global_seed = m_trace->tr_seed_label(cm.seed);
           cm.cand = out_vec.size() - 1;
         }
 #endif
@@ -882,7 +888,7 @@ namespace mkfit {
     EventOfCombCandidates &eoccs = m_event_of_comb_cands;
 
 #ifdef MKFIT_TRACE
-    trace_begin_v2p2_search(m_event, eoccs, iteration_dir);
+    trace_begin_v2p2_search(m_trace, eoccs, iteration_dir);
 #endif
 
     TBB_PARALLEL_FOR_EACH(m_job->regions_begin(), m_job->regions_end(), [&](int region) {
@@ -917,7 +923,7 @@ namespace mkfit {
 
         assert(layer_plan_it.is_pickup_only());
 
-        mkfndr->setup(m_job, eoccs, start_seed, end_seed, layer_plan_it, m_event);
+        mkfndr->setup(m_job, eoccs, start_seed, end_seed, layer_plan_it, m_trace);
 
         mkfndr->awaken_candidates();
 
@@ -969,7 +975,7 @@ namespace mkfit {
 #endif
 
 #ifdef MKFIT_TRACE
-    trace_end_v2p2_search(m_event, eoccs, iteration_dir);
+    trace_end_v2p2_search(m_trace, eoccs, iteration_dir);
 #endif
 
     // debug = false;
@@ -1490,7 +1496,7 @@ namespace mkfit {
   void MkBuilder::fit_cands_BH(MkFinder *mkfndr, int start_cand, int end_cand, int region) {
     const SteeringParams &st_par = m_job->steering_params(region);
     const PropagationConfig &prop_config = m_job->m_trk_info.prop_config();
-    mkfndr->setup_bkfit(prop_config, m_job->m_iter_config, st_par, m_event);
+    mkfndr->setup_bkfit(prop_config, m_job->m_iter_config, st_par, m_event, m_trace);
 #ifdef DEBUG_FINAL_FIT
     EventOfCombCandidates &eoccs = m_event_of_comb_cands;
     bool debug = true;
@@ -1603,7 +1609,7 @@ namespace mkfit {
     EventOfCombCandidates &eoccs = m_event_of_comb_cands;
     const SteeringParams &st_par = m_job->steering_params(region);
     const PropagationConfig &prop_config = m_job->m_trk_info.prop_config();
-    mkfndr->setup_bkfit(prop_config, m_job->m_iter_config, st_par, m_event);
+    mkfndr->setup_bkfit(prop_config, m_job->m_iter_config, st_par, m_event, m_trace);
 
     int step = NN;
     for (int icand = start_cand; icand < end_cand; icand += step) {

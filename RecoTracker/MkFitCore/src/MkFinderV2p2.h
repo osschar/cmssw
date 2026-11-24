@@ -29,7 +29,7 @@ namespace mkfit {
   // Switches are in V2p2Config.h, namespace Config::V2p2; the per-iteration
   // tunings are V2p2Params (interface/V2p2Params.h), read through MkJob::v2p2().
 
-  class Event;
+  class TraceStore;
 
   // The v2p2 track finder: runs a block of seeds through the layer plan, one
   // layer at a time. MkBuilder::findTracksStandardv2p2() drives it: setup(),
@@ -45,7 +45,7 @@ namespace mkfit {
                int seed_begin,
                int seed_end,
                SteeringParams::iterator& sp_it,
-               const Event* ev);
+               const TraceStore* trace);
     void reset();
 
     // Track terms of the search window: the iteration's V2p2Params, else the built-in ones.
@@ -227,10 +227,10 @@ namespace mkfit {
     //==========================================================================
     // Data
 
-    // The job, the layer plan position and the event, for one seed block.
+    // The job, the layer plan position and the trace store (MKFIT_TRACE), for one seed block.
     const MkJob* mp_job = nullptr;
     SteeringParams::iterator* mp_steeringparams_iter = nullptr;
-    const Event* mp_event = nullptr;
+    const TraceStore* mp_trace = nullptr;
 
     BatchManager m_batch_mgr;
 
