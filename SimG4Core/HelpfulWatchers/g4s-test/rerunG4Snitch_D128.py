@@ -26,7 +26,9 @@ process.source = cms.Source("PoolSource", fileNames = cms.untracked.vstring('fil
 if os.environ.get("G4SNITCH_EVENTS"):
     process.source.eventsToProcess = cms.untracked.VEventRange(*os.environ["G4SNITCH_EVENTS"].split(","))
 process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(-1))
-process.options = cms.untracked.PSet(numberOfThreads = cms.untracked.uint32(1), numberOfStreams = cms.untracked.uint32(0))
+# G4SNITCH_NTHREADS=N: N framework threads (default 1); the snitch then writes one file per thread
+process.options = cms.untracked.PSet(numberOfThreads = cms.untracked.uint32(int(os.environ.get('G4SNITCH_NTHREADS', '1'))),
+                                     numberOfStreams = cms.untracked.uint32(0))
 
 # Restore the engine states the original job saved at the start of each event.
 process.RandomNumberGeneratorService.restoreStateLabel = cms.untracked.string('randomEngineStateProducer')

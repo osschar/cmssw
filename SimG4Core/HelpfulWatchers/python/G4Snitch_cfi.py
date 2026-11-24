@@ -12,6 +12,8 @@
 #   G4SNITCH_LAST_EKIN_CUT=MeV        kinetic energy below which a particle's last state is no longer updated (default 1)
 #   G4SNITCH_TRACK_UNSTABLE=0         unstable particles (not neutrons) only by the energy cut, not at any energy
 #   G4SNITCH_POSITRON_TOTAL=0         positrons cut on kinetic energy, like the rest, not on total energy
+#   G4SNITCH_NTHREADS=N               (read by the run configurations) N framework threads; above 1 each thread's
+#                                     snitch writes G4Snitch_t<thread>.root (output_per_thread)
 # Every value in use, with the code version and these environment variables, goes into the output's tree "C".
 import os
 import FWCore.ParameterSet.Config as cms
@@ -43,6 +45,8 @@ def g4snitch_watcher(env=os.environ):
         last_state_ekin_cut = cms.untracked.double(1.0),  # MeV: below this the last state is no longer updated
         track_unstable_always = cms.untracked.bool(True),  # unstable particles other than neutrons: tracked always
         positron_by_total_energy = cms.untracked.bool(True),  # positrons: the cut applies to the total energy
+        output_file = cms.untracked.string("G4Snitch.root"),
+        output_per_thread = cms.untracked.bool(False),  # one file per framework thread, "_t<thread>" before ".root"
     )
     if env.get("G4SNITCH_BFIELD", "0") == "1":
         w.output_path_bfield = True
@@ -60,6 +64,8 @@ def g4snitch_watcher(env=os.environ):
         w.track_ekin_cut = float(env["G4SNITCH_TRACK_EKIN_CUT"])
     if env.get("G4SNITCH_LAST_EKIN_CUT"):
         w.last_state_ekin_cut = float(env["G4SNITCH_LAST_EKIN_CUT"])
+    if int(env.get("G4SNITCH_NTHREADS", "1")) > 1:
+        w.output_per_thread = True
     if env.get("G4SNITCH_TRACK_UNSTABLE", "1") == "0":
         w.track_unstable_always = False
     if env.get("G4SNITCH_POSITRON_TOTAL", "1") == "0":

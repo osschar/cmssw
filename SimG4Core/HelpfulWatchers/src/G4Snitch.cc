@@ -26,6 +26,7 @@ Description: Outputs a ROOT tree of kinematics.
 
 // user include files
 #include "SimG4Core/HelpfulWatchers/interface/G4Snitch.h"
+#include "SimG4Core/Notification/interface/BeginOfEvent.h"
 #include "SimG4Core/Notification/interface/BeginOfTrack.h"
 #include "SimG4Core/Notification/interface/EndOfTrack.h"
 
@@ -33,6 +34,8 @@ Description: Outputs a ROOT tree of kinematics.
 #include "G4Step.hh"
 #include "G4VProcess.hh"
 #include "G4Version.hh"
+#include "G4Threading.hh"
+#include "G4Event.hh"
 
 #include "G4VPhysicalVolume.hh"
 #include "G4LogicalVolume.hh"
@@ -135,6 +138,8 @@ G4Snitch::G4Snitch(const edm::ParameterSet &pSet)
   m_last_state_ekin_cut = pSet.getUntrackedParameter<double>("last_state_ekin_cut", 1.0);
   m_track_unstable_always = pSet.getUntrackedParameter<bool>("track_unstable_always", true);
   m_positron_by_total_energy = pSet.getUntrackedParameter<bool>("positron_by_total_energy", true);
+  m_output_file = pSet.getUntrackedParameter<std::string>("output_file", "G4Snitch.root");
+  m_output_per_thread = pSet.getUntrackedParameter<bool>("output_per_thread", false);
   m_pset_dump = pSet.dump();
   // 2025-04-18 Linking through BuildFile.xml no longer works (-Wl,--as-needed)
   // so we just pull the dicts in here.
@@ -348,8 +353,16 @@ G4Snitch::~G4Snitch() {
 }
 
 void G4Snitch::open_file_tree() {
-  m_file = TFile::Open("G4Snitch.root", "RECREATE");
+  m_thread_id = G4Threading::G4GetThreadId();
+  m_output_name = m_output_file;
+  if (m_output_per_thread) {
+    const std::string tag = "_t" + std::to_string(m_thread_id);
+    const auto dot = m_output_name.rfind(".root");
+    m_output_name = dot == std::string::npos ? m_output_name + tag : m_output_name.insert(dot, tag);
+  }
+  m_file = TFile::Open(m_output_name.c_str(), "RECREATE");
   m_tree = new TTree("T", "G4 Dump Tree of some kind");
+  m_tree->Branch("ev", &m_ev_number, "ev/I");
 
   m_info.reset(new G4S_Info);
   m_tree->Branch("i", m_info.get());
@@ -482,7 +495,7 @@ void G4Snitch::write_config_tree() {
     o << f.rdbuf();
     return o.str();
   };
-  put("format", "trees T (events: i, p, s, b), P (processes), V (volumes), D (sensitive detectors), C (this)");
+  put("format", "trees T (events: ev, i, p, s, b), P (processes), V (volumes), D (sensitive detectors), C (this)");
   put("verbose", b2yn(m_verbose));
   put("verbose_stack_level", b2yn(m_verbose_stack_level));
   put("verbose_transport", b2yn(m_verbose_transport));
@@ -504,6 +517,10 @@ void G4Snitch::write_config_tree() {
   put("select_cone", vec(m_select_cone));
   put("track_ekin_cut", num(m_track_ekin_cut) + " MeV");
   put("last_state_ekin_cut", num(m_last_state_ekin_cut) + " MeV");
+  put("output_file", m_output_file);
+  put("output_per_thread", b2yn(m_output_per_thread));
+  put("output_name", m_output_name);
+  put("thread_id", std::to_string(m_thread_id));
   put("track_unstable_always", b2yn(m_track_unstable_always));
   put("positron_by_total_energy", b2yn(m_positron_by_total_energy));
   put("rule.tracked",
@@ -574,6 +591,7 @@ void G4Snitch::update(const BeginOfRun* bor) {
 void G4Snitch::update(const BeginOfEvent* boe) {
   std::cout << "++ signal BeginOfEvent\n";
   ++m_event;
+  m_ev_number = (*boe)() ? (*boe)()->GetEventID() : -1;
   m_tracking = true;
 
   m_stack.clear();

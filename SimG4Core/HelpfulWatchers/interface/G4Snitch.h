@@ -147,6 +147,13 @@ private:
   // energy (track_unstable_always); positrons are cut on total, not kinetic, energy (positron_by_total_energy).
   bool m_track_unstable_always = true;
   bool m_positron_by_total_energy = true;
+  // The output file. With several framework threads every thread has its own snitch, so output_per_thread inserts
+  // "_t<Geant4 thread id>" before ".root" (G4Snitch_t0.root, ...); events are matched across files by branch "ev".
+  std::string m_output_file = "G4Snitch.root";
+  bool m_output_per_thread = false;
+  std::string m_output_name;
+  int m_thread_id = -1;
+  int m_ev_number = -1;  // the Geant4 event id, which CMS sets to the CMSSW event number; branch "ev" of tree T
   // The parameter set as given, written with the values in use into the configuration tree "C".
   std::string m_pset_dump;
   edm::ESGetToken<MagneticField, IdealMagneticFieldRecord> m_bfield_token;
