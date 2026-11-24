@@ -23,8 +23,8 @@
 #endif
 
 #ifdef MKFIT_TRACE
-#include "RecoTracker/MkFitCore/standalone/DataFormats/RntStructs.h"
-#include "RecoTracker/MkFitCore/standalone/DataFormats/RntConversions.h"
+#include "RecoTracker/MkFitCore/interface/TraceStore.h"
+#include "TraceConversions.h"
 #endif
 
 namespace mkfit {
@@ -36,26 +36,26 @@ namespace mkfit {
     // rather than in TrackCand::m_trace_state_id, which belongs to the search:
     // writing it would chain the search's states onto the fit's.
     struct BkFitTracer {
-      const Event *m_event;
+      const TraceStore *m_trace;
       int m_layer[NN], m_mcid[NN], m_hit[NN], m_step[NN], m_state[NN];
       bool m_live[NN];
 
       // The root state of each lane is the fit's INPUT state, after
       // bkFitInputTracks() has inflated the covariance by 100 (10x in sigma).
-      BkFitTracer(const Event *ev,
+      BkFitTracer(const TraceStore *tr,
                   TrackCand *const *tcands,
                   const MPlexLV &par,
                   const MPlexLS &err,
                   const MPlexQI &chg,
                   int N_proc)
-          : m_event(ev) {
+          : m_trace(tr) {
         std::fill_n(m_layer, NN, -1);
         std::fill_n(m_mcid, NN, -1);
         std::fill_n(m_hit, NN, -1);
         std::fill_n(m_step, NN, 0);
         std::fill_n(m_state, NN, -1);
         std::fill_n(m_live, NN, false);
-        if (!m_event)
+        if (!m_trace)
           return;
         for (int i = 0; i < N_proc; ++i) {
           TrackCand *tc = tcands[i];
@@ -64,16 +64,16 @@ namespace mkfit {
             continue;
           // Created lazily, as in MkBuilder: in HLT the fit runs before any search.
           if (cc->m_trace_meta_id == -1)
-            cc->m_trace_meta_id = m_event->trace_new_cand_meta(m_event->evtID(), cc->seed_origin_index());
+            cc->m_trace_meta_id = m_trace->trace_new_cand_meta(m_trace->tr_event_id(), cc->seed_origin_index());
           TrackState ts;
           par.copyOut(i, ts.parArray_nc());
           err.copyOut(i, ts.errArray_nc());
           ts.charge = chg[i];
           // layer -1: the root sits before any hit. stage 1 = BkwFit.
           auto [stage_id, state_id] =
-              m_event->trace_new_cand_stage_and_state(cc->m_trace_meta_id, -1, 1, -1, state2bivec3(ts), ts);
+              m_trace->trace_new_cand_stage_and_state(cc->m_trace_meta_id, -1, 1, -1, state2bivec3(ts), ts);
           cc->m_trace_stage_id = stage_id;
-          TrCandMeta &cm = m_event->tr_candmeta(cc->m_trace_meta_id);
+          TrCandMeta &cm = m_trace->tr_candmeta(cc->m_trace_meta_id);
           cm.stage_ids[1] = stage_id;
           // The truth-join key, if MkBuilder has not set it (HLT runs the fit first):
           // seeds are relabelled sequentially, so a track's label is its seed index.
@@ -84,7 +84,7 @@ namespace mkfit {
       }
 
       void on_hit(int i, int layer, int hit_idx, int mc_hit_id) {
-        if (!m_event)
+        if (!m_trace)
           return;
         m_layer[i] = layer;
         m_hit[i] = hit_idx;
@@ -105,7 +105,7 @@ namespace mkfit {
                      const MPlexQF &chi2,
                      const MPlexQF &chi2_cum,
                      const MPlexQI &fail) {
-        if (!m_event)
+        if (!m_trace)
           return;
         for (int i = 0; i < N_proc; ++i) {
           if (!m_live[i])
@@ -141,8 +141,7 @@ namespace mkfit {
 
           // Which particle made the hit. Not compared to anything here: the track's
           // sim label is not available at this point (see the struct).
-          if (m_mcid[i] >= 0 && m_mcid[i] < (int)m_event->simHitsInfo_.size())
-            bu.mc_track_id = m_event->simHitsInfo_[m_mcid[i]].mcTrackID();
+          bu.mc_track_id = m_trace->tr_mc_track_id(m_mcid[i]);
 
           TrackState ts;
           par_c.copyOut(i, ts.parArray_nc());
@@ -153,10 +152,10 @@ namespace mkfit {
           err_p.copyOut(i, bu.propagated_state.errArray_nc());
           bu.propagated_state.charge = chg[i];
 #endif
-          const int sid = m_event->trace_new_cand_state(m_state[i], m_layer[i], state2bivec3(ts), ts);
+          const int sid = m_trace->trace_new_cand_state(m_state[i], m_layer[i], state2bivec3(ts), ts);
           bu.state_id_out = sid;
           m_state[i] = sid;
-          m_event->trace_bkfitupdate(std::move(bu));
+          m_trace->trace_bkfitupdate(std::move(bu));
         }
       }
     };
@@ -180,7 +179,7 @@ namespace mkfit {
       fit_lay[i] = fit_idx[i] = -1;
 
 #ifdef MKFIT_TRACE
-    BkFitTracer tracer(m_event, m_TrkCand, m_Par[iC], m_Err[iC], m_Chg, N_proc);
+    BkFitTracer tracer(m_trace, m_TrkCand, m_Par[iC], m_Err[iC], m_Chg, N_proc);
 #endif
 
     MPlexHV plNrm{0.0f};  // input detector plane [pl - plane]

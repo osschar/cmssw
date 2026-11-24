@@ -151,15 +151,20 @@ namespace mkfit {
       MKFIT_V2P2_KNOB(float, detv_const, 0.0f);  // ln(det V) per hit, used when use_detv is false
     }  // namespace Score
 
-#if defined(MKFIT_STANDALONE)
     //--------------------------------------------------------------------------
     // Diagnostic instruments, off by default.
+    namespace Diag {
+      // Rank above which TrackCand::m_rank_over_layer records the layer, MKFIT_TRACE.
+      // Outside the standalone-only knobs below, so that a trace build without
+      // MKFIT_STANDALONE compiles.
+      MKFIT_V2P2_KNOB(int, rank_over, 6);
+    }  // namespace Diag
+
+#if defined(MKFIT_STANDALONE)
     namespace Diag {
       // Surface reference of dq_track with the layer's cylinder or disc normal,
       // in MkBins, so that the corrected value reaches the trace.
       MKFIT_V2P2_KNOB(bool, mkbins_surface_q, false);
-      // Rank above which TrackCand::m_rank_over_layer records the layer, MKFIT_TRACE.
-      MKFIT_V2P2_KNOB(int, rank_over, 6);
       // Standalone: classify each seed's beam at the end of the forward search by truth,
       // v2p2_final_beam_diag() and its _reset() / _report(), standalone/V2p2Diag.h
       // (single-threaded accumulation).

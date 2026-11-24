@@ -25,6 +25,7 @@ namespace mkfit {
   class SteeringParams;
 
   class Event;
+  class TraceStore;
 
   struct UpdateIndices {
     int seed_idx;
@@ -57,7 +58,11 @@ namespace mkfit {
                const Event *ev,
                int region,
                bool infwd);
-    void setup_bkfit(const PropagationConfig &pc, const IterationConfig &ic, const SteeringParams &sp, const Event *ev);
+    void setup_bkfit(const PropagationConfig &pc,
+                     const IterationConfig &ic,
+                     const SteeringParams &sp,
+                     const Event *ev,
+                     const TraceStore *trace);
     void reset();
 
     void begin_layer(const LayerOfHits &layer_of_hits);
@@ -356,6 +361,8 @@ namespace mkfit {
     const SteeringParams *m_steering_params = nullptr;
     const std::vector<bool> *m_iteration_hit_mask = nullptr;
     const Event *m_event = nullptr;
+    // The trace store of the backward fit's MKFIT_TRACE hooks, null otherwise.
+    const TraceStore *m_trace = nullptr;
     int m_current_region = -1;
     bool m_in_fwd = true;
 

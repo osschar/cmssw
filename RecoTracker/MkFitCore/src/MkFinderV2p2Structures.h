@@ -17,7 +17,7 @@
 namespace mkfit {
 
 #ifdef MKFIT_TRACE
-  class Event;
+  class TraceStore;
 #endif
 
   struct CCandRep;
@@ -234,7 +234,7 @@ namespace mkfit {
 #ifdef MKFIT_TRACE
     int tr_hitmatch_ids[NN];
     void set_tr_hitmatch_id(int id) { tr_hitmatch_ids[N_filled] = id; }
-    const Event* mp_event = nullptr;
+    const TraceStore* mp_trace = nullptr;
 #endif
 
     // One result per lane, appended to *mp_out.

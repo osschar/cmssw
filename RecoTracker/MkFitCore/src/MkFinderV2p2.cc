@@ -9,8 +9,8 @@
 #endif
 
 #ifdef MKFIT_TRACE
-#include "RecoTracker/MkFitCore/standalone/DataFormats/RntStructs.h"
-#include "RecoTracker/MkFitCore/standalone/DataFormats/RntConversions.h"
+#include "RecoTracker/MkFitCore/interface/TraceStore.h"
+#include "TraceConversions.h"
 #endif
 
 //#define DEBUG
@@ -18,7 +18,7 @@
 
 // Counters of the current TrLayerSearch, empty without MKFIT_TRACE.
 #ifdef MKFIT_TRACE
-#define V2P2_TR_LS_COUNT(ls_id, field) (++mp_event->tr_layersearch(ls_id).field)
+#define V2P2_TR_LS_COUNT(ls_id, field) (++mp_trace->tr_layersearch(ls_id).field)
 #else
 #define V2P2_TR_LS_COUNT(ls_id, field) ((void)0)
 #endif
@@ -114,10 +114,10 @@ namespace mkfit {
                            int seed_begin,
                            int seed_end,
                            SteeringParams::iterator& sp_it,
-                           const Event* ev) {
+                           const TraceStore* trace) {
     mp_job = job;
     mp_steeringparams_iter = &sp_it;
-    mp_event = ev;
+    mp_trace = trace;
 
     m_batch_mgr.setup(eoccs, seed_begin, seed_end);
 
@@ -149,7 +149,7 @@ namespace mkfit {
     m_batch_mgr.release();
     mp_job = nullptr;
     mp_steeringparams_iter = nullptr;
-    mp_event = nullptr;
+    mp_trace = nullptr;
 
     // Finders are reused across seed blocks and events, and the queue holds
     // pointers into CCandRep::m_cands. process_layer() asserts it is empty on exit.
@@ -582,7 +582,7 @@ namespace mkfit {
       fill_layer(ls, *spi, m_rz_limits);
       fill_window(ls, B, TCE, i);
       fill_bins(ls, BL_p, m_rz_limits.m_is_double ? &BL_s : nullptr, i);
-      tr_layersearch_ids[i] = mp_event->trace_layersearch(std::move(ls)).id;
+      tr_layersearch_ids[i] = mp_trace->trace_layersearch(std::move(ls)).id;
     }
 #endif
 
@@ -612,7 +612,7 @@ namespace mkfit {
                 std::sqrt(dev.Mag2()), B.m_sp1.dalpha[i], B.m_sp2.dalpha[i], H.m_Hderfac[i]);
         // clang-format on
 #ifdef MKFIT_TRACE
-        mp_event->tr_layersearch(tr_layersearch_ids[i]).hermite_mid_dev = dev;
+        mp_trace->tr_layersearch(tr_layersearch_ids[i]).hermite_mid_dev = dev;
 #endif
       }
     }
@@ -953,10 +953,10 @@ namespace mkfit {
 
 #ifdef MKFIT_TRACE
       CandIncoming& cand = *cand_ptrs[cand_idcs[h]];
-      TrHitMatch hm = make_hitmatch(mp_event, cand.ccand().seed_origin_index(), L, hit_orig_idcs[h], is_sec_layer);
+      TrHitMatch hm = make_hitmatch(mp_trace, cand.ccand().seed_origin_index(), L, hit_orig_idcs[h], is_sec_layer);
       hm.state_id = cand.tcand().m_trace_state_id;
       hm.search_id = tr_layersearch_ids[cand_idcs[h]];
-      tr_hitmatch_ids[h] = mp_event->trace_hitmatch(std::move(hm)).id;
+      tr_hitmatch_ids[h] = mp_trace->trace_hitmatch(std::move(hm)).id;
 #endif
     }
     pad_free_lanes(N_proc_hits, module_pos, module_norm);
@@ -1048,7 +1048,7 @@ namespace mkfit {
 
 #ifdef MKFIT_TRACE
       // h3_state is the state the cut above was taken on.
-      TrHitMatch& hm = mp_event->tr_hitmatch(tr_hitmatch_ids[h]);
+      TrHitMatch& hm = mp_trace->tr_hitmatch(tr_hitmatch_ids[h]);
       fill_hitmatch_presel(hm,
                            h3_state,
                            h,
@@ -1104,7 +1104,7 @@ namespace mkfit {
     for (int i = 0; i < N_proc; ++i) {
       CandIncoming& cand = *cand_ptrs[i];
 #ifdef MKFIT_TRACE
-      mp_event->tr_layersearch(tr_layersearch_ids[i]).n_hits_pqueue = cand.m_pqueue[0].size() + cand.m_pqueue[1].size();
+      mp_trace->tr_layersearch(tr_layersearch_ids[i]).n_hits_pqueue = cand.m_pqueue[0].size() + cand.m_pqueue[1].size();
 #endif
       for (int sl = 0; sl < 2; ++sl) {
         for (const auto& e : cand.m_pqueue[sl])
@@ -1148,7 +1148,7 @@ namespace mkfit {
           better += (o.ddphi < e.ddphi);
           better_sub += (o.ddphi < e.ddphi && o.layer == e.layer);
         }
-        TrHitMatch& hm = mp_event->tr_hitmatch(e.tr_hitmatch_id);
+        TrHitMatch& hm = mp_trace->tr_hitmatch(e.tr_hitmatch_id);
         hm.passed_pqueue = true;
         hm.sub_rank = better_sub + 1;
         hm.full_rank = better + 1;
@@ -1196,7 +1196,7 @@ namespace mkfit {
     koa.m_solve_plane = solve_plane;
     koa.m_chi2_trk_fac = mp_job->v2p2().chi2_trk_fac;
 #ifdef MKFIT_TRACE
-    koa.mp_event = mp_event;
+    koa.mp_trace = mp_trace;
 #endif
   }
 
@@ -1507,9 +1507,9 @@ namespace mkfit {
           }
 #ifdef MKFIT_TRACE
           int pid = nc.m_trace_state_id;
-          int id = mp_event->trace_new_cand_state(pid, (*mp_steeringparams_iter)->m_layer, track2bivec3(nc), n.m_state);
+          int id = mp_trace->trace_new_cand_state(pid, (*mp_steeringparams_iter)->m_layer, track2bivec3(nc), n.m_state);
           if (n.m_tr_hitmatch_id >= 0) {
-            auto& ku = mp_event->tr_kalmanupdate(mp_event->tr_hitmatch(n.m_tr_hitmatch_id).kalman_id);
+            auto& ku = mp_trace->tr_kalmanupdate(mp_trace->tr_hitmatch(n.m_tr_hitmatch_id).kalman_id);
             ku.accepted = true;
             ku.state_id_out = id;
           }
@@ -1543,7 +1543,7 @@ namespace mkfit {
 #ifdef MKFIT_TRACE
         int pid = nc.m_trace_state_id;
         nc.m_trace_state_id =
-            mp_event->trace_new_cand_state(pid, (*mp_steeringparams_iter)->m_layer, track2bivec3(nc), nc.state());
+            mp_trace->trace_new_cand_state(pid, (*mp_steeringparams_iter)->m_layer, track2bivec3(nc), nc.state());
 #endif
       }
 

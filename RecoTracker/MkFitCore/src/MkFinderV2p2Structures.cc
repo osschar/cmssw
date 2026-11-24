@@ -6,8 +6,7 @@
 #include "MatriplexPackers.h"
 
 #ifdef MKFIT_TRACE
-#include "RecoTracker/MkFitCore/standalone/DataFormats/RntStructs.h"
-#include "RecoTracker/MkFitCore/standalone/Event.h"
+#include "RecoTracker/MkFitCore/interface/TraceStore.h"
 #endif
 
 namespace mkfit {
@@ -90,9 +89,9 @@ namespace mkfit {
 #ifdef MKFIT_TRACE
       // Create TrKalmanUpdate for EVERY hit that went through Kalman
       int hm_id = tr_hitmatch_ids[i];
-      TrHitMatch& hm = mp_event->tr_hitmatch(hm_id);
+      TrHitMatch& hm = mp_trace->tr_hitmatch(hm_id);
 
-      TrKalmanUpdate& ku = mp_event->trace_kalmanupdate({-1, hm_id, hm.state_id});
+      TrKalmanUpdate& ku = mp_trace->trace_kalmanupdate({-1, hm_id, hm.state_id});
       ku.chi2 = tsChi2[i];
       ku.chi2_acc = tsChi2Acc[i];
       // accepted and state_id_out are set when a path is materialised.

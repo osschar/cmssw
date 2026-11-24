@@ -21,6 +21,7 @@ namespace mkfit {
   class TrackerInfo;
 
   class Event;
+  class TraceStore;
 
   //==============================================================================
   // MkBuilder
@@ -46,7 +47,9 @@ namespace mkfit {
 
     // --------
 
-    void begin_event(MkJob *job, Event *ev, const char *build_type);
+    // trace: the store the MKFIT_TRACE hooks write into. The standalone passes
+    // none, and its Event, which is a TraceStore, is used.
+    void begin_event(MkJob *job, Event *ev, const char *build_type, TraceStore *trace = nullptr);
     void end_event();
     void release_memory();
 
@@ -145,6 +148,8 @@ namespace mkfit {
 
     // MIMI -- Used by seed processing / validation.
     Event *m_event = nullptr;
+    // The trace store of the MKFIT_TRACE hooks, null otherwise.
+    TraceStore *m_trace = nullptr;
 
     // State for BestHit
     TrackVec m_tracks;

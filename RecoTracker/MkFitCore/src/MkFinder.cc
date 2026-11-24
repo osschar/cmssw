@@ -52,11 +52,13 @@ namespace mkfit {
   void MkFinder::setup_bkfit(const PropagationConfig &pc,
                              const IterationConfig &ic,
                              const SteeringParams &sp,
-                             const Event *ev) {
+                             const Event *ev,
+                             const TraceStore *trace) {
     m_prop_config = &pc;
     m_iteration_config = &ic;
     m_steering_params = &sp;
     m_event = ev;
+    m_trace = trace;
   }
 
   void MkFinder::reset() {
@@ -67,6 +69,7 @@ namespace mkfit {
     m_steering_params = nullptr;
     m_iteration_hit_mask = nullptr;
     m_event = nullptr;
+    m_trace = nullptr;
     m_current_region = -1;
     m_in_fwd = true;
   }
