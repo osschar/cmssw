@@ -291,7 +291,7 @@ namespace edmtest {
     ConsumingStreamAnalyzer(edm::ParameterSet const& iPSet)
         : value_(iPSet.getUntrackedParameter<int>("valueMustMatch")),
           moduleLabel_(iPSet.getUntrackedParameter<std::string>("moduleLabel"), "") {
-      consumes<IntProduct>(moduleLabel_);
+      mayConsume<IntProduct>(moduleLabel_);
     }
 
     void analyze(edm::Event const& iEvent, edm::EventSetup const&) {
@@ -315,7 +315,7 @@ namespace edmtest {
     ConsumingOneSharedResourceAnalyzer(edm::ParameterSet const& iPSet)
         : value_(iPSet.getUntrackedParameter<int>("valueMustMatch")),
           moduleLabel_(iPSet.getUntrackedParameter<edm::InputTag>("moduleLabel")) {
-      consumes<IntProduct>(moduleLabel_);
+      mayConsume<IntProduct>(moduleLabel_);
       usesResource(iPSet.getUntrackedParameter<std::string>("resourceName"));
     }
 
