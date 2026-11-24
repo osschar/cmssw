@@ -22,6 +22,7 @@
 #include <exception>
 #include <map>
 #include <mutex>
+#include <set>
 #include <stdexcept>
 #include <thread>
 #include <tuple>
@@ -95,6 +96,9 @@ namespace mkfit_fwff {
       // The truth, in writeTruth() only: the tables, and their sim tracks as rows.
       const TraceTruthTables* truth = nullptr;
       std::vector<TrackRow> simTracks;
+      // mkFit's inputs, in writeInputs() only; writeGeom: the Geometry RNTuple gets the tables' geometry.
+      const TraceInputTables* inputs = nullptr;
+      bool writeGeom = false;
 
       Clock::time_point tCall;
       double takeMs = 0;
@@ -346,6 +350,118 @@ namespace mkfit_fwff {
       }
     };
 
+    // Hits: one entry per layer of the batch's inputs.
+    class HitsTuple : public Tuple {
+    public:
+      HitsTuple(TDirectory& dir, const TraceRNTupleWriter::Options& o) {
+        auto model = ROOT::RNTupleModel::Create();
+        makeKeyFields(*model);
+        model->MakeField<std::int32_t>("layer");
+        model->MakeField<std::int32_t>("n_hits", "1 + the largest index of a hit in the layer");
+        model->MakeField<std::vector<std::int32_t>>(
+            "idx", "the hit's index as the records use it, the cluster's index in its cluster collection");
+        model->MakeField<std::vector<float>>("x", "Hit::x()");
+        model->MakeField<std::vector<float>>("y", "Hit::y()");
+        model->MakeField<std::vector<float>>("z", "Hit::z()");
+        model->MakeField<std::vector<std::array<float, 6>>>(
+            "err", "Hit::errArray(), the symmetric 3x3 covariance: xx, xy, yy, xz, yz, zz");
+        model->MakeField<std::vector<std::uint32_t>>("detid", "the CMSSW DetId of the hit's module");
+        model->MakeField<std::vector<std::uint16_t>>("det_in_layer", "Hit::detIDinLayer()");
+        model->MakeField<std::vector<std::uint16_t>>("charge_pcm", "Hit::chargePerCM()");
+        model->MakeField<std::vector<std::uint8_t>>("span_rows", "Hit::spanRows()");
+        model->MakeField<std::vector<std::uint8_t>>("span_cols", "Hit::spanCols()");
+        open(std::move(model), "Hits", dir, o);
+      }
+
+    private:
+      void fillRows(const Batch& b, std::mutex& fileMutex) override {
+        bindKey(*m_entry, b);
+        for (const auto& l : b.inputs->layers) {
+          m_entry->BindRawPtr("layer", &l.layer);
+          m_entry->BindRawPtr("n_hits", &l.n_hits);
+          m_entry->BindRawPtr("idx", &l.idx);
+          m_entry->BindRawPtr("x", &l.x);
+          m_entry->BindRawPtr("y", &l.y);
+          m_entry->BindRawPtr("z", &l.z);
+          m_entry->BindRawPtr("err", &l.err);
+          m_entry->BindRawPtr("detid", &l.detid);
+          m_entry->BindRawPtr("det_in_layer", &l.det_in_layer);
+          m_entry->BindRawPtr("charge_pcm", &l.charge_pcm);
+          m_entry->BindRawPtr("span_rows", &l.span_rows);
+          m_entry->BindRawPtr("span_cols", &l.span_cols);
+          fillOne(fileMutex);
+        }
+      }
+    };
+
+    // Inputs: one entry per batch with inputs.
+    class InputsTuple : public Tuple {
+    public:
+      static constexpr const char* kBsNames[8] = {
+          "bs_x", "bs_y", "bs_z", "bs_sigma_z", "bs_width_x", "bs_width_y", "bs_dxdz", "bs_dydz"};
+
+      InputsTuple(TDirectory& dir, const TraceRNTupleWriter::Options& o) {
+        auto model = ROOT::RNTupleModel::Create();
+        makeKeyFields(*model);
+        for (const char* n : kBsNames)
+          model->MakeField<float>(n, "the beam spot of mkFit's EventOfHits (mkfit::BeamSpot)");
+        model->MakeField<std::int32_t>("n_hits_pixel", "size of the pixel hit vector, the pixel layers' index space");
+        model->MakeField<std::int32_t>("n_hits_outer",
+                                       "size of the outer-tracker hit vector, the outer layers' index space");
+        model->MakeField<std::int32_t>("n_phi_bins", "phi bins of a LayerOfHits");
+        model->MakeField<std::vector<std::int32_t>>("dead_layer", "the layer of each dead bin of the EventOfHits");
+        model->MakeField<std::vector<std::int32_t>>("dead_q_bin", "its q bin");
+        model->MakeField<std::vector<std::int32_t>>("dead_phi_bin", "its phi bin");
+        model->MakeField<std::string>("geom_md5", "md5 of TrackerInfo::write_bin_file() of the job's TrackerInfo");
+        model->MakeField<std::string>("geom_version", "the stamp written into that file");
+        open(std::move(model), "Inputs", dir, o);
+      }
+
+    private:
+      void fillRows(const Batch& b, std::mutex& fileMutex) override {
+        const TraceInputTables& t = *b.inputs;
+        bindKey(*m_entry, b);
+        const float* bs[8] = {
+            &t.bs_x, &t.bs_y, &t.bs_z, &t.bs_sigma_z, &t.bs_width_x, &t.bs_width_y, &t.bs_dxdz, &t.bs_dydz};
+        for (int i = 0; i < 8; ++i)
+          m_entry->BindRawPtr(kBsNames[i], bs[i]);
+        m_entry->BindRawPtr("n_hits_pixel", &t.n_hits_pixel);
+        m_entry->BindRawPtr("n_hits_outer", &t.n_hits_outer);
+        m_entry->BindRawPtr("n_phi_bins", &t.n_phi_bins);
+        m_entry->BindRawPtr("dead_layer", &t.dead_layer);
+        m_entry->BindRawPtr("dead_q_bin", &t.dead_q_bin);
+        m_entry->BindRawPtr("dead_phi_bin", &t.dead_phi_bin);
+        m_entry->BindRawPtr("geom_md5", &t.geom_md5);
+        m_entry->BindRawPtr("geom_version", &t.geom_version);
+        fillOne(fileMutex);
+      }
+    };
+
+    // Geometry: one entry per batch whose geometry is new to the file.
+    class GeometryTuple : public Tuple {
+    public:
+      GeometryTuple(TDirectory& dir, const TraceRNTupleWriter::Options& o) {
+        auto model = ROOT::RNTupleModel::Create();
+        makeKeyFields(*model);
+        model->MakeField<std::string>("md5", "md5 of bin");
+        model->MakeField<std::string>("version", "the stamp in the file's header");
+        model->MakeField<std::vector<std::uint8_t>>(
+            "bin", "the file TrackerInfo::write_bin_file() writes, which TrackerInfo::read_bin_file() reads");
+        open(std::move(model), "Geometry", dir, o);
+      }
+
+    private:
+      void fillRows(const Batch& b, std::mutex& fileMutex) override {
+        if (!b.writeGeom)
+          return;
+        bindKey(*m_entry, b);
+        m_entry->BindRawPtr("md5", &b.inputs->geom_md5);
+        m_entry->BindRawPtr("version", &b.inputs->geom_version);
+        m_entry->BindRawPtr("bin", b.inputs->geom_bin);
+        fillOne(fileMutex);
+      }
+    };
+
   }  // namespace
 
   struct TraceRNTupleWriter::Impl {
@@ -361,6 +477,11 @@ namespace mkfit_fwff {
     std::vector<std::unique_ptr<Tuple>> truthTuples;
     std::mutex truthMutex;
     std::map<std::tuple<std::uint32_t, std::uint32_t, std::uint64_t, std::string>, int> truthPasses;
+    // The input RNTuples, filled by writeInputs() in its caller, one call at a time (inputMutex).
+    std::vector<std::unique_ptr<Tuple>> inputTuples;
+    std::mutex inputMutex;
+    std::map<std::tuple<std::uint32_t, std::uint32_t, std::uint64_t, std::string>, int> inputPasses;
+    std::set<std::string> geomMd5s;  // the geometries in Geometry
 
     // mutex guards everything below; fileMutex the writing into the file.
     std::mutex mutex;
@@ -483,6 +604,9 @@ namespace mkfit_fwff {
     auto simTracks = std::make_unique<TrackTuple>(
         "SimTracks", "the sim track's index, also its label", &Batch::simTracks, dir, I.opt);
     auto truthSeeds = std::make_unique<TruthSeedsTuple>(dir, I.opt);
+    auto inHits = std::make_unique<HitsTuple>(dir, I.opt);
+    auto inputs = std::make_unique<InputsTuple>(dir, I.opt);
+    auto geometry = std::make_unique<GeometryTuple>(dir, I.opt);
     I.fileOrder = {metas.get(),
                    stages.get(),
                    states.get(),
@@ -495,7 +619,10 @@ namespace mkfit_fwff {
                    tracks.get(),
                    truthHits.get(),
                    simTracks.get(),
-                   truthSeeds.get()};
+                   truthSeeds.get(),
+                   inHits.get(),
+                   inputs.get(),
+                   geometry.get()};
     I.tuples.push_back(std::move(searches));
     I.tuples.push_back(std::move(states));
     I.tuples.push_back(std::move(hits));
@@ -509,6 +636,9 @@ namespace mkfit_fwff {
     I.truthTuples.push_back(std::move(truthHits));
     I.truthTuples.push_back(std::move(simTracks));
     I.truthTuples.push_back(std::move(truthSeeds));
+    I.inputTuples.push_back(std::move(inHits));
+    I.inputTuples.push_back(std::move(inputs));
+    I.inputTuples.push_back(std::move(geometry));
 
     if (I.opt.threads > 0) {
       const int n = std::min<int>(I.opt.threads, I.tuples.size());
@@ -644,6 +774,33 @@ namespace mkfit_fwff {
     return b.pass;
   }
 
+  int TraceRNTupleWriter::writeInputs(const TraceInputTables& inputs, bool* geomWritten) {
+    Impl& I = *m_impl;
+    std::lock_guard<std::mutex> inputLock(I.inputMutex);
+    Batch b;
+    {
+      std::lock_guard<std::mutex> lock(I.mutex);
+      if (I.closed)
+        throw std::runtime_error("TraceRNTupleWriter::writeInputs after close");
+      if (I.error)
+        std::rethrow_exception(I.error);
+      b.module = inputs.module;
+      b.pass = I.inputPasses[{inputs.run, inputs.lumi, inputs.event, b.module}]++;
+    }
+    b.run = inputs.run;
+    b.lumi = inputs.lumi;
+    b.event = inputs.event;
+    b.inputs = &inputs;
+    b.writeGeom = inputs.geom_bin != nullptr && !inputs.geom_md5.empty() && !I.geomMd5s.count(inputs.geom_md5);
+    for (auto& t : I.inputTuples)
+      t->fill(b, I.fileMutex);
+    if (b.writeGeom)
+      I.geomMd5s.insert(inputs.geom_md5);
+    if (geomWritten)
+      *geomWritten = b.writeGeom;
+    return b.pass;
+  }
+
   void TraceRNTupleWriter::close() {
     if (!m_impl)
       return;
@@ -662,8 +819,9 @@ namespace mkfit_fwff {
     I.workers.clear();
 
     {
-      // No writeTruth() is filling the truth RNTuples any more: it checks closed under the same locks.
+      // No writeTruth() or writeInputs() is filling their RNTuples any more: they check closed under the same locks.
       std::lock_guard<std::mutex> truthLock(I.truthMutex);
+      std::lock_guard<std::mutex> inputLock(I.inputMutex);
       std::lock_guard<std::mutex> lock(I.fileMutex);
       TDirectory::TContext context;
       // Destroying a writer commits its RNTuple into the file.
@@ -672,6 +830,7 @@ namespace mkfit_fwff {
       I.fileOrder.clear();
       I.tuples.clear();
       I.truthTuples.clear();
+      I.inputTuples.clear();
       I.file->Close();
       I.file.reset();
     }

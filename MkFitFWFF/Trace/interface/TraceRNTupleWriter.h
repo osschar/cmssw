@@ -33,10 +33,32 @@
 //   best_sim and best_frac (the sim track with most of the seed's clusters, at
 //   least 3, and the fraction of the clusters it has).
 //
+// - mkFit's inputs of an event, written by writeInputs() when a module gives
+//   them (TraceInputTables below; cmsRun: MkFitTraceInputs), keyed like the
+//   records. They need no simulation.
+//   "Hits", one entry per layer: layer, n_hits (1 + the largest index of a hit
+//   in the layer), and per hit of the layer, in index order: idx (the index the
+//   records use, which is the cluster's index in its cluster collection), x, y,
+//   z and err (the hit as mkFit has it: Hit::position() and Hit::errArray(),
+//   the symmetric 3x3 covariance as xx, xy, yy, xz, yz, zz), detid (the CMSSW
+//   DetId), det_in_layer (Hit::detIDinLayer()), charge_pcm
+//   (Hit::chargePerCM()), span_rows and span_cols (Hit::spanRows(),
+//   spanCols()).
+//   "Inputs", one entry per event: the beam spot of mkFit's EventOfHits
+//   (bs_x, bs_y, bs_z, bs_sigma_z, bs_width_x, bs_width_y, bs_dxdz, bs_dydz),
+//   n_hits_pixel and n_hits_outer (the sizes of the two hit vectors, i.e. the
+//   index spaces of the pixel and the outer-tracker layers), the dead bins of
+//   the EventOfHits (n_phi_bins, and per dead bin dead_layer, dead_q_bin,
+//   dead_phi_bin), and the identity of mkFit's TrackerInfo: geom_md5 (the md5
+//   of TrackerInfo::write_bin_file() with geom_version as its stamp) and
+//   geom_version.
+//   "Geometry", one entry per distinct geom_md5 in the file, written with the
+//   first event that has it: md5, version, and bin, the bytes of that file.
+//
 // "pass" counts how often the same (run, lumi, event, module) was written in
 // this job, from 0: a looper re-running an event gives passes 0, 1, ... The
 // truth tables count their passes on their own, in the order of the
-// writeTruth() calls.
+// writeTruth() calls, and so do the input tables (writeInputs()).
 //
 // Writing. With Options::threads > 0, write() takes the store's seven record
 // vectors by swapping them with empty ones (the vectors are mutable members),
@@ -54,7 +76,9 @@
 
 #include "RecoTracker/MkFitCore/interface/Track.h"
 
+#include <array>
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
@@ -93,6 +117,37 @@ namespace mkfit_fwff {
       float best_frac = 0;
     };
     std::vector<SeedSim> seeds;
+  };
+
+  // mkFit's inputs of one traced event, for TraceRNTupleWriter::writeInputs(); the RNTuples Hits, Inputs and Geometry
+  // are described above.
+  struct TraceInputTables {
+    unsigned int run = 0, lumi = 0;
+    unsigned long long event = 0;
+    std::string module;  // label of the MkFitProducer the inputs are for
+
+    struct LayerHits {
+      int layer = -1;
+      int n_hits = 0;  // 1 + the largest index of a hit in the layer
+      std::vector<std::int32_t> idx;
+      std::vector<float> x, y, z;
+      std::vector<std::array<float, 6>> err;  // xx, xy, yy, xz, yz, zz
+      std::vector<std::uint32_t> detid;
+      std::vector<std::uint16_t> det_in_layer, charge_pcm;
+      std::vector<std::uint8_t> span_rows, span_cols;
+    };
+    std::vector<LayerHits> layers;
+
+    // mkfit::BeamSpot of the EventOfHits.
+    float bs_x = 0, bs_y = 0, bs_z = 0, bs_sigma_z = 0, bs_width_x = 0, bs_width_y = 0, bs_dxdz = 0, bs_dydz = 0;
+    std::int32_t n_hits_pixel = 0, n_hits_outer = 0;
+    // The dead bins of the EventOfHits' layers, LayerOfHits::isBinDead(phi bin, q bin).
+    std::int32_t n_phi_bins = 0;
+    std::vector<std::int32_t> dead_layer, dead_q_bin, dead_phi_bin;
+
+    std::string geom_md5, geom_version;
+    // The bytes of the geometry file; written into Geometry when its md5 is not there yet. May be null.
+    const std::vector<std::uint8_t>* geom_bin = nullptr;
   };
 
   class TraceRNTupleWriter {
@@ -139,6 +194,10 @@ namespace mkfit_fwff {
 
     // Appends the truth tables of one event, in the caller. Returns their pass. Thread safe.
     int writeTruth(const TraceTruthTables& truth);
+
+    // Appends the input tables of one event, in the caller, and the geometry when its md5 is new to the file.
+    // Returns their pass; geomWritten tells whether the geometry was written. Thread safe.
+    int writeInputs(const TraceInputTables& inputs, bool* geomWritten = nullptr);
 
     // Writes the queued events, commits every RNTuple and closes the file; write() afterwards throws. Called by the
     // destructor if not called before.

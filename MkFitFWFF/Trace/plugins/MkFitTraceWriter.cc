@@ -90,6 +90,12 @@ namespace mkfit_fwff {
     return writer_->writeTruth(truth);
   }
 
+  int MkFitTraceWriter::writeInputs(const TraceInputTables& inputs, bool* geomWritten) {
+    if (!writer_)
+      throw cms::Exception("LogicError") << "MkFitTraceWriter: the trace file is not open";
+    return writer_->writeInputs(inputs, geomWritten);
+  }
+
   void MkFitTraceWriter::finish() {
     if (!writer_)
       return;
