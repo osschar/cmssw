@@ -11,8 +11,13 @@
 //
 // Each knob is declared once, with its default, through MKFIT_V2P2_KNOB:
 //   - CMSSW build:      constexpr;
+//   - CMSSW build with MKFIT_V2P2_MUTABLE (a debugging build, never production):
+//                       a mutable variable, defined in V2p2Config.cc, and an entry
+//                       "<group>.<knob>" in the table of interface/V2p2Knobs.h, by
+//                       which a job can set it by name between events;
 //   - standalone build: a mutable variable, defined in V2p2Config.cc and set by
 //                       mkFit.cc options and the shell drivers.
+// MKFIT_V2P2_KNOB_GROUP names the group of the knobs that follow, for the table.
 // The tunings in interface/V2p2Params.h are not knobs: they are set per
 // iteration in IterationConfig::m_v2p2, read through MkJob::v2p2().
 //
@@ -20,8 +25,13 @@
 // section named next to each group.
 //==============================================================================
 
-#if !defined(MKFIT_STANDALONE)
+#if !defined(MKFIT_STANDALONE) && !defined(MKFIT_V2P2_MUTABLE)
 #define MKFIT_V2P2_KNOB(type, name, value) constexpr type name = value
+#elif !defined(MKFIT_STANDALONE) && defined(MKFIT_V2P2_CONFIG_DEFINE)
+#include "RecoTracker/MkFitCore/interface/V2p2Knobs.h"
+#define MKFIT_V2P2_KNOB(type, name, value) \
+  type name = value;                       \
+  static const ::mkfit::Config::V2p2::KnobRegistration name##_knob_registration(MKFIT_V2P2_KNOB_GROUP "." #name, &name)
 #elif defined(MKFIT_V2P2_CONFIG_DEFINE)
 #define MKFIT_V2P2_KNOB(type, name, value) type name = value
 #else
@@ -38,6 +48,8 @@ namespace mkfit {
     //   ddphi < dphi_trk_fac * dphi_track + dphi_hit_fac * hit_phi_half_extent
     // dq_track and dphi_track are 3 sigma. The binnor fetch is derived from the
     // same factors, plus whole spare bins.
+#undef MKFIT_V2P2_KNOB_GROUP
+#define MKFIT_V2P2_KNOB_GROUP "Window"
     namespace Window {
       // Field of the mini-propagators (window, edge states, Hermite path): 0 the uniform
       // Config::Bfield, 1 Config::bFieldFromZR() at each candidate's state, sampled once per
@@ -71,6 +83,8 @@ namespace mkfit {
     // Line pre-cut in MkFinderV2p2::select_hits(), design notes "Line pre-cut".
     // The slacks multiply the track terms of the real cut, so the pre-cut stays
     // looser than it.
+#undef MKFIT_V2P2_KNOB_GROUP
+#define MKFIT_V2P2_KNOB_GROUP "PreCut"
     namespace PreCut {
       MKFIT_V2P2_KNOB(bool, q, true);
       MKFIT_V2P2_KNOB(bool, phi, true);
@@ -83,6 +97,8 @@ namespace mkfit {
     // In-layer combinatorial search and end-of-layer selection, design notes
     // "Reduction and hit ordering", "In-layer combinatorial search" and
     // "End-of-layer selection".
+#undef MKFIT_V2P2_KNOB_GROUP
+#define MKFIT_V2P2_KNOB_GROUP "InLayer"
     namespace InLayer {
       constexpr int max_presel_hits_limit = V2p2Params::max_presel_hits_limit;
       constexpr int max_hits_per_layer_limit = V2p2Params::max_hits_per_layer_limit;
@@ -117,6 +133,8 @@ namespace mkfit {
     // Per-layer candidate policy and hit acceptance, design notes
     // "Within-sensitive-region verdict", "Candidate pickup and stopping cuts" and
     // "Kalman hit acceptance".
+#undef MKFIT_V2P2_KNOB_GROUP
+#define MKFIT_V2P2_KNOB_GROUP "Policy"
     namespace Policy {
       MKFIT_V2P2_KNOB(bool, use_wsr, true);
       MKFIT_V2P2_KNOB(float, wsr_n_sigma, 5.0f);     // WSR edge fuzz, in sigma of the track's q error
@@ -139,6 +157,8 @@ namespace mkfit {
 
     //--------------------------------------------------------------------------
     // Layer-step score, design notes "Layer-step score".
+#undef MKFIT_V2P2_KNOB_GROUP
+#define MKFIT_V2P2_KNOB_GROUP "Score"
     namespace Score {
       MKFIT_V2P2_KNOB(int, mode, 1);  // 0 linear, 1 log-likelihood ratio
       // The score sets of the outward and the inward search are V2p2Params::score_outward
@@ -153,6 +173,8 @@ namespace mkfit {
 
     //--------------------------------------------------------------------------
     // Diagnostic instruments, off by default.
+#undef MKFIT_V2P2_KNOB_GROUP
+#define MKFIT_V2P2_KNOB_GROUP "Diag"
     namespace Diag {
       // Rank above which TrackCand::m_rank_over_layer records the layer, MKFIT_TRACE.
       // Outside the standalone-only knobs below, so that a trace build without
@@ -190,5 +212,6 @@ namespace mkfit {
 }  // namespace mkfit
 
 #undef MKFIT_V2P2_KNOB
+#undef MKFIT_V2P2_KNOB_GROUP
 
 #endif
