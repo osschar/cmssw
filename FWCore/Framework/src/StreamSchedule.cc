@@ -514,19 +514,14 @@ namespace edm {
     for (auto const& worker : allWorkersRuns()) {
       if (worker->description()->moduleLabel() == iLabel) {
         iMod->replaceModuleFor(worker, RunTransitionInfo::key(), TransitionPhaseStream::value);
-        try {
-          convertException::wrap([&] { iMod->beginStream(streamID_); });
-        } catch (cms::Exception& ex) {
-          moduleBeginStreamFailed_.emplace_back(iMod->moduleDescription().id());
-          ex.addContext("Executing StreamSchedule::replaceModule");
-          throw;
-        }
         break;
       }
     }
+    bool found = false;
     for (auto const& worker : allWorkersEvents()) {
       if (worker->description()->moduleLabel() == iLabel) {
         iMod->replaceModuleFor(worker, EventTransitionInfo::key(), TransitionPhaseGlobal::value);
+        found = true;
         break;
       }
     }
@@ -535,6 +530,19 @@ namespace edm {
         iMod->replaceModuleFor(worker, LumiTransitionInfo::key(), TransitionPhaseStream::value);
         break;
       }
+    }
+    if (not found) {
+      return;
+    }
+    // beginStream for every replacement in this stream, also for a module without stream run transitions, which has
+    // no run worker here: runEndStreamForModules calls endStream on every module in the registry, and
+    // Schedule::changeModule on the module being replaced.
+    try {
+      convertException::wrap([&] { iMod->beginStream(streamID_); });
+    } catch (cms::Exception& ex) {
+      moduleBeginStreamFailed_.emplace_back(iMod->moduleDescription().id());
+      ex.addContext("Executing StreamSchedule::replaceModule");
+      throw;
     }
   }
 

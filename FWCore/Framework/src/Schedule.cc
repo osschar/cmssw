@@ -879,17 +879,47 @@ namespace edm {
       return false;
     }
 
+    // The old module's holder. The registry drops it in replaceModule below; this pointer keeps the holder, and with it
+    // the old module, alive until the old module has been ended.
+    std::shared_ptr<maker::ModuleHolder> oldMod = moduleRegistry_->getExistingModule(iLabel);
+
+    // Construct the new module first. A constructor that throws then leaves the old module in place, begun and in use.
+    auto newMod = moduleRegistry_->replaceModule(iLabel, iPSet, preallocConfig_);
+
     if (wantSummary_) {
       // The summary keepers hold the address of each module's ModuleDescription and drop a module only on the
-      // PreModuleDestruction signal. The replacement below destroys the old module, and its ModuleDescription,
-      // without that signal. Drop the old module from the keepers while its description is still alive, so that
-      // the end-of-job summary does not read freed memory. The summary then omits the replaced module.
+      // PreModuleDestruction signal. This function destroys the old module, and its ModuleDescription, without that
+      // signal. Drop the old module from the keepers while its description is still alive, so that the end-of-job
+      // summary does not read freed memory. The summary then omits the replaced module.
       ModuleDescription const& oldDescription = *found->description();
       summaryTimeKeeper_->removeModuleIfExists(oldDescription);
       summaryTriggerResultsKeeper_->removeModuleIfExists(oldDescription);
     }
 
-    auto newMod = moduleRegistry_->replaceModule(iLabel, iPSet, preallocConfig_);
+    // End the old module as the end of the job would: endStream on every stream, then endJob. At the end of the job,
+    // runEndStreamForModules and runEndJobForModules reach only the modules in the registry, where the old module no
+    // longer is. The old module was begun on every stream and for the job: an original module by
+    // runBeginStreamForModules and runBeginJobForModules, a replacement by GlobalSchedule::replaceModule and
+    // StreamSchedule::replaceModule. Like those begin calls, these end calls send no ActivityRegistry signals. An
+    // exception from them is rethrown once the replacement is complete.
+    std::exception_ptr endException;
+    auto endOldModule = [&](char const* transition, auto&& call) {
+      try {
+        convertException::wrap(call);
+      } catch (cms::Exception& ex) {
+        if (not endException) {
+          ex.addContext(std::string("Calling ") + transition + " of the module '" + iLabel +
+                        "' that Schedule::changeModule replaces");
+          endException = std::current_exception();
+        }
+      }
+    };
+    if (oldMod) {
+      for (auto const& s : streamSchedules_) {
+        endOldModule("endStream", [&]() { oldMod->endStream(s->streamID()); });
+      }
+      endOldModule("endJob", [&]() { oldMod->endJob(); });
+    }
 
     globalSchedule_->replaceModule(newMod, iLabel);
 
@@ -920,6 +950,9 @@ namespace edm {
       newMod->resolvePutIndicies(InEvent, eventModuleToIndicies);
     }
 
+    if (endException) {
+      std::rethrow_exception(endException);
+    }
     return true;
   }
 

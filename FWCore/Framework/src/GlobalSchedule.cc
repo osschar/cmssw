@@ -153,15 +153,13 @@ namespace edm {
     }
   }  // namespace
   void GlobalSchedule::replaceModule(maker::ModuleHolder* iMod, std::string const& iLabel) {
-    bool found = false;
-
-    found |= replaceWorkerByLabel(runManagers(), iMod, iLabel);
-    found |= replaceWorkerByLabel(lumiManagers(), iMod, iLabel);
-    found |= replaceWorkerByLabel(processBlockManagers(), iMod, iLabel);
-    found |= replaceWorkerByLabel(inputProcessBlockManagers(), iMod, iLabel);
-    if (not found) {
-      return;
-    }
+    replaceWorkerByLabel(runManagers(), iMod, iLabel);
+    replaceWorkerByLabel(lumiManagers(), iMod, iLabel);
+    replaceWorkerByLabel(processBlockManagers(), iMod, iLabel);
+    replaceWorkerByLabel(inputProcessBlockManagers(), iMod, iLabel);
+    // beginJob for every replacement, also for a module without global transitions, which has no worker here:
+    // runEndJobForModules calls endJob on every module in the registry, and Schedule::changeModule on the module
+    // being replaced.
     auto sentry = make_sentry(
         iMod, [&](auto const* mod) { beginJobFailedForModule_.emplace_back(mod->moduleDescription().id()); });
     iMod->beginJob();
