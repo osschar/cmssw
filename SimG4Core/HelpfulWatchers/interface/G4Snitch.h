@@ -28,7 +28,11 @@
 #include "FWCore/Utilities/interface/ESGetToken.h"
 
 #include <cstdint>
+#include <map>
+#include <memory>
+#include <mutex>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <vector>
 
@@ -37,6 +41,12 @@ class IdealMagneticFieldRecord;
 
 class TFile;
 class TTree;
+namespace ROOT {
+  class RNTupleFillContext;
+  namespace Detail {
+    class RRawPtrWriteEntry;
+  }
+}  // namespace ROOT
 
 class BeginOfJob;
 class BeginOfRun;
@@ -62,6 +72,28 @@ class EndOfJob;
 
 
 */
+
+//==============================================================================
+
+// The tables of an output file: processes (tree "P"), volumes ("V") and sensitive detectors ("D").
+// G4S_Particle::m_birth_proc and m_death_proc index the processes, G4S_Step::m_volume and G4S_InertSum::m_volume the
+// volumes, and the volume table's column "sd" the sensitive detectors. A snitch writing its own file numbers one entry
+// per Geant4 process and sensitive-detector object, keyed by pointer in the snitch. A table shared by the snitches of
+// several threads (the RNTuple output) is keyed by content, since Geant4 has a process and a sensitive-detector object
+// per thread: a process by (name, type, subtype), a sensitive detector by name, a volume by the hash of its
+// touchable's history (the physical volumes are shared by the threads).
+struct G4SnitchTables {
+  std::vector<std::string> proc_names;
+  std::vector<int> proc_types, proc_subtypes;
+  std::vector<std::string> vol_paths, vol_materials;
+  std::vector<double> vol_x0, vol_lambda, vol_density, vol_x, vol_y, vol_z;
+  std::vector<int> vol_sd;
+  std::vector<std::string> sd_names, sd_classes;
+  // The keys by content, used only by a shared table.
+  std::map<std::tuple<std::string, int, int>, int> proc_key;
+  std::unordered_map<uint64_t, int> vol_key;
+  std::map<std::string, int> sd_key;
+};
 
 //==============================================================================
 
@@ -99,8 +131,11 @@ public:
 private:
   void open_file_tree();
   void write_tree_close_file();
-  void write_config_tree();
+  void write_tables(const G4SnitchTables &tab);
+  void write_config_tree(bool shared_file);
   void reset_output_structs();
+  void open_shared_rntuple();
+  void close_shared_rntuple();
 
   bool filter(const G4Track *t) const;
 
@@ -151,6 +186,14 @@ private:
   // "_t<Geant4 thread id>" before ".root" (G4Snitch_t0.root, ...); events are matched across files by branch "ev".
   std::string m_output_file = "G4Snitch.root";
   bool m_output_per_thread = false;
+  // The format of the event data: "ttree" (tree T, a file per snitch), "rntuple" (RNTuple T in one file shared by the
+  // snitches of all threads, written in parallel), or "both" (the TTree files as with "ttree", and the RNTuple file
+  // with "_rnt" inserted before ".root"; the same objects feed both). With an RNTuple the tables are shared by all
+  // snitches of the job, in both outputs.
+  std::string m_output_format = "ttree";
+  bool m_write_ttree = true, m_write_rntuple = false;
+  std::shared_ptr<ROOT::RNTupleFillContext> m_rnt_fill;
+  std::unique_ptr<ROOT::Detail::RRawPtrWriteEntry> m_rnt_entry;
   std::string m_output_name;
   int m_thread_id = -1;
   int m_ev_number = -1;  // the Geant4 event id, which CMS sets to the CMSSW event number; branch "ev" of tree T
@@ -159,8 +202,8 @@ private:
   edm::ESGetToken<MagneticField, IdealMagneticFieldRecord> m_bfield_token;
   const MagneticField *m_bfield = nullptr;
 
-  TFile *m_file;
-  TTree *m_tree;
+  TFile *m_file = nullptr;
+  TTree *m_tree = nullptr;
 
   std::shared_ptr<G4S_Info> m_info;
   std::shared_ptr<std::vector<G4S_Particle>> m_part_vec;
@@ -195,24 +238,18 @@ private:
 
   std::map<const G4Track*, int> m_gtp2vid;
 
-  // The process table of the file (tree "P"): G4S_Particle::m_birth_proc and m_death_proc index it.
-  std::map<const G4VProcess*, int> m_proc_index;
-  std::vector<std::string> m_proc_names;
-  std::vector<int> m_proc_types, m_proc_subtypes;
+  // The tables (trees P, V, D): the snitch's own, or with an RNTuple the job's shared one, which m_tables_mutex guards.
+  G4SnitchTables m_own_tables;
+  G4SnitchTables *m_tables = &m_own_tables;
+  std::mutex *m_tables_mutex = nullptr;
+  // This snitch's index of each process object, volume and sensitive-detector object into the tables. A volume is a
+  // placement, keyed by a hash of the (physical volume, copy number) pairs of its touchable's whole history.
+  std::map<const G4VProcess *, int> m_proc_index;
   int process_index(const G4VProcess *proc);
-
-  // The volume table of the file (tree "V"): G4S_InertSum::m_volume indexes it. A volume is a placement, keyed by a
-  // hash of the (physical volume, copy number) pairs of its touchable's whole history.
   std::unordered_map<uint64_t, int> m_vol_index;
-  std::vector<std::string> m_vol_paths, m_vol_materials;
-  std::vector<double> m_vol_x0, m_vol_lambda, m_vol_density, m_vol_x, m_vol_y, m_vol_z;
-  std::vector<int> m_vol_sd;
-  std::vector<bool> m_vol_no_det_id;  // a volume under one of m_no_det_id_volumes
+  std::vector<bool> m_vol_no_det_id;  // by volume index: a volume under one of m_no_det_id_volumes
   int volume_index(const G4StepPoint *sp);
-
-  // The sensitive-detector table of the file (tree "D": idx, name, class): the volume table's column "sd" indexes it.
   std::map<const G4VSensitiveDetector *, int> m_sd_index;
-  std::vector<std::string> m_sd_names, m_sd_classes;
   int sd_index(const G4VSensitiveDetector *sd);
 
   // Per-event accumulators of the inert sums, keyed by (particle slot << 32 | volume index). Positions and times

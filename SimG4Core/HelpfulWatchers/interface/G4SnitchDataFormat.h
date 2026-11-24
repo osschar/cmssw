@@ -7,9 +7,11 @@
 #include <cstdint>
 #include <limits>
 
-// The output file: tree T (one entry per event: branches i (G4S_Info), p (particles), s (their steps), b (the field
-// at path points, optional)), and the tables P (processes), V (volumes), D (sensitive detectors) and C (the
-// configuration the file was made with: key, value strings; see G4Snitch::write_config_tree()).
+// The output file: T, one entry per event, a TTree or an RNTuple (parameter output_format), with branches or fields ev
+// (the CMSSW event number), i (G4S_Info), p (particles), s (their steps), b (the field at path points, optional); and
+// the tables P (processes), V (volumes), D (sensitive detectors) and C (the configuration the file was made with: key,
+// value strings; see G4Snitch::write_config_tree()), all TTrees. The RNTuple's entries come in the order the threads
+// finished them: match events by ev.
 
 // Information about the event
 

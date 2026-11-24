@@ -14,5 +14,7 @@
 <use name="SimG4Core/Physics"/>
 
 <use name="rootcore"/>
+<use name="rootntuple"/>
+<use name="FWCore/Utilities"/>
 <lib name="ROOTEve"/>
 <lib name="RootG4Snitch"/>

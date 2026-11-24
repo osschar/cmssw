@@ -14,6 +14,8 @@
 #   G4SNITCH_POSITRON_TOTAL=0         positrons cut on kinetic energy, like the rest, not on total energy
 #   G4SNITCH_NTHREADS=N               (read by the run configurations) N framework threads; above 1 each thread's
 #                                     snitch writes G4Snitch_t<thread>.root (output_per_thread)
+#   G4SNITCH_FORMAT=rntuple           the events as an RNTuple in one file for all threads (G4Snitch.root); =both:
+#                                     the TTree files as without, and the RNTuple in G4Snitch_rnt.root
 # Every value in use, with the code version and these environment variables, goes into the output's tree "C".
 import os
 import FWCore.ParameterSet.Config as cms
@@ -47,6 +49,7 @@ def g4snitch_watcher(env=os.environ):
         positron_by_total_energy = cms.untracked.bool(True),  # positrons: the cut applies to the total energy
         output_file = cms.untracked.string("G4Snitch.root"),
         output_per_thread = cms.untracked.bool(False),  # one file per framework thread, "_t<thread>" before ".root"
+        output_format = cms.untracked.string("ttree"),  # ttree, rntuple (one file shared by the threads) or both
     )
     if env.get("G4SNITCH_BFIELD", "0") == "1":
         w.output_path_bfield = True
@@ -70,6 +73,8 @@ def g4snitch_watcher(env=os.environ):
         w.track_unstable_always = False
     if env.get("G4SNITCH_POSITRON_TOTAL", "1") == "0":
         w.positron_by_total_energy = False
+    if env.get("G4SNITCH_FORMAT"):
+        w.output_format = env["G4SNITCH_FORMAT"]
     if env.get("G4SNITCH_SELECT_CONE"):
         w.select_cone = cms.untracked.vdouble([float(x) for x in env["G4SNITCH_SELECT_CONE"].split(",")])
     return w
