@@ -35,6 +35,7 @@ a + b L + c D_m(L) (offset, angle and curvature free), in micron at pT = 1 GeV (
 the relative pT bias of that fit (unweighted, no scattering): the measure closest to what a track fit infers.
 kmax*: the step of fit_s1 with the largest kick turn (over G_phi(map)), its radii and z."""
 import sys, math, array, ROOT
+from SimG4Core.HelpfulWatchers.g4s_read import SnitchFile
 ROOT.gSystem.Load("libRootG4Snitch.so")
 
 K = 0.299792458e-2  # GeV / (T cm)
@@ -116,13 +117,12 @@ def main():
     nskip_ins = [0]
     ndrop = [0]
     for fn in sys.argv[2:]:
-        f = ROOT.TFile.Open(fn)
-        t = f.Get("T")
-        sdcls = [str(getattr(d, "class")) for d in f.Get("D")]
-        vsd = [int(v.sd) for v in f.Get("V")]
+        sf = SnitchFile(fn); f = sf.f
+        sdcls = [str(getattr(d, "class")) for d in sf.rows("D")]
+        vsd = [int(v.sd) for v in sf.rows("V")]
         trk_sd = {i for i, c in enumerate(sdcls) if "TkAccumulating" in c}
         trk_vol = {i for i, s in enumerate(vsd) if s in trk_sd}
-        for ev in t:
+        for ev in sf:
             p, s, bb = ev.p, ev.s, ev.b
             k = p[0].m_daughters_begin
             q = p[k]

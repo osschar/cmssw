@@ -1,10 +1,11 @@
 """g4s_seedcheck.py FILE...: per event, the number of particles, of primaries, the first primary's vertex z and
 momentum x, z, and the summed sensitive deposit (MeV); to check that equal G4SNITCH_SEED give equal events."""
 import sys, ROOT
+from SimG4Core.HelpfulWatchers.g4s_read import SnitchFile
 ROOT.gSystem.Load("libRootG4Snitch.so")
 def summ(fn):
-    f = ROOT.TFile.Open(fn); t = f.Get("T"); out = []
-    for ev in t:
+    sf = SnitchFile(fn); out = []
+    for ev in sf:
         p, s = ev.p, ev.s
         q = p[1]
         esens = sum(ps.m_edep_sum_sensitive.m_total for ps in s)

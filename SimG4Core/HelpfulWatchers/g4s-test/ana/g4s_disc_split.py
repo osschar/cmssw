@@ -9,6 +9,7 @@ inside the tracker volume (r < 120 cm, |z| < 290 cm at either end) is cut into p
 linear interpolation. A line "SUMS family n after before elsewhere" per family lets runs on several files be added. The share after the hit, src / (src + dst), is
 what "half before, half after" assumes to be 0.5."""
 import sys, math, collections, ROOT
+from SimG4Core.HelpfulWatchers.g4s_read import SnitchFile
 ROOT.gSystem.Load("libRootG4Snitch.so")
 
 geo = ROOT.TFile.Open(sys.argv[1])
@@ -50,11 +51,11 @@ def env_of(r, z):
 acc = collections.defaultdict(collections.Counter)
 nstep = collections.Counter()
 for fn in sys.argv[3:]:
-    f = ROOT.TFile.Open(fn)
-    sdcls = [str(getattr(d, "class")) for d in f.Get("D")]
+    sf = SnitchFile(fn)
+    sdcls = [str(getattr(d, "class")) for d in sf.rows("D")]
     trk = {i for i, c in enumerate(sdcls) if "TkAccumulating" in c}
-    V = [(float(v.x0), int(v.sd) in trk) for v in f.Get("V")]
-    for ev in f.Get("T"):
+    V = [(float(v.x0), int(v.sd) in trk) for v in sf.rows("V")]
+    for ev in sf:
         p, s = ev.p, ev.s
         k = p[0].m_daughters_begin
         q = p[k]

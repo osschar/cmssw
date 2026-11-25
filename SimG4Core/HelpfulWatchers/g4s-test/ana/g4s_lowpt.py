@@ -32,6 +32,7 @@ Each is the fraction of the event's visible HGCal energy. Reported per sample an
 events with visible energy, and the share of events with at least 90 % in the 3x3."""
 import sys, math, statistics, collections, argparse, time, ROOT
 import numpy as np
+from SimG4Core.HelpfulWatchers.g4s_read import SnitchFile
 ROOT.gSystem.Load("libRootG4Snitch.so")
 ROOT.gInterpreter.Declare(r'''
 #include "SimG4Core/HelpfulWatchers/interface/G4SnitchDataFormat.h"
@@ -187,10 +188,10 @@ def eta_of(x, y, z):
     r = math.hypot(x, y); return math.asinh(z / r) if r > 0 else math.copysign(99.0, z)
 
 def analyse(fn):
-    f = ROOT.TFile.Open(fn); t = f.Get("T")
-    procs = {int(x.idx): str(x.name) for x in f.Get("P")}
+    sf = SnitchFile(fn)
+    procs = {int(x.idx): str(x.name) for x in sf.rows("P")}
     rows = []
-    for ev in t:
+    for ev in sf:
         p, s = ev.p, ev.s
         k = p[0].m_daughters_begin; q0 = p[k]; pdg = q0.m_pdg; kind = abs(pdg)
         pt0 = math.hypot(q0.m_p_birth.fX, q0.m_p_birth.fY)

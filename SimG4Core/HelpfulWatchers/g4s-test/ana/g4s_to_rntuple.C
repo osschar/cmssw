@@ -1,10 +1,11 @@
-// g4s_to_rntuple.C(in, out): a feasibility test of RNTuple for the snitch's output. Converts a snitch TTree file
-// (tree T: branches ev (optional), i, p, s, b (optional)) into an RNTuple "T" with the same classes, one entry and one
-// cluster per event, the TTree's branches bound to the RNTuple model's objects (the pattern of mkFit-external's
-// RntDumper: one set of objects for both formats). The tables P, V, D, C are copied as TTrees. Then reports the
-// compression settings and sizes, reads every event back from both formats and compares per-event summaries (counts
+// g4s_to_rntuple.C(in, out): converts a snitch file written with TTrees (before 2026-11-24) into the layout the snitch
+// writes since: RNTuple "T" with the same classes, one entry and one cluster per event, and the tables P, V, D, C as
+// RNTuples of their own (C gains the keys converted_from and converted_by). The TTree's branches are bound to the
+// RNTuple model's objects (the pattern of mkFit-external's RntDumper: one set of objects for both formats). Then
+// reports the compression and sizes, reads every event back from both files and compares per-event summaries (counts
 // of particles, sensitive and inert steps, inert sums, path points, field points, and the summed deposits), and times
-// reading one event (the middle one) from each, warm (file already opened once).
+// reading one event (the middle one) from each, warm (file already opened once). The tables keep their row order, so
+// the events' indices into them stay valid.
 // Run in the CMSSW area's environment after gSystem->Load("libRootG4Snitch.so"), with ACLiC and
 // -I$CMSSW_BASE/src.
 #include "SimG4Core/HelpfulWatchers/interface/G4SnitchDataFormat.h"
@@ -15,6 +16,8 @@
 #include <ROOT/RNTupleWriter.hxx>
 
 #include "TFile.h"
+#include "TTreeReader.h"
+#include "TTreeReaderValue.h"
 #include "TStopwatch.h"
 #include "TTree.h"
 
@@ -53,6 +56,57 @@ namespace {
         r.nb += x.m_b.size();
     return r;
   }
+  // Copy table name of fin (a TTree) into fout as an RNTuple with the same columns; type 'i' int, 'd' double, 's'
+  // std::string. Extra rows (key, value) are appended for table C.
+  void copy_table(TFile &fin, TFile &fout, const char *name, const std::vector<std::pair<std::string, char>> &cols,
+                  const ROOT::RNTupleWriteOptions &opts,
+                  const std::vector<std::pair<std::string, std::string>> &extra = {}) {
+    auto *t = fin.Get<TTree>(name);
+    if (!t) {
+      printf("no table %s in the input%s\n", name, extra.empty() ? "" : "; written with the converter's rows only");
+      if (extra.empty())
+        return;
+    }
+    TTreeReader r(t);  // with t null, Next() returns false at once
+    auto model = ROOT::RNTupleModel::Create();
+    std::vector<std::shared_ptr<int>> wi;
+    std::vector<std::shared_ptr<double>> wd;
+    std::vector<std::shared_ptr<std::string>> ws;
+    std::vector<std::unique_ptr<TTreeReaderValue<int>>> ri;
+    std::vector<std::unique_ptr<TTreeReaderValue<double>>> rd;
+    std::vector<std::unique_ptr<TTreeReaderValue<std::string>>> rs;
+    for (const auto &[c, ty] : cols) {
+      if (!t) {  // no input table: the columns, without readers (table C, all strings)
+        ws.push_back(model->MakeField<std::string>(c));
+        continue;
+      }
+      if (ty == 'i') {
+        wi.push_back(model->MakeField<int>(c));
+        ri.push_back(std::make_unique<TTreeReaderValue<int>>(r, c.c_str()));
+      } else if (ty == 'd') {
+        wd.push_back(model->MakeField<double>(c));
+        rd.push_back(std::make_unique<TTreeReaderValue<double>>(r, c.c_str()));
+      } else {
+        ws.push_back(model->MakeField<std::string>(c));
+        rs.push_back(std::make_unique<TTreeReaderValue<std::string>>(r, c.c_str()));
+      }
+    }
+    auto w = ROOT::RNTupleWriter::Append(std::move(model), name, fout, opts);
+    while (r.Next()) {
+      for (size_t k = 0; k < wi.size(); ++k)
+        *wi[k] = **ri[k];
+      for (size_t k = 0; k < wd.size(); ++k)
+        *wd[k] = **rd[k];
+      for (size_t k = 0; k < ws.size(); ++k)
+        *ws[k] = **rs[k];
+      w->Fill();
+    }
+    for (const auto &[k, v] : extra) {  // table C only: key, value
+      *ws[0] = k;
+      *ws[1] = v;
+      w->Fill();
+    }
+  }
 }  // namespace
 
 void g4s_to_rntuple(const char *in, const char *out) {
@@ -84,6 +138,7 @@ void g4s_to_rntuple(const char *in, const char *out) {
   std::unique_ptr<TFile> fout(TFile::Open(out, "RECREATE"));
   ROOT::RNTupleWriteOptions opts;
   opts.SetCompression(fin->GetCompressionSettings());
+  opts.SetUseImplicitMT(ROOT::RNTupleWriteOptions::EImplicitMT::kOff);
   const Long64_t n = t->GetEntries();
   TStopwatch sw;
   {
@@ -97,13 +152,14 @@ void g4s_to_rntuple(const char *in, const char *out) {
     }
   }
   const double t_write = sw.RealTime();
-  fout->cd();
-  for (const char *name : {"P", "V", "D", "C"}) {
-    if (auto *tab = (TTree *)fin->Get(name)) {
-      TTree *c = tab->CloneTree(-1, "fast");
-      c->Write();
-    }
-  }
+  copy_table(*fin, *fout, "P", {{"idx", 'i'}, {"name", 's'}, {"type", 'i'}, {"subtype", 'i'}}, opts);
+  copy_table(*fin, *fout, "V",
+             {{"idx", 'i'}, {"path", 's'}, {"material", 's'}, {"x0", 'd'}, {"lambda", 'd'}, {"density", 'd'},
+              {"x", 'd'}, {"y", 'd'}, {"z", 'd'}, {"sd", 'i'}},
+             opts);
+  copy_table(*fin, *fout, "D", {{"idx", 'i'}, {"name", 's'}, {"class", 's'}}, opts);
+  copy_table(*fin, *fout, "C", {{"key", 's'}, {"value", 's'}}, opts,
+             {{"converted_from", in}, {"converted_by", "g4s_to_rntuple.C (TTree layout to RNTuple layout)"}});
   fout->Close();
 
   // sizes and settings
@@ -115,7 +171,7 @@ void g4s_to_rntuple(const char *in, const char *out) {
   }
   printf("input  %s: %lld events, TTree T zipped %.1f MB (unzipped %.1f MB), file %.1f MB, compression %d\n", in, n,
          t->GetZipBytes() / 1e6, t->GetTotBytes() / 1e6, fin->GetSize() / 1e6, fin->GetCompressionSettings());
-  printf("output %s: RNTuple T in %ld clusters, file %.1f MB (tables P V D C copied as TTrees), compression %d, "
+  printf("output %s: RNTuple T in %ld clusters, file %.1f MB (tables P V D C as RNTuples), compression %d, "
          "written in %.1f s\n",
          out, nclusters, fo->GetSize() / 1e6, opts.GetCompression(), t_write);
 

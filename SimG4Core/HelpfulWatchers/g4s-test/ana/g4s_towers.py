@@ -10,6 +10,7 @@ mean, and the share of events with at least 90 % in the 3x3), for (a) and (b); f
 fraction in 1, 3x3, 5x5 EM towers around (a). Pions are split by a first inelastic interaction before the face."""
 import sys, math, statistics, collections, ROOT
 import numpy as np
+from SimG4Core.HelpfulWatchers.g4s_read import SnitchFile
 ROOT.gSystem.Load("libRootG4Snitch.so")
 
 ETA0, DETA_EM, NPHI_EM = 1.305, (3.045 - 1.305) / 100, 360
@@ -63,10 +64,10 @@ def within(t, t0, n, nphi):
 
 CHARGE = {11: -1, -11: 1, 13: -1, -13: 1, 211: 1, -211: -1, 22: 0, 2112: 0}
 for fn in sys.argv[2:]:
-    f = ROOT.TFile.Open(fn); t = f.Get("T")
-    procs = {int(x.idx): str(x.name) for x in f.Get("P")}
+    sf = SnitchFile(fn)
+    procs = {int(x.idx): str(x.name) for x in sf.rows("P")}
     res = collections.defaultdict(list)
-    for ev in t:
+    for ev in sf:
         p, s = ev.p, ev.s
         k = p[0].m_daughters_begin; q0 = p[k]; pdg = q0.m_pdg
         cls = "all"

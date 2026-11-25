@@ -3,12 +3,13 @@
 volume, in X0 per particle: each own stored step contributes the difference of the sums at its start and at the next
 own stored step's start (so unstored steps between them are included), filed under the step's volume. For muons."""
 import sys, collections, ROOT
+from SimG4Core.HelpfulWatchers.g4s_read import SnitchFile
 ROOT.gSystem.Load("libRootG4Snitch.so")
-f = ROOT.TFile.Open(sys.argv[1]); t = f.Get("T")
+sf = SnitchFile(sys.argv[1])
 zmin, zmax = (float(sys.argv[2]), float(sys.argv[3])) if len(sys.argv) > 3 else (280.0, 325.0)
-vols = [str(v.path) for v in f.Get("V")]
+vols = [str(v.path) for v in sf.rows("V")]
 acc = collections.Counter(); n = 0
-for ev in t:
+for ev in sf:
     p, s = ev.p, ev.s
     k = p[0].m_daughters_begin; q = p[k]; n += 1
     steps = sorted([st for st in list(s[k].m_steps_sensitive) + list(s[k].m_steps_inert) if st.m_g4_pid == q.m_g4_id],

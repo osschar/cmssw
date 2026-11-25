@@ -20,6 +20,7 @@ averages its disc budgets (a track hits a random point of the disc)."""
 import sys, math, collections
 import numpy as np
 import ROOT
+from SimG4Core.HelpfulWatchers.g4s_read import SnitchFile
 ROOT.gSystem.Load("libRootG4Snitch.so")
 
 envf, difff = sys.argv[1], sys.argv[2]
@@ -53,11 +54,11 @@ edges = [0.0, 0.5, 0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7, 3.0, 3.5, 4.0, 4.5]
 acc = collections.defaultdict(list)
 cross = collections.defaultdict(list)  # family -> [(r, x0 * |t_z|)]
 for fn in sys.argv[3:]:
-    f = ROOT.TFile.Open(fn)
-    sdcls = [str(getattr(d, "class")) for d in f.Get("D")]
+    sf = SnitchFile(fn); f = sf.f
+    sdcls = [str(getattr(d, "class")) for d in sf.rows("D")]
     trk_sd = {i for i, c in enumerate(sdcls) if "TkAccumulating" in c}
-    V = [(float(v.x0), float(getattr(v, "lambda")), int(v.sd) in trk_sd) for v in f.Get("V")]
-    for ev in f.Get("T"):
+    V = [(float(v.x0), float(getattr(v, "lambda")), int(v.sd) in trk_sd) for v in sf.rows("V")]
+    for ev in sf:
         p, s = ev.p, ev.s
         k = p[0].m_daughters_begin
         q = p[k]

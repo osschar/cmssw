@@ -7,17 +7,18 @@ from the first). Volumes inside a tracker module (a path component containing "M
 sub-detector as "<sub-detector> modules: sensors" (sensitive) and "...: other"; the rest by sub-detector and leaf
 name (copy numbers dropped)."""
 import sys, math, collections, ROOT
+from SimG4Core.HelpfulWatchers.g4s_read import SnitchFile
 ROOT.gSystem.Load("libRootG4Snitch.so")
 
 emin, emax = float(sys.argv[1]), float(sys.argv[2])
 acc = collections.Counter()
 ntrk, x0_run, x0_steps = 0, 0.0, 0.0
 for fn in sys.argv[3:]:
-    f = ROOT.TFile.Open(fn)
-    sdcls = [str(getattr(d, "class")) for d in f.Get("D")]
+    sf = SnitchFile(fn); f = sf.f
+    sdcls = [str(getattr(d, "class")) for d in sf.rows("D")]
     trk_sd = {i for i, c in enumerate(sdcls) if "TkAccumulating" in c}
     V = []
-    for v in f.Get("V"):
+    for v in sf.rows("V"):
         comps = [c.split(":")[0] for c in str(v.path).split("/")]
         if "Tracker" in comps:
             sub = comps[comps.index("Tracker") + 1:]
@@ -29,7 +30,7 @@ for fn in sys.argv[3:]:
         else:
             key = "/".join(comps[2:4]) + "/" + comps[-1]
         V.append((key, float(v.x0), int(v.sd) in trk_sd))
-    for ev in f.Get("T"):
+    for ev in sf:
         p, s = ev.p, ev.s
         k = p[0].m_daughters_begin
         q = p[k]

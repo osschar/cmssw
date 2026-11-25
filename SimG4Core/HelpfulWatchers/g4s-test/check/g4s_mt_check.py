@@ -9,7 +9,7 @@ code, birth process name, birth position rounded to 1 um, momentum rounded to 1 
 differently (a snitch's own tables, or the job's shared ones) compare equal. Prints the events only in one side and
 every event that differs, then a summary line."""
 import sys, math, collections, ROOT
-from g4s_read import SnitchFile
+from SimG4Core.HelpfulWatchers.g4s_read import SnitchFile
 
 
 def summarise(files):
@@ -19,9 +19,9 @@ def summarise(files):
         if "ev" not in sf.fields:
             sys.exit(f"{fn}: no ev (written before the event number was stored)")
         f = sf.f
-        P = [str(x.name) for x in f.Get("P")]
-        D = [str(x.name) for x in f.Get("D")]
-        V = [(str(x.path), D[x.sd] if x.sd >= 0 else "") for x in f.Get("V")]
+        P = [str(x.name) for x in sf.rows("P")]
+        D = [str(x.name) for x in sf.rows("D")]
+        V = [(str(x.path), D[x.sd] if x.sd >= 0 else "") for x in sf.rows("V")]
         for e in sf:
             key, p, s = int(e.ev), e.p, e.s
             n_sens = n_inert = n_sums = n_path = 0

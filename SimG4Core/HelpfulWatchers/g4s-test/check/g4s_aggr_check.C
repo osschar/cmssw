@@ -4,20 +4,19 @@
 #include <cmath>
 #include <cstdio>
 #include <vector>
-#include "TFile.h"
-#include "TTree.h"
-#include "SimG4Core/HelpfulWatchers/interface/G4SnitchDataFormat.h"
+#include "SimG4Core/HelpfulWatchers/interface/G4SnitchReader.h"
 void g4s_aggr_check(const char *fa, const char *fb) {
-  TFile a(fa), b(fb);
-  TTree *ta = (TTree *)a.Get("T"), *tb = (TTree *)b.Get("T");
-  std::vector<G4S_Particle> *pa = nullptr, *pb = nullptr;
-  std::vector<G4S_ParticleSteps> *sa = nullptr, *sb = nullptr;
-  ta->SetBranchAddress("p", &pa); ta->SetBranchAddress("s", &sa);
-  tb->SetBranchAddress("p", &pb); tb->SetBranchAddress("s", &sb);
+  G4SnitchFile a(fa), b(fb);  // TTree or RNTuple files
+  std::vector<G4S_Particle> *&pa = a.p, *&pb = b.p;
+  std::vector<G4S_ParticleSteps> *&sa = a.s, *&sb = b.s;
   long n_part = 0, n_bad_e = 0, n_bad_n = 0, n_bad_own = 0, n_bad_sens = 0, n_sums = 0, n_desc_steps = 0;
   double e_desc = 0, e_sums = 0, max_rel = 0;
-  for (long ev = 0; ev < ta->GetEntries(); ++ev) {
-    ta->GetEntry(ev); tb->GetEntry(ev);
+  for (long ev = 0; ev < a.n_events(); ++ev) {
+    a.load(ev); b.load(ev);
+    if (a.ev != b.ev) {
+      printf("entry %ld: event %d in A, %d in B; the files must hold the same events in the same order\n", ev, a.ev, b.ev);
+      return;
+    }
     if (pa->size() != pb->size()) { printf("event %ld: particle counts differ %zu %zu\n", ev, pa->size(), pb->size()); return; }
     for (size_t i = 1; i < pa->size(); ++i) {
       if (!(*pa)[i].m_was_tracked) continue;
@@ -40,10 +39,9 @@ void g4s_aggr_check(const char *fa, const char *fb) {
       if ((*sa)[i].m_steps_sensitive.size() != (*sb)[i].m_steps_sensitive.size()) ++n_bad_sens;
     }
   }
-  printf("%lld events, %ld tracked particles\n", ta->GetEntries(), n_part);
+  printf("%lld events, %ld tracked particles\n", (long long)a.n_events(), n_part);
   printf("descendant inert steps in A: %ld, %.1f MeV; sums in B: %ld entries, %.1f MeV\n", n_desc_steps, e_desc, n_sums, e_sums);
   printf("particles differing: energy %ld (max rel %.2e), step count %ld, own inert steps %ld, sensitive steps %ld\n",
          n_bad_e, max_rel, n_bad_n, n_bad_own, n_bad_sens);
-  TTree *v = (TTree *)b.Get("V");
-  printf("volume table of B: %lld volumes\n", v ? v->GetEntries() : -1LL);
+  printf("volume table of B: %lld volumes\n", (long long)b.column<int>("V", "idx").size());
 }

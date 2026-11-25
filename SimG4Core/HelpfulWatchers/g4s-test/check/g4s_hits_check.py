@@ -72,11 +72,11 @@ print(f"{n_ev} events in both, {len(common)} collections (hits, SimTracks, SimVe
       f"collections differing: {n_diff}" + (f"; in only one file: {only}" if only else ""))
 
 if len(sys.argv) > 3:
-    from g4s_read import SnitchFile
+    from SimG4Core.HelpfulWatchers.g4s_read import SnitchFile
     sf = SnitchFile(sys.argv[3]); f = sf.f
     jb_of_event = {x[2]: jb for jb, x in enumerate(idb)}  # the snitch's ev is the CMSSW event number
-    vol_sd = [int(v.sd) for v in f.Get("V")]
-    sd_name = {int(d.idx): f"{str(getattr(d, 'class'))} ({str(d.name)})" for d in f.Get("D")}
+    vol_sd = [int(v.sd) for v in sf.rows("V")]
+    sd_name = {int(d.idx): f"{str(getattr(d, 'class'))} ({str(d.name)})" for d in sf.rows("D")}
     tot, found, zero = {}, {}, {}
     for k, ev in enumerate(sf):
         i = jb_of_event[int(ev.ev)] if "ev" in sf.fields else k

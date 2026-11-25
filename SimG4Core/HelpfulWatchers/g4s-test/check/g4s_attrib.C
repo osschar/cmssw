@@ -3,22 +3,17 @@
 // A step under P whose m_g4_pid is smaller than P's m_g4_id cannot come from a descendant: misattributed.
 #include <cstdio>
 #include <vector>
-#include "TFile.h"
-#include "TTree.h"
 #include "TSystem.h"
-#include "SimG4Core/HelpfulWatchers/interface/G4SnitchDataFormat.h"
+#include "SimG4Core/HelpfulWatchers/interface/G4SnitchReader.h"
 void g4s_attrib(const char *fn) {
-  TFile f(fn);
-  TTree *t = (TTree *)f.Get("T");
-  std::vector<G4S_Particle> *p = nullptr;
-  std::vector<G4S_ParticleSteps> *s = nullptr;
-  t->SetBranchAddress("p", &p);
-  t->SetBranchAddress("s", &s);
+  G4SnitchFile f(fn);  // TTree or RNTuple file
+  std::vector<G4S_Particle> *&p = f.p;
+  std::vector<G4S_ParticleSteps> *&s = f.s;
   const char *kind[2] = {"sensitive", "inert"};
   long n[2][3] = {}; double e[2][3] = {};  // [kind][own, larger id, smaller id]
   long n_part_bad = 0, n_part = 0;
-  for (long ev = 0; ev < t->GetEntries(); ++ev) {
-    t->GetEntry(ev);
+  for (long ev = 0; ev < f.n_events(); ++ev) {
+    f.load(ev);
     for (size_t i = 1; i < p->size(); ++i) {
       const G4S_Particle &pp = (*p)[i];
       if (!pp.m_was_tracked) continue;
@@ -35,7 +30,7 @@ void g4s_attrib(const char *fn) {
       if (bad) ++n_part_bad;
     }
   }
-  printf("%ld events, %ld tracked particles, %ld with steps of a smaller track id\n", (long)t->GetEntries(), n_part, n_part_bad);
+  printf("%ld events, %ld tracked particles, %ld with steps of a smaller track id\n", f.n_events(), n_part, n_part_bad);
   printf("%-10s %12s %12s %12s   %10s %10s %10s (MeV)\n", "steps", "own", "larger id", "smaller id", "own", "larger", "smaller");
   for (int k = 0; k < 2; ++k)
     printf("%-10s %12ld %12ld %12ld   %10.1f %10.1f %10.1f\n", kind[k], n[k][0], n[k][1], n[k][2], e[k][0], e[k][1], e[k][2]);

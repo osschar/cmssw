@@ -2,22 +2,18 @@
 #include <cmath>
 #include <cstdio>
 #include <vector>
-#include "TFile.h"
-#include "TTree.h"
-#include "SimG4Core/HelpfulWatchers/interface/G4SnitchDataFormat.h"
+#include "SimG4Core/HelpfulWatchers/interface/G4SnitchReader.h"
 void g4s_zsplit(const char *fn) {
-  TFile f(fn);
-  TTree *t = (TTree *)f.Get("T");
-  std::vector<G4S_ParticleSteps> *s = nullptr;
-  std::vector<G4S_Particle> *p = nullptr;
-  t->SetBranchAddress("s", &s); t->SetBranchAddress("p", &p);
+  G4SnitchFile f(fn);  // TTree or RNTuple file
+  std::vector<G4S_ParticleSteps> *&s = f.s;
+  std::vector<G4S_Particle> *&p = f.p;
   const double edges[] = {0, 300, 520, 1100, 5000, 1e9};  // cm
   const char *names[] = {"tracker+ETL |z|<3 m", "HGCal 3-5.2 m", "5.2-11 m", "11-50 m", "beyond 50 m"};
   const int nb = 5;
   long n[2][nb] = {}; double e[2][nb] = {};
   long n_path[nb] = {};
-  for (long ev = 0; ev < t->GetEntries(); ++ev) {
-    t->GetEntry(ev);
+  for (long ev = 0; ev < f.n_events(); ++ev) {
+    f.load(ev);
     for (size_t i = 0; i < s->size(); ++i) {
       for (int k = 0; k < 2; ++k) {
         const std::vector<G4S_Step> &v = k == 0 ? (*s)[i].m_steps_inert : (*s)[i].m_steps_sensitive;
@@ -34,7 +30,7 @@ void g4s_zsplit(const char *fn) {
       }
     }
   }
-  printf("%s, %lld events\n%-22s %12s %12s %12s %12s %10s\n", fn, t->GetEntries(), "|z| of step end", "inert steps", "inert MeV", "sens steps", "sens MeV", "path pts");
+  printf("%s, %lld events\n%-22s %12s %12s %12s %12s %10s\n", fn, (long long)f.n_events(), "|z| of step end", "inert steps", "inert MeV", "sens steps", "sens MeV", "path pts");
   for (int b = 0; b < nb; ++b)
     printf("%-22s %12ld %12.1f %12ld %12.1f %10ld\n", names[b], n[0][b], e[0][b], n[1][b], e[1][b], n_path[b]);
 }

@@ -11,24 +11,25 @@
 #include "TDatabasePDG.h"
 #include "TFile.h"
 #include "TParticlePDG.h"
-#include "TTree.h"
-#include "SimG4Core/HelpfulWatchers/interface/G4SnitchDataFormat.h"
+#include "SimG4Core/HelpfulWatchers/interface/G4SnitchReader.h"
 static bool charged(int pdg) {
   if (std::abs(pdg) >= 1000000000) return true;
   TParticlePDG *pp = TDatabasePDG::Instance()->GetParticle(pdg);
   return pp && pp->Charge() != 0;
 }
 void g4s_cov_check(const char *foff, const char *fon) {
-  TFile a(foff), b(fon);
-  TTree *ta = (TTree *)a.Get("T"), *tb = (TTree *)b.Get("T");
-  std::vector<G4S_Particle> *pa = nullptr;
-  std::vector<G4S_ParticleSteps> *sa = nullptr, *sb = nullptr;
-  ta->SetBranchAddress("p", &pa); ta->SetBranchAddress("s", &sa); tb->SetBranchAddress("s", &sb);
+  G4SnitchFile a(foff), b(fon);  // TTree or RNTuple files
+  std::vector<G4S_Particle> *&pa = a.p;
+  std::vector<G4S_ParticleSteps> *&sa = a.s, *&sb = b.s;
   long n_sums = 0, n_missing = 0, n_neutral = 0, n_steps = 0;
   double max_de = 0, max_dm = 0, max_dc = 0, max_dt = 0;
   static const int ci[6] = {0, 1, 2, 0, 0, 1}, cj[6] = {0, 1, 2, 1, 2, 2};
-  for (long ev = 0; ev < ta->GetEntries(); ++ev) {
-    ta->GetEntry(ev); tb->GetEntry(ev);
+  for (long ev = 0; ev < a.n_events(); ++ev) {
+    a.load(ev); b.load(ev);
+    if (a.ev != b.ev) {
+      printf("entry %ld: event %d in A, %d in B; the files must hold the same events in the same order\n", ev, a.ev, b.ev);
+      return;
+    }
     for (size_t i = 1; i < pa->size(); ++i) {
       if (!(*pa)[i].m_was_tracked) continue;
       std::map<int, std::vector<double>> acc;  // volume -> w, s1[4], s2[6], s2t (raw, relative to the first point)
@@ -78,7 +79,7 @@ void g4s_cov_check(const char *foff, const char *fon) {
     }
   }
   printf("%lld events: %ld sums, %ld without steps in the other file; %ld descendant steps, %ld of neutral tracks\n",
-         ta->GetEntries(), n_sums, n_missing, n_steps, n_neutral);
+         (long long)a.n_events(), n_sums, n_missing, n_steps, n_neutral);
   printf("largest differences: deposit %.2g (relative), mean %.2g cm, covariance %.2g (relative to its trace), time RMS %.2g (relative)\n",
          max_de, max_dm, max_dc, max_dt);
 }

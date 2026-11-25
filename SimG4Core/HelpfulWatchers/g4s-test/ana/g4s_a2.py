@@ -9,6 +9,7 @@ the first sign, below 90 %). Reported: where (|z| < 300 cm: tracker; 300-320: ET
 split at the largest |z| of an EE cell's step; or nowhere), the material from the origin in X0 and lambda_I at the
 start (medians), and the number of distinct HGCal layers the chain crossed with its own sensitive steps before it."""
 import sys, math, statistics, collections, ROOT
+from SimG4Core.HelpfulWatchers.g4s_read import SnitchFile
 ROOT.gSystem.Load("libRootG4Snitch.so")
 
 def hgc_layer(d):
@@ -19,15 +20,15 @@ def hgc_layer(d):
     return None
 
 def analyse(fn):
-    f = ROOT.TFile.Open(fn); t = f.Get("T")
-    procs = {int(p.idx): str(p.name) for p in f.Get("P")}
+    sf = SnitchFile(fn)
+    procs = {int(p.idx): str(p.name) for p in sf.rows("P")}
     # The CE-E / CE-H boundary from the geometry: halfway between the last CE-E and the first CE-H sensitive volume.
-    sdname = {int(d.idx): str(d.name) for d in f.Get("D")}
-    ee_z = [abs(v.z) for v in f.Get("V") if sdname.get(int(v.sd)) == "HGCHitsEE"]
-    he_z = [abs(v.z) for v in f.Get("V") if sdname.get(int(v.sd)) in ("HGCHitsHEfront", "HGCHitsHEback")]
+    sdname = {int(d.idx): str(d.name) for d in sf.rows("D")}
+    ee_z = [abs(v.z) for v in sf.rows("V") if sdname.get(int(v.sd)) == "HGCHitsEE"]
+    he_z = [abs(v.z) for v in sf.rows("V") if sdname.get(int(v.sd)) in ("HGCHitsHEfront", "HGCHitsHEback")]
     ee_zmax = 0.5 * (max(ee_z) + min(he_z)) if ee_z and he_z else 362.0
     rows = []
-    for ev in t:
+    for ev in sf:
         p, s = ev.p, ev.s
         k = p[0].m_daughters_begin
         q0 = p[k]; E0 = q0.m_p_birth.fT; kind = abs(q0.m_pdg)

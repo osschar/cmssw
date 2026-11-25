@@ -3,10 +3,10 @@
 their |eta| range. Tracker subdetectors in phase 2: 1 PixelBarrel, 2 PixelEndcap (inner tracker), 5 TOB, 4 TID (outer
 tracker); Ecal: 1 EB, 2 EE; Muon: 1 DT, 2 CSC, 3 RPC, 4 GEM, 5 ME0; HCalSD: 1 HB, 2 HE, 3 HO, 4 HF."""
 import sys, math, ROOT, collections
-from g4s_read import SnitchFile
+from SimG4Core.HelpfulWatchers.g4s_read import SnitchFile
 sf = SnitchFile(sys.argv[1]); f = sf.f
-vol_sd = [int(v.sd) for v in f.Get("V")]
-cls = {int(d.idx): str(getattr(d, "class")) for d in f.Get("D")}
+vol_sd = [int(v.sd) for v in sf.rows("V")]
+cls = {int(d.idx): str(getattr(d, "class")) for d in sf.rows("D")}
 n = collections.Counter(); eta = {}
 for ev in sf:
     for ps in ev.s:

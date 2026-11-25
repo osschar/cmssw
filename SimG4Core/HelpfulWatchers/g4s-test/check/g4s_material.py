@@ -3,7 +3,7 @@
 front), 320 cm (HGCal front face) and 520 cm (HGCal back), in X0 and lambda_I, interpolated linearly in |z| between
 path points, in bins of |eta|; and whether the sums along the path never decrease."""
 import sys, math, ROOT, collections
-from g4s_read import SnitchFile
+from SimG4Core.HelpfulWatchers.g4s_read import SnitchFile
 sf = SnitchFile(sys.argv[1]); f = sf.f
 zs = (300.0, 320.0, 520.0)
 acc = collections.defaultdict(lambda: [0, [0.0] * 3, [0.0] * 3])

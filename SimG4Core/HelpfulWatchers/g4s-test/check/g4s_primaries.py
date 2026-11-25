@@ -2,7 +2,7 @@
 """g4s_primaries.py FILE: per event, the primaries (PDG, pT, eta, phi) and the energy deposited by the sensitive steps
 and the inert sums at z > 0 and at z < 0 (GeV), with the event's particle count; reads either format (g4s_read)."""
 import sys, math
-from g4s_read import SnitchFile
+from SimG4Core.HelpfulWatchers.g4s_read import SnitchFile
 
 sf = SnitchFile(sys.argv[1])
 print(f"{sys.argv[1]}: {'TTree' if sf.is_ttree else 'RNTuple'}, {len(sf)} events")

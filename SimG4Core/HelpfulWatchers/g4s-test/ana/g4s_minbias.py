@@ -21,12 +21,11 @@ points) first crosses |z| = 320 cm; its visible energy is split into that tower'
 Printed: means per interaction over the events with their standard errors, and times 200 for PU200."""
 import sys, math, collections, ROOT
 import numpy as np
+from SimG4Core.HelpfulWatchers.g4s_read import SnitchFile
 ROOT.gSystem.Load("libRootG4Snitch.so")
 
 ROOT.gInterpreter.Declare(r'''
-#include "SimG4Core/HelpfulWatchers/interface/G4SnitchDataFormat.h"
-#include "TFile.h"
-#include "TTree.h"
+#include "SimG4Core/HelpfulWatchers/interface/G4SnitchReader.h"
 #include <cmath>
 #include <vector>
 namespace g4smb {
@@ -61,21 +60,13 @@ struct Out {
   std::vector<int> ev_n_part;
 };
 void process_file(const char *fn, Out &o, long max_events = -1) {
-  TFile f(fn);
-  TTree *t = (TTree *)f.Get("T");
-  std::vector<G4S_Particle> *p = nullptr;
-  std::vector<G4S_ParticleSteps> *s = nullptr;
-  t->SetBranchStatus("*", 0);
-  t->SetBranchStatus("p*", 1);
-  t->SetBranchStatus("s*", 1);
-  t->SetBranchStatus("s.m_steps_inert*", 0);
-  t->SetBranchStatus("s.m_inert_sums*", 0);
-  t->SetBranchAddress("p", &p);
-  t->SetBranchAddress("s", &s);
-  const long n_ev = max_events >= 0 ? std::min(max_events, (long)t->GetEntries()) : (long)t->GetEntries();
+  G4SnitchFile sf(fn);  // a TTree or an RNTuple file; reads every field of T (no pruning)
+  const long n_ev = max_events >= 0 ? std::min(max_events, sf.n_events()) : sf.n_events();
   const int ev_off = o.ev_e_total.size();
   for (long ev = 0; ev < n_ev; ++ev) {
-    t->GetEntry(ev);
+    sf.load(ev);
+    const std::vector<G4S_Particle> *p = sf.p;
+    const std::vector<G4S_ParticleSteps> *s = sf.s;
     const int n = p->size();
     // The entrant of each particle: the nearest ancestor-or-self with |z_birth| < ZFACE; -1 if the chain reaches the
     // administrative mother (slot 0) first.
@@ -199,7 +190,7 @@ def main(files):
     for fn in files:
         ROOT.g4smb.process_file(fn, o)
         if procs is None:
-            f = ROOT.TFile.Open(fn); procs = {int(x.idx): str(x.name) for x in f.Get("P")}; f.Close()
+            sf = SnitchFile(fn); procs = {int(x.idx): str(x.name) for x in sf.rows("P")}; sf.f.Close()
     A = {k: np.array(list(getattr(o, k))) for k in ("ev", "pdg", "charge", "birth_proc", "is_primary", "has_cross", "pt",
                                                      "eta_birth", "z_birth", "r_birth", "e_vis", "e_ee", "e_hsi", "e_hsc",
                                                      "e_own", "e_1", "e_3", "e_5", "e_3ee", "e_pt", "e_3pt", "cross_r", "cross_eta")}

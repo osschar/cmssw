@@ -18,6 +18,7 @@ Tree "K", one entry per track: eta, pt, pdg, nhits, x0_first (truth from the ori
 x0, lam (truth between the first and the last hit's mid points), rl_mod, rl_grid (sums over hits 2..N), inel (1 if
 the primary ended by an inelastic interaction inside r < 118, |z| < 282), death_r, death_z."""
 import sys, math, array, collections, ROOT
+from SimG4Core.HelpfulWatchers.g4s_read import SnitchFile
 ROOT.gSystem.Load("libRootG4Snitch.so")
 
 
@@ -49,13 +50,12 @@ def main():
         Kt.Branch(c, kb[c], c + "/F")
     nomod = collections.Counter()
     for fn in sys.argv[3:]:
-        f = ROOT.TFile.Open(fn)
-        t = f.Get("T")
-        sdcls = [str(getattr(d, "class")) for d in f.Get("D")]
-        V = [(int(v.sd), float(v.x0), float(getattr(v, "lambda"))) for v in f.Get("V")]
-        procs = [str(pp.name) for pp in f.Get("P")]
+        sf = SnitchFile(fn); f = sf.f
+        sdcls = [str(getattr(d, "class")) for d in sf.rows("D")]
+        V = [(int(v.sd), float(v.x0), float(getattr(v, "lambda"))) for v in sf.rows("V")]
+        procs = [str(pp.name) for pp in sf.rows("P")]
         trk_sd = {i for i, c in enumerate(sdcls) if "TkAccumulating" in c}
-        for ev in t:
+        for ev in sf:
             p, s = ev.p, ev.s
             k = p[0].m_daughters_begin
             q = p[k]

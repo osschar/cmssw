@@ -6,7 +6,7 @@ The subtree is laid out as G4Snitch::select_output() writes it: slot 0 the admin
 daughters as one contiguous block, breadth first. Compared exactly: the particles, and per particle its steps, inert
 sums and path points."""
 import sys, ROOT
-from g4s_read import SnitchFile
+from SimG4Core.HelpfulWatchers.g4s_read import SnitchFile
 
 def subtree(p, root):
     order = [0, root]; parent = {root: 0}; k = 1
@@ -18,8 +18,8 @@ def subtree(p, root):
     return order, parent
 
 # The process and volume tables are numbered in order of first use within a job, so indices are compared by name.
-def tables(f):
-    return [str(x.name) for x in f.Get("P")], [str(x.path) for x in f.Get("V")]
+def tables(sf):
+    return [str(x.name) for x in sf.rows("P")], [str(x.path) for x in sf.rows("V")]
 
 def pkey(q, P, V):
     v = lambda a: (a.fX, a.fY, a.fZ, a.fT)
@@ -50,7 +50,7 @@ if sys.argv[1] == "pick":
 sfo = SnitchFile(sys.argv[1]); fo = sfo.f; to = sfo.entry(int(sys.argv[2])); po, so = to.p, to.s
 gid = int(sys.argv[3])
 sfs = SnitchFile(sys.argv[4]); fs = sfs.f; ts = sfs.entry(0); ps_, ss = ts.p, ts.s
-Po, Vo = tables(fo); Ps, Vs = tables(fs)
+Po, Vo = tables(sfo); Ps, Vs = tables(sfs)
 root = next(i for i in range(1, po.size()) if po[i].m_was_tracked and po[i].m_g4_id == gid)
 order, parent = subtree(po, root)
 bad = []

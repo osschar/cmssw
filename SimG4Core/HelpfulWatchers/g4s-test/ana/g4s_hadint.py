@@ -14,6 +14,7 @@ Per primary (tree "H"):
   angle between the step's own direction and its end momentum: nk5, nk20, nk100 (above 5, 20, 100 mrad), kmax
   (largest), kmax_r (its radius), kmax_dp (relative momentum change)."""
 import sys, math, array, ROOT
+from SimG4Core.HelpfulWatchers.g4s_read import SnitchFile
 ROOT.gSystem.Load("libRootG4Snitch.so")
 
 
@@ -38,12 +39,12 @@ def main():
     for c in cols:
         H.Branch(c, b[c], c + "/F")
     for fn in sys.argv[2:]:
-        f = ROOT.TFile.Open(fn)
-        sdcls = [str(getattr(d, "class")) for d in f.Get("D")]
+        sf = SnitchFile(fn); f = sf.f
+        sdcls = [str(getattr(d, "class")) for d in sf.rows("D")]
         trk_sd = {i for i, c in enumerate(sdcls) if "TkAccumulating" in c}
-        V = [int(v.sd) in trk_sd for v in f.Get("V")]
-        P = [str(x.name) for x in f.Get("P")]
-        for ev in f.Get("T"):
+        V = [int(v.sd) in trk_sd for v in sf.rows("V")]
+        P = [str(x.name) for x in sf.rows("P")]
+        for ev in sf:
             p, s = ev.p, ev.s
             k = p[0].m_daughters_begin
             q = p[k]

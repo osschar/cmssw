@@ -15,6 +15,7 @@ momentum leaving the destination hit. dp = dE / beta is what mkFit subtracts fro
 Tree "S": eta, pt, pdg, lay0, lay1, r1, z1, p1 (GeV), de (truth, GeV), de_mod, de_grid.
 Tree "K": eta, pt, pdg, nhits, p_first, de, de_mod, de_grid (sums between the first and the last hit)."""
 import sys, math, array, collections, ROOT
+from SimG4Core.HelpfulWatchers.g4s_read import SnitchFile
 ROOT.gSystem.Load("libRootG4Snitch.so")
 
 ME, MPI = 0.0005, 0.140
@@ -57,11 +58,11 @@ def main():
         Kt.Branch(c, kb[c], c + "/F")
     nbreak = collections.Counter()
     for fn in sys.argv[3:]:
-        f = ROOT.TFile.Open(fn)
-        sdcls = [str(getattr(d, "class")) for d in f.Get("D")]
+        sf = SnitchFile(fn); f = sf.f
+        sdcls = [str(getattr(d, "class")) for d in sf.rows("D")]
         trk_sd = {i for i, c in enumerate(sdcls) if "TkAccumulating" in c}
-        V = [int(v.sd) in trk_sd for v in f.Get("V")]
-        for ev in f.Get("T"):
+        V = [int(v.sd) in trk_sd for v in sf.rows("V")]
+        for ev in sf:
             p, s = ev.p, ev.s
             k = p[0].m_daughters_begin
             q = p[k]

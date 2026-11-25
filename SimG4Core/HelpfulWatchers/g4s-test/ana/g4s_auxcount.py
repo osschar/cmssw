@@ -13,6 +13,7 @@ Classes by |PDG|: e (11), mu (13), hadron (211, 321, 2212), other charged; neutr
 no turns. For e+- at 20 degrees also: the extra points by their number per segment, by region, by kinetic energy,
 and the totals with a cap of 17 (one turn) or 35 extra points per segment."""
 import sys, math, collections, ROOT
+from SimG4Core.HelpfulWatchers.g4s_read import SnitchFile
 ROOT.gSystem.Load("libRootG4Snitch.so")
 
 K = 0.299792458e-2
@@ -45,8 +46,8 @@ CAPS = (17, 35)
 capped = collections.Counter()
 EK = [0.001, 0.01, 0.1, 1.0, 1e9]  # GeV
 for fn in sys.argv[1:]:
-    f = ROOT.TFile.Open(fn)
-    for ev in f.Get("T"):
+    sf = SnitchFile(fn); f = sf.f
+    for ev in sf:
         nev += 1
         p, s, bb = ev.p, ev.s, ev.b
         for k in range(p.size()):
