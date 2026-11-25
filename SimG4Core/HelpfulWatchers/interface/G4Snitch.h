@@ -40,9 +40,9 @@ class MagneticField;
 class IdealMagneticFieldRecord;
 
 class TFile;
-class TTree;
 namespace ROOT {
   class RNTupleFillContext;
+  class RNTupleWriteOptions;
   namespace Detail {
     class RRawPtrWriteEntry;
   }
@@ -75,13 +75,12 @@ class EndOfJob;
 
 //==============================================================================
 
-// The tables of an output file: processes (tree "P"), volumes ("V") and sensitive detectors ("D").
-// G4S_Particle::m_birth_proc and m_death_proc index the processes, G4S_Step::m_volume and G4S_InertSum::m_volume the
-// volumes, and the volume table's column "sd" the sensitive detectors. A snitch writing its own file numbers one entry
-// per Geant4 process and sensitive-detector object, keyed by pointer in the snitch. A table shared by the snitches of
-// several threads (the RNTuple output) is keyed by content, since Geant4 has a process and a sensitive-detector object
-// per thread: a process by (name, type, subtype), a sensitive detector by name, a volume by the hash of its
-// touchable's history (the physical volumes are shared by the threads).
+// The tables of the output file: processes (RNTuple "P"), volumes ("V") and sensitive detectors ("D").
+// G4S_Particle::m_birth_proc and m_death_proc and G4S_Step::m_proc index the processes, G4S_Step::m_volume and
+// G4S_InertSum::m_volume the volumes, and the volume table's column "sd" the sensitive detectors. The snitches of
+// all threads share one set, keyed by content, since Geant4 has a process and a sensitive-detector object per thread:
+// a process by (name, type, subtype), a sensitive detector by name, a volume by the hash of its touchable's history
+// (the physical volumes are shared by the threads).
 struct G4SnitchTables {
   std::vector<std::string> proc_names;
   std::vector<int> proc_types, proc_subtypes;
@@ -89,7 +88,7 @@ struct G4SnitchTables {
   std::vector<double> vol_x0, vol_lambda, vol_density, vol_x, vol_y, vol_z;
   std::vector<int> vol_sd;
   std::vector<std::string> sd_names, sd_classes;
-  // The keys by content, used only by a shared table.
+  // The keys by content.
   std::map<std::tuple<std::string, int, int>, int> proc_key;
   std::unordered_map<uint64_t, int> vol_key;
   std::map<std::string, int> sd_key;
@@ -129,13 +128,12 @@ public:
   UPDATE(EndOfJob);
 
 private:
-  void open_file_tree();
-  void write_tree_close_file();
-  void write_tables(const G4SnitchTables &tab);
-  void write_config_tree(bool shared_file);
+  void open_output();
+  void close_output();
+  static ROOT::RNTupleWriteOptions write_options(TFile &f);
+  void write_tables(TFile &f, const G4SnitchTables &tab);
+  void write_config(TFile &f);
   void reset_output_structs();
-  void open_shared_rntuple();
-  void close_shared_rntuple();
 
   bool filter(const G4Track *t) const;
 
@@ -182,30 +180,16 @@ private:
   // energy (track_unstable_always); positrons are cut on total, not kinetic, energy (positron_by_total_energy).
   bool m_track_unstable_always = true;
   bool m_positron_by_total_energy = true;
-  // The output file. With several framework threads every thread has its own snitch, so output_per_thread inserts
-  // "_t<Geant4 thread id>" before ".root" (G4Snitch_t0.root, ...); events are matched across files by branch "ev".
+  // The output file, written by the snitches of all threads together: RNTuple T, one entry per event, and the tables
+  // P, V, D, C. The k-th run of the job (a looper's k-th loop) writes "_run<k>" before ".root" from k = 2 on.
   std::string m_output_file = "G4Snitch.root";
-  bool m_output_per_thread = false;
-  // The format of the event data: "rntuple" (the default: RNTuple T in one file shared by the snitches of all
-  // threads, written in parallel), "ttree" (tree T, a file per snitch), or "both" (the TTree files as with "ttree",
-  // and the RNTuple file with "_rnt" inserted before ".root"; the same objects feed both). With an RNTuple the tables
-  // are shared by all snitches of the job, in both outputs.
-  std::string m_output_format = "rntuple";
-  bool m_write_ttree = true, m_write_rntuple = false;
   std::shared_ptr<ROOT::RNTupleFillContext> m_rnt_fill;
   std::unique_ptr<ROOT::Detail::RRawPtrWriteEntry> m_rnt_entry;
-  std::string m_output_name;
-  int m_thread_id = -1;
-  // This snitch's runs so far in the job (a looper runs one per loop); the k-th run's file has "_run<k>" from k = 2.
-  int m_run_in_job = 0;
-  int m_ev_number = -1;  // the Geant4 event id, which CMS sets to the CMSSW event number; branch "ev" of tree T
-  // The parameter set as given, written with the values in use into the configuration tree "C".
+  int m_ev_number = -1;  // the Geant4 event id, which CMS sets to the CMSSW event number; field "ev" of T
+  // The parameter set as given, written with the values in use into the configuration table "C".
   std::string m_pset_dump;
   edm::ESGetToken<MagneticField, IdealMagneticFieldRecord> m_bfield_token;
   const MagneticField *m_bfield = nullptr;
-
-  TFile *m_file = nullptr;
-  TTree *m_tree = nullptr;
 
   std::shared_ptr<G4S_Info> m_info;
   std::shared_ptr<std::vector<G4S_Particle>> m_part_vec;
@@ -240,9 +224,8 @@ private:
 
   std::map<const G4Track*, int> m_gtp2vid;
 
-  // The tables (trees P, V, D): the snitch's own, or with an RNTuple the job's shared one, which m_tables_mutex guards.
-  G4SnitchTables m_own_tables;
-  G4SnitchTables *m_tables = &m_own_tables;
+  // The tables (RNTuples P, V, D), shared by the snitches of the job and guarded by m_tables_mutex.
+  G4SnitchTables *m_tables = nullptr;
   std::mutex *m_tables_mutex = nullptr;
   // This snitch's index of each process object, volume and sensitive-detector object into the tables. A volume is a
   // placement, keyed by a hash of the (physical volume, copy number) pairs of its touchable's whole history.

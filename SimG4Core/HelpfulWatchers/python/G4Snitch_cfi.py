@@ -12,12 +12,10 @@
 #   G4SNITCH_LAST_EKIN_CUT=MeV        kinetic energy below which a particle's last state is no longer updated (default 1)
 #   G4SNITCH_TRACK_UNSTABLE=0         unstable particles (not neutrons) only by the energy cut, not at any energy
 #   G4SNITCH_POSITRON_TOTAL=0         positrons cut on kinetic energy, like the rest, not on total energy
-#   G4SNITCH_NTHREADS=N               (read by the run configurations) N framework threads; above 1, with TTree
-#                                     output, each thread's snitch writes G4Snitch_t<thread>.root (output_per_thread)
-#   G4SNITCH_FORMAT=ttree             the events as a TTree, one file per thread (the default is an RNTuple in one
-#                                     file for all threads, G4Snitch.root); =both: the TTree files, and the RNTuple
-#                                     in G4Snitch_rnt.root
-# Every value in use, with the code version and these environment variables, goes into the output's tree "C".
+#   G4SNITCH_NTHREADS=N               (read by the run configurations) N framework threads; the snitches of all
+#                                     threads write one file
+# The output: RNTuples, the events in T and the tables P, V, D, C (SimG4Core/HelpfulWatchers/python/g4s_read.py
+# reads them). Every value in use, with the code version and these environment variables, goes into C.
 import os
 import FWCore.ParameterSet.Config as cms
 
@@ -49,8 +47,6 @@ def g4snitch_watcher(env=os.environ):
         track_unstable_always = cms.untracked.bool(True),  # unstable particles other than neutrons: tracked always
         positron_by_total_energy = cms.untracked.bool(True),  # positrons: the cut applies to the total energy
         output_file = cms.untracked.string("G4Snitch.root"),
-        output_per_thread = cms.untracked.bool(False),  # TTree output: one file per thread, "_t<thread>" before ".root"
-        output_format = cms.untracked.string("rntuple"),  # rntuple (one file shared by the threads), ttree or both
     )
     if env.get("G4SNITCH_BFIELD", "0") == "1":
         w.output_path_bfield = True
@@ -68,14 +64,10 @@ def g4snitch_watcher(env=os.environ):
         w.track_ekin_cut = float(env["G4SNITCH_TRACK_EKIN_CUT"])
     if env.get("G4SNITCH_LAST_EKIN_CUT"):
         w.last_state_ekin_cut = float(env["G4SNITCH_LAST_EKIN_CUT"])
-    if int(env.get("G4SNITCH_NTHREADS", "1")) > 1:
-        w.output_per_thread = True
     if env.get("G4SNITCH_TRACK_UNSTABLE", "1") == "0":
         w.track_unstable_always = False
     if env.get("G4SNITCH_POSITRON_TOTAL", "1") == "0":
         w.positron_by_total_energy = False
-    if env.get("G4SNITCH_FORMAT"):
-        w.output_format = env["G4SNITCH_FORMAT"]
     if env.get("G4SNITCH_SELECT_CONE"):
         w.select_cone = cms.untracked.vdouble([float(x) for x in env["G4SNITCH_SELECT_CONE"].split(",")])
     return w

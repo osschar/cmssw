@@ -5,7 +5,7 @@
 //
 /**\class SimTracer SimTracer.h SimG4Core/HelpfulWatchers/interface/G4Snitch.h
 
-Description: Outputs a ROOT tree of kinematics.
+Description: Writes the particles and steps of each Geant4 event as RNTuples (G4SnitchDataFormat.h).
 
 */
 //
@@ -59,12 +59,12 @@ Description: Outputs a ROOT tree of kinematics.
 
 #include <TDirectory.h>
 #include <TFile.h>
-#include <TTree.h>
 #include <TSystem.h>
 #include <ROOT/RNTupleFillContext.hxx>
 #include <ROOT/RNTupleModel.hxx>
 #include <ROOT/RNTupleParallelWriter.hxx>
 #include <ROOT/RNTupleWriteOptions.hxx>
+#include <ROOT/RNTupleWriter.hxx>
 #include <ROOT/RRawPtrWriteEntry.hxx>
 
 #include <mutex>
@@ -74,7 +74,7 @@ namespace {
   // The energy cuts that decide what is tracked and the last state are parameters: track_ekin_cut and
   // last_state_ekin_cut (G4Snitch::m_track_ekin_cut, m_last_state_ekin_cut).
 
-  // Conversion to TTree units, all printouts are in G4 units
+  // Conversion to the output's units (cm, GeV), all printouts are in G4 units
   constexpr double Pos_fac = 0.1;   // mm => cm
   constexpr double Mom_fac = 0.001; // MeV => GeV
   // time stays in ns
@@ -122,15 +122,10 @@ namespace {
     return dot == std::string::npos ? name + tag : name.insert(dot, tag);
   }
 
-  // A lock on the mutex if there is one (the shared tables), none otherwise (a snitch's own tables).
-  std::unique_lock<std::mutex> lock_if(std::mutex *m) {
-    return m ? std::unique_lock<std::mutex>(*m) : std::unique_lock<std::mutex>();
-  }
-
-  // The output shared by the snitches of one job (one snitch per Geant4 thread) when they write an RNTuple: one file,
-  // one RNTupleParallelWriter, one set of tables. Each snitch fills its events through its own RNTupleFillContext.
-  // The first snitch to begin its run opens the file; the last one to end its run commits the RNTuple, writes the
-  // tables and the configuration as trees, and closes the file.
+  // The output shared by the snitches of one job (one snitch per Geant4 thread): one file, one RNTupleParallelWriter,
+  // one set of tables. Each snitch fills its events through its own RNTupleFillContext. The first snitch to begin its
+  // run opens the file; the last one to end its run commits the events and writes the tables and the configuration
+  // as RNTuples of their own.
   struct SharedRNTuple {
     std::mutex mutex;         // guards the members below, except the tables
     std::mutex tables_mutex;  // guards the tables
@@ -177,20 +172,11 @@ G4Snitch::G4Snitch(const edm::ParameterSet &pSet)
   m_track_unstable_always = pSet.getUntrackedParameter<bool>("track_unstable_always", true);
   m_positron_by_total_energy = pSet.getUntrackedParameter<bool>("positron_by_total_energy", true);
   m_output_file = pSet.getUntrackedParameter<std::string>("output_file", "G4Snitch.root");
-  m_output_per_thread = pSet.getUntrackedParameter<bool>("output_per_thread", false);
-  m_output_format = pSet.getUntrackedParameter<std::string>("output_format", "rntuple");
-  if (m_output_format != "ttree" && m_output_format != "rntuple" && m_output_format != "both")
-    throw cms::Exception("Configuration") << "G4Snitch: output_format is ttree, rntuple or both, not '"
-                                          << m_output_format << "'";
-  m_write_ttree = m_output_format != "rntuple";
-  m_write_rntuple = m_output_format != "ttree";
-  if (m_write_rntuple) {
-    m_tables = &g_shared_rnt.tables;
-    m_tables_mutex = &g_shared_rnt.tables_mutex;
-  }
   // CMS runs a watcher on more than one thread only if it says it can (RunManagerMTWorker::createWatchers). The
-  // snitch can when each thread writes its own TTree file, and with the RNTuple alone, whose file the threads share.
-  setMT(m_write_ttree ? m_output_per_thread : true);
+  // snitches of all threads write one file and share its tables.
+  setMT(true);
+  m_tables = &g_shared_rnt.tables;
+  m_tables_mutex = &g_shared_rnt.tables_mutex;
   m_pset_dump = pSet.dump();
   // 2025-04-18 Linking through BuildFile.xml no longer works (-Wl,--as-needed)
   // so we just pull the dicts in here.
@@ -228,20 +214,17 @@ int G4Snitch::process_index(const G4VProcess *proc) {
   const int type = (int)proc->GetProcessType(), subtype = proc->GetProcessSubType();
   int idx = -1;
   {
-    auto lock = lock_if(m_tables_mutex);
+    std::lock_guard<std::mutex> lock(*m_tables_mutex);
     G4SnitchTables &tab = *m_tables;
-    if (m_tables_mutex) {
-      auto jt = tab.proc_key.find(std::make_tuple(name, type, subtype));
-      if (jt != tab.proc_key.end())
-        idx = jt->second;
-    }
+    auto jt = tab.proc_key.find(std::make_tuple(name, type, subtype));
+    if (jt != tab.proc_key.end())
+      idx = jt->second;
     if (idx < 0) {
       idx = (int)tab.proc_names.size();
       tab.proc_names.push_back(name);
       tab.proc_types.push_back(type);
       tab.proc_subtypes.push_back(subtype);
-      if (m_tables_mutex)
-        tab.proc_key.emplace(std::make_tuple(name, type, subtype), idx);
+      tab.proc_key.emplace(std::make_tuple(name, type, subtype), idx);
     }
   }
   m_proc_index.emplace(proc, idx);
@@ -261,19 +244,16 @@ int G4Snitch::sd_index(const G4VSensitiveDetector *sd) {
   std::free(dm);
   int idx = -1;
   {
-    auto lock = lock_if(m_tables_mutex);
+    std::lock_guard<std::mutex> lock(*m_tables_mutex);
     G4SnitchTables &tab = *m_tables;
-    if (m_tables_mutex) {
-      auto jt = tab.sd_key.find(name);
-      if (jt != tab.sd_key.end())
-        idx = jt->second;
-    }
+    auto jt = tab.sd_key.find(name);
+    if (jt != tab.sd_key.end())
+      idx = jt->second;
     if (idx < 0) {
       idx = (int)tab.sd_names.size();
       tab.sd_names.push_back(name);
       tab.sd_classes.push_back(cls);
-      if (m_tables_mutex)
-        tab.sd_key.emplace(name, idx);
+      tab.sd_key.emplace(name, idx);
     }
   }
   m_sd_index.emplace(sd, idx);
@@ -314,13 +294,11 @@ int G4Snitch::volume_index(const G4StepPoint *sp) {
   const G4ThreeVector &o = th->GetTranslation(0);
   int idx = -1;
   {
-    auto lock = lock_if(m_tables_mutex);
+    std::lock_guard<std::mutex> lock(*m_tables_mutex);
     G4SnitchTables &tab = *m_tables;
-    if (m_tables_mutex) {
-      auto jt = tab.vol_key.find(h);
-      if (jt != tab.vol_key.end())
-        idx = jt->second;
-    }
+    auto jt = tab.vol_key.find(h);
+    if (jt != tab.vol_key.end())
+      idx = jt->second;
     if (idx < 0) {
       idx = (int)tab.vol_paths.size();
       tab.vol_paths.push_back(path);
@@ -332,8 +310,7 @@ int G4Snitch::volume_index(const G4StepPoint *sp) {
       tab.vol_x.push_back(Pos_fac * o.x());
       tab.vol_y.push_back(Pos_fac * o.y());
       tab.vol_z.push_back(Pos_fac * o.z());
-      if (m_tables_mutex)
-        tab.vol_key.emplace(h, idx);
+      tab.vol_key.emplace(h, idx);
     }
   }
   m_vol_index.emplace(h, idx);
@@ -453,9 +430,8 @@ G4Snitch::~G4Snitch() {
   std::cout <<"G4Snitch destructed\n";
 }
 
-// The event data objects, which the TTree's branches and the RNTuple's entry both point to (no copy), then the outputs.
-void G4Snitch::open_file_tree() {
-  m_thread_id = G4Threading::G4GetThreadId();
+// The event data objects, which the RNTuple entry points to (raw pointers, no copy), then the shared output file.
+void G4Snitch::open_output() {
   m_vec_capacity = 16384;
   m_info.reset(new G4S_Info);
   m_part_vec.reset(new std::vector<G4S_Particle>);
@@ -465,56 +441,26 @@ void G4Snitch::open_file_tree() {
     m_pbfield_vec.reset(new std::vector<G4S_PathBField>);
   steps_reserve(m_vec_capacity);
 
-  if (m_write_ttree) {
-    // One file per run: the k-th run of the job (a looper's k-th loop) writes "_run<k>" from k = 2 on.
-    ++m_run_in_job;
-    m_output_name = m_output_file;
-    if (m_output_per_thread)
-      m_output_name = with_tag(m_output_name, "_t" + std::to_string(m_thread_id));
-    if (m_run_in_job > 1)
-      m_output_name = with_tag(m_output_name, "_run" + std::to_string(m_run_in_job));
-    m_file = TFile::Open(m_output_name.c_str(), "RECREATE");
-    m_tree = new TTree("T", "G4 Dump Tree of some kind");
-    // No ROOT implicit multi-threading for the snitch's trees. CMS runs Geant4 on hand-off threads outside TBB while
-    // the TBB workers wait for them in OscarMTProducer::produce, so a basket compression handed to the TBB arena from
-    // TTree::Fill never runs and every thread waits: with 4 threads the job hung at the first EndOfEvent (2026-11-23).
-    m_tree->SetImplicitMT(false);
-    m_tree->Branch("ev", &m_ev_number, "ev/I");
-    m_tree->Branch("i", m_info.get());
-    m_tree->Branch("p", m_part_vec.get());
-    m_tree->Branch("s", m_psteps_vec.get());
-    if (m_output_path_bfield)
-      m_tree->Branch("b", m_pbfield_vec.get());
-  }
-  if (m_write_rntuple)
-    open_shared_rntuple();
-}
-
-void G4Snitch::open_shared_rntuple() {
   SharedRNTuple &sh = g_shared_rnt;
   std::lock_guard<std::mutex> lock(sh.mutex);
   if (sh.n_open++ == 0) {
+    // One file per run: the k-th run of the job (a looper's k-th loop) writes "_run<k>" from k = 2 on.
     ++sh.n_runs;
-    sh.name = m_write_ttree ? with_tag(m_output_file, "_rnt") : m_output_file;
-    if (sh.n_runs > 1)
-      sh.name = with_tag(sh.name, "_run" + std::to_string(sh.n_runs));
+    sh.name = sh.n_runs > 1 ? with_tag(m_output_file, "_run" + std::to_string(sh.n_runs)) : m_output_file;
     // TFile::Open makes the new file this thread's current directory; the context restores the previous one.
     TDirectory::TContext context;
     sh.file = TFile::Open(sh.name.c_str(), "RECREATE");
     if (!sh.file || sh.file->IsZombie())
-      throw cms::Exception("G4Snitch") << "cannot create the RNTuple file " << sh.name;
+      throw cms::Exception("G4Snitch") << "cannot create the output file " << sh.name;
     auto model = ROOT::RNTupleModel::CreateBare();
-    model->MakeField<int>("ev");
-    model->MakeField<G4S_Info>("i");
-    model->MakeField<std::vector<G4S_Particle>>("p");
-    model->MakeField<std::vector<G4S_ParticleSteps>>("s");
+    model->SetDescription("G4Snitch events; the tables are the RNTuples P, V, D, C of the same file");
+    model->MakeField<int>("ev", "the Geant4 event id, which CMS sets to the CMSSW event number");
+    model->MakeField<G4S_Info>("i", "event information");
+    model->MakeField<std::vector<G4S_Particle>>("p", "the tracked particles; slot 0 is the event's mother");
+    model->MakeField<std::vector<G4S_ParticleSteps>>("s", "steps, inert sums and path of each particle of p");
     if (m_output_path_bfield)
-      model->MakeField<std::vector<G4S_PathBField>>("b");
-    ROOT::RNTupleWriteOptions opts;
-    opts.SetCompression(sh.file->GetCompressionSettings());
-    // The parallel writer's default, stated: no implicit multi-threading, for the reason in open_file_tree().
-    opts.SetUseImplicitMT(ROOT::RNTupleWriteOptions::EImplicitMT::kOff);
-    sh.writer = ROOT::RNTupleParallelWriter::Append(std::move(model), "T", *sh.file, opts);
+      model->MakeField<std::vector<G4S_PathBField>>("b", "the field at each path point of s, T");
+    sh.writer = ROOT::RNTupleParallelWriter::Append(std::move(model), "T", *sh.file, write_options(*sh.file));
     sh.n_users = 0;
   }
   ++sh.n_users;
@@ -528,7 +474,7 @@ void G4Snitch::open_shared_rntuple() {
     m_rnt_entry->BindRawPtr("b", m_pbfield_vec.get());
 }
 
-void G4Snitch::close_shared_rntuple() {
+void G4Snitch::close_output() {
   // Every fill context must be gone before the writer commits the RNTuple; each has flushed its last event already.
   m_rnt_entry.reset();
   m_rnt_fill.reset();
@@ -537,127 +483,109 @@ void G4Snitch::close_shared_rntuple() {
   if (--sh.n_open > 0)
     return;
   sh.writer.reset();
-  TDirectory::TContext context(sh.file);
   G4SnitchTables tab;
   {
     std::lock_guard<std::mutex> tables_lock(sh.tables_mutex);
     tab = sh.tables;
   }
-  write_tables(tab);
-  write_config_tree(true);
+  write_tables(*sh.file, tab);
+  write_config(*sh.file);
   sh.file->Close();
   delete sh.file;
   sh.file = nullptr;
 }
 
-void G4Snitch::write_tree_close_file() {
-  m_file->cd();
-  m_tree->Write();
-  delete m_tree;
-  m_tree = nullptr;
-  if (m_tables_mutex) {
-    // The shared tables as they are now, while other threads may still add to them: they hold every entry this
-    // file's events index.
-    G4SnitchTables tab;
-    {
-      std::lock_guard<std::mutex> tables_lock(*m_tables_mutex);
-      tab = *m_tables;
-    }
-    write_tables(tab);
-  } else {
-    write_tables(*m_tables);
-  }
-  write_config_tree(false);
-  m_file->Close();
-  delete m_file;
-  m_file = nullptr;
+// The file's compression, and no ROOT implicit multi-threading. CMS runs Geant4 on hand-off threads outside TBB while
+// the TBB workers wait for them in OscarMTProducer::produce, so compression work handed to the TBB arena from a
+// Geant4 thread never runs and every thread waits: with 4 threads a job with TTree output hung at the first
+// EndOfEvent (2026-11-23). The parallel writer defaults to no implicit multi-threading; the sequential one, which
+// writes the tables, does not.
+ROOT::RNTupleWriteOptions G4Snitch::write_options(TFile &f) {
+  ROOT::RNTupleWriteOptions opts;
+  opts.SetCompression(f.GetCompressionSettings());
+  opts.SetUseImplicitMT(ROOT::RNTupleWriteOptions::EImplicitMT::kOff);
+  return opts;
 }
 
-// The tables P, V and D, into the current directory.
-void G4Snitch::write_tables(const G4SnitchTables &tab) {
-  // The process table that m_birth_proc and m_death_proc index.
+// The tables P, V and D, as RNTuples in the file.
+void G4Snitch::write_tables(TFile &f, const G4SnitchTables &tab) {
+  // The process table that G4S_Particle::m_birth_proc, m_death_proc and G4S_Step::m_proc index.
   {
-    TTree ptree("P", "G4Snitch process table: idx, name, type (G4ProcessType), subtype");
-    ptree.SetImplicitMT(false);
-    int idx = 0, type = 0, subtype = 0;
-    std::string name;
-    ptree.Branch("idx", &idx);
-    ptree.Branch("name", &name);
-    ptree.Branch("type", &type);
-    ptree.Branch("subtype", &subtype);
-    for (idx = 0; idx < (int)tab.proc_names.size(); ++idx) {
-      name = tab.proc_names[idx];
-      type = tab.proc_types[idx];
-      subtype = tab.proc_subtypes[idx];
-      ptree.Fill();
+    auto model = ROOT::RNTupleModel::Create();
+    model->SetDescription("G4Snitch process table");
+    auto idx = model->MakeField<int>("idx");
+    auto name = model->MakeField<std::string>("name");
+    auto type = model->MakeField<int>("type", "G4ProcessType");
+    auto subtype = model->MakeField<int>("subtype");
+    auto w = ROOT::RNTupleWriter::Append(std::move(model), "P", f, write_options(f));
+    for (int k = 0; k < (int)tab.proc_names.size(); ++k) {
+      *idx = k;
+      *name = tab.proc_names[k];
+      *type = tab.proc_types[k];
+      *subtype = tab.proc_subtypes[k];
+      w->Fill();
     }
-    ptree.Write();
   }
-  // The volume table that G4S_InertSum::m_volume indexes.
+  // The volume table that G4S_Step::m_volume and G4S_InertSum::m_volume index.
   {
-    TTree vtree("V", "G4Snitch volume table: idx, path (name:copy from the world down), material, x0 (cm), density "
-                     "(g/cm3), x, y, z (cm, the volume's origin in global coordinates), sd (index into tree D, -1 for "
-                     "none)");
-    vtree.SetImplicitMT(false);
-    int idx = 0, sd = -1;
-    std::string path, material;
-    double x0 = 0, lambda = 0, density = 0, x = 0, y = 0, z = 0;
-    vtree.Branch("idx", &idx);
-    vtree.Branch("path", &path);
-    vtree.Branch("material", &material);
-    vtree.Branch("x0", &x0);
-    vtree.Branch("lambda", &lambda);
-    vtree.Branch("density", &density);
-    vtree.Branch("x", &x);
-    vtree.Branch("y", &y);
-    vtree.Branch("z", &z);
-    vtree.Branch("sd", &sd);
-    for (idx = 0; idx < (int)tab.vol_paths.size(); ++idx) {
-      path = tab.vol_paths[idx];
-      material = tab.vol_materials[idx];
-      x0 = tab.vol_x0[idx];
-      lambda = tab.vol_lambda[idx];
-      density = tab.vol_density[idx];
-      x = tab.vol_x[idx];
-      y = tab.vol_y[idx];
-      z = tab.vol_z[idx];
-      sd = tab.vol_sd[idx];
-      vtree.Fill();
+    auto model = ROOT::RNTupleModel::Create();
+    model->SetDescription("G4Snitch volume table: one row per placement");
+    auto idx = model->MakeField<int>("idx");
+    auto path = model->MakeField<std::string>("path", "name:copy of each level, from the world down");
+    auto material = model->MakeField<std::string>("material");
+    auto x0 = model->MakeField<double>("x0", "radiation length of the material, cm");
+    auto lambda = model->MakeField<double>("lambda", "nuclear interaction length of the material, cm");
+    auto density = model->MakeField<double>("density", "g/cm3");
+    auto x = model->MakeField<double>("x", "the volume's origin in global coordinates, cm");
+    auto y = model->MakeField<double>("y", "cm");
+    auto z = model->MakeField<double>("z", "cm");
+    auto sd = model->MakeField<int>("sd", "the volume's sensitive detector, an index into D; -1 for none");
+    auto w = ROOT::RNTupleWriter::Append(std::move(model), "V", f, write_options(f));
+    for (int k = 0; k < (int)tab.vol_paths.size(); ++k) {
+      *idx = k;
+      *path = tab.vol_paths[k];
+      *material = tab.vol_materials[k];
+      *x0 = tab.vol_x0[k];
+      *lambda = tab.vol_lambda[k];
+      *density = tab.vol_density[k];
+      *x = tab.vol_x[k];
+      *y = tab.vol_y[k];
+      *z = tab.vol_z[k];
+      *sd = tab.vol_sd[k];
+      w->Fill();
     }
-    vtree.Write();
   }
   // The sensitive-detector table that the volume table's column "sd" indexes.
   {
-    TTree dtree("D", "G4Snitch sensitive-detector table: idx, name, class");
-    dtree.SetImplicitMT(false);
-    int idx = 0;
-    std::string name, cls;
-    dtree.Branch("idx", &idx);
-    dtree.Branch("name", &name);
-    dtree.Branch("class", &cls);
-    for (idx = 0; idx < (int)tab.sd_names.size(); ++idx) {
-      name = tab.sd_names[idx];
-      cls = tab.sd_classes[idx];
-      dtree.Fill();
+    auto model = ROOT::RNTupleModel::Create();
+    model->SetDescription("G4Snitch sensitive-detector table");
+    auto idx = model->MakeField<int>("idx");
+    auto name = model->MakeField<std::string>("name");
+    auto cls = model->MakeField<std::string>("class", "the C++ class of the sensitive detector");
+    auto w = ROOT::RNTupleWriter::Append(std::move(model), "D", f, write_options(f));
+    for (int k = 0; k < (int)tab.sd_names.size(); ++k) {
+      *idx = k;
+      *name = tab.sd_names[k];
+      *cls = tab.sd_classes[k];
+      w->Fill();
     }
-    dtree.Write();
   }
 }
 
-// The configuration tree "C" (key, value): what decides what this file holds. The parameters as used (defaults
-// included), the rules of filter() in words, the units, the parameter set as given, the code (the stamps the
-// Ceph area's build.sh and sync20.sh leave in $CMSSW_BASE: COMMIT.built at the last successful build, COMMIT at the
-// last sync, each the commit and the dirty files), the G4SNITCH_* environment of the job, and the versions.
-void G4Snitch::write_config_tree(bool shared_file) {
-  TTree ctree("C", "G4Snitch configuration: key, value");
-  ctree.SetImplicitMT(false);
-  std::string key, value;
-  ctree.Branch("key", &key);
-  ctree.Branch("value", &value);
+// The configuration table "C" (key, value), an RNTuple: what decides what this file holds. The parameters as used
+// (defaults included), the rules of filter() in words, the units, the parameter set as given, the code (the stamps
+// the Ceph area's build.sh and sync20.sh leave in $CMSSW_BASE: COMMIT.built at the last successful build, COMMIT at
+// the last sync, each the commit and the dirty files), the G4SNITCH_* environment of the job, and the versions.
+void G4Snitch::write_config(TFile &f) {
+  auto model = ROOT::RNTupleModel::Create();
+  model->SetDescription("G4Snitch configuration");
+  auto key = model->MakeField<std::string>("key");
+  auto value = model->MakeField<std::string>("value");
+  auto w = ROOT::RNTupleWriter::Append(std::move(model), "C", f, write_options(f));
   auto put = [&](const std::string &k, const std::string &v) {
-    key = k;
-    value = v;
-    ctree.Fill();
+    *key = k;
+    *value = v;
+    w->Fill();
   };
   auto num = [](double x) {
     std::ostringstream o;
@@ -685,17 +613,12 @@ void G4Snitch::write_config_tree(bool shared_file) {
     o << f.rdbuf();
     return o.str();
   };
-  if (shared_file)
-    put("format",
-        "RNTuple T (events: ev, i, p, s, b; one cluster per event, in the order the threads finished them, so "
-        "match events by ev), trees P (processes), V (volumes), D (sensitive detectors), C (this)");
-  else
-    put("format", "trees T (events: ev, i, p, s, b), P (processes), V (volumes), D (sensitive detectors), C (this)");
+  put("format",
+      "RNTuples: T (events: ev, i, p, s, b; one cluster per event, in the order the threads finished them, so match "
+      "events by ev), P (processes), V (volumes), D (sensitive detectors), C (this)");
   put("tables",
-      m_tables_mutex ? "the job's, shared by the snitches of all threads: one process per (name, type, subtype), one "
-                       "sensitive detector per name, one volume per placement"
-                     : "this snitch's: one entry per Geant4 process object and sensitive-detector object, one volume "
-                       "per placement");
+      "the job's, shared by the snitches of all threads: one process per (name, type, subtype), one sensitive "
+      "detector per name, one volume per placement");
   put("verbose", b2yn(m_verbose));
   put("verbose_stack_level", b2yn(m_verbose_stack_level));
   put("verbose_transport", b2yn(m_verbose_transport));
@@ -718,19 +641,10 @@ void G4Snitch::write_config_tree(bool shared_file) {
   put("track_ekin_cut", num(m_track_ekin_cut) + " MeV");
   put("last_state_ekin_cut", num(m_last_state_ekin_cut) + " MeV");
   put("output_file", m_output_file);
-  put("output_per_thread", b2yn(m_output_per_thread));
-  put("output_format", m_output_format);
-  if (shared_file) {
-    // Called by the last snitch to end its run, under the shared output's lock.
-    put("output_name", g_shared_rnt.name);
-    put("thread_id", "shared");
-    put("snitches", std::to_string(g_shared_rnt.n_users));
-    put("run_in_job", std::to_string(g_shared_rnt.n_runs));
-  } else {
-    put("output_name", m_output_name);
-    put("thread_id", std::to_string(m_thread_id));
-    put("run_in_job", std::to_string(m_run_in_job));
-  }
+  // Called by the last snitch to end its run, under the shared output's lock.
+  put("output_name", g_shared_rnt.name);
+  put("snitches", std::to_string(g_shared_rnt.n_users));
+  put("run_in_job", std::to_string(g_shared_rnt.n_runs));
   put("track_unstable_always", b2yn(m_track_unstable_always));
   put("positron_by_total_energy", b2yn(m_positron_by_total_energy));
   put("rule.tracked",
@@ -756,7 +670,6 @@ void G4Snitch::write_config_tree(bool shared_file) {
       put("env." + kv.substr(0, eq), eq == std::string::npos ? "" : kv.substr(eq + 1));
     }
   }
-  ctree.Write();
 }
 
 void G4Snitch::reset_output_structs() {
@@ -793,7 +706,7 @@ void G4Snitch::update(const BeginOfJob* boj) {
 
 void G4Snitch::update(const BeginOfRun* bor) {
   std::cout << "++ signal BeginOfRun --- creating root file / tree\n";
-  open_file_tree();
+  open_output();
   reset_output_structs();
   m_total_tracks_accepted = m_total_tracks_skipped = 0;
 }
@@ -1226,14 +1139,10 @@ void G4Snitch::update(const EndOfEvent *eoe)
 
   flush_inert_sums();
   select_output();
-  if (m_write_ttree)
-    m_tree->Fill();
-  if (m_write_rntuple) {
-    // One cluster per event: this thread compresses the event, and the writer appends the cluster to the shared file
-    // under its own lock.
-    m_rnt_fill->Fill(*m_rnt_entry);
-    m_rnt_fill->FlushCluster();
-  }
+  // One cluster per event: this thread compresses the event, and the writer appends the cluster to the shared file
+  // under its own lock.
+  m_rnt_fill->Fill(*m_rnt_entry);
+  m_rnt_fill->FlushCluster();
   reset_output_structs();
 }
 
@@ -1324,10 +1233,7 @@ void G4Snitch::update(const EndOfRun *eor)
   std::cout << "++ signal EndOfRun  -- closing the root file\n";
   printf(" m_total_tracks_accepted=%d, m_total_tracks_skipped=%d\n",
          m_total_tracks_accepted, m_total_tracks_skipped);
-  if (m_write_ttree)
-    write_tree_close_file();
-  if (m_write_rntuple)
-    close_shared_rntuple();
+  close_output();
 }
 
 // this never gets called
