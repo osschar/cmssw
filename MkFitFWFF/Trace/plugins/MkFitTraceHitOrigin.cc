@@ -38,14 +38,30 @@
 //              was not kept either), counted apart as "orphan" in the log.
 //   Blind spot of the rule: a secondary of the same type and process as its kept parent (a delta ray of an electron
 //   that was itself made by ionisation) counts as own.
-// - Any other link is pileup: the job has no pileup sim hits (a RAW file keeps only the signal's), so its charge
-//   cannot be classified.
+// - Any other link is pileup. A RAW file keeps only the signal's sim hits, so without more the pileup's charge cannot
+//   be classified. With the pileup's sim hits (pileupSimHits, pileupSimTracks, pileupSimVertices: the vectors
+//   MkFitTraceCrossingFrame* copy from a playback of the event's mixing, signal first, then the pileup events in the
+//   order the mixing accumulated them), a pileup link is resolved as a signal link, in the vector of its tof bin. The
+//   digitizer counted a pileup event's sim hits after the signal's and after those of the pileup events before it, so
+//   "global" is the vector's index, and "perModule" the vector index of the module's first sim hit of that pileup event
+//   plus the rank among the module's sim hits of that event; the decoding the signal links chose is used. The sim
+//   hit is classified as a signal one, with the SimTracks of its own pileup event (the event id: bunch crossing and
+//   event number) and their creating processes (a pileup SimTrack's vertex index counts in its own event's
+//   SimVertices). A pileup link whose sim hit is not found so, or any pileup link without the pileup's sim hits, is
+//   "pileup unmatched".
 // - Per hit: f_own, f_sec (secondary and orphan), f_pu, f_unm, the fractions of the hit's charge, each link
 //   contributing its share times the channel's charge; the rest is charge without a link (noise). cls: the largest of
 //   own, secondary and unknown (pileup + unmatched), own winning a tie, then secondary. sim: the sim track (the index
 //   into the trace file's SimTracks, the TrackingParticles of trackingParticles in their order, as MkFitTraceTruth
 //   writes them) of the signal SimTrack with most of the hit's charge, own and secondary together; -1 without
-//   trackingParticles. sec_pdg, sec_proc: the secondary sim hit with most charge in the hit.
+//   trackingParticles. sec_pdg, sec_proc: the secondary sim hit with most charge in the hit. These describe the
+//   signal's charge only, with or without the pileup's sim hits.
+// - The pileup's part: f_pu_own, f_pu_sec (secondary and orphan), f_pu_unm, the pileup's charge f_pu split by the same
+//   rule; cls_all, the largest of own (f_own + f_pu_own), secondary (f_sec + f_pu_sec) and unknown (f_unm +
+//   f_pu_unm), with cls's tie rule; sim_all and sec_pdg_all, sec_proc_all as sim and sec_pdg, sec_proc over the signal
+//   and the pileup (a pileup SimTrack's sim track is the TrackingParticle with its track id and event id, in-time
+//   pileup only when trackingParticles is in-time only). Without the pileup's sim hits they reduce to f_pu_unm = f_pu,
+//   cls_all = cls, sim_all = sim, sec_*_all = sec_*.
 // - Listed are the hits with at least one link.
 //
 // Prints one line per event:
@@ -61,6 +77,26 @@
 // and one line on the unmatched signal links on hits, pixel and outer tracker apart:
 //   MKFITHITORIGIN-UNMATCHED <key> pixel: no_simhit_in_tof_bin=.. out_of_range=.. other_module=.. other_track=..
 //     track_has_simhit_here=..; outer: ...
+// The pileup's lines (also without the pileup's sim hits, pileup=0):
+//   MKFITHITORIGIN-PU <key> pileup=<0|1> cls_all_own=<n> cls_all_sec=<n> cls_all_unk=<n> cls_all_none=<n>
+//     cls_all_sec_pu=<of cls_all_sec: the pileup's secondary charge the larger part> cls_all_own_pu=<likewise for own>
+//     q_pu_own=.. q_pu_sec=.. q_pu_orph=.. q_pu_unm=.. (shares of the listed hits' total charge) links_pu=<on hits>
+//     links_pu_unmatched=<n> event_links_pu=<all pileup links of the event> found_pu_global=<n>
+//     found_pu_perModule=<n> pu_simhits=<pileup sim hits read> pu_simtracks=<n> pu_simvertices=<n>
+//     pu_events=<distinct pileup event ids of the SimTracks> pu_vert_bad=<pileup SimTracks whose vertex index is not in
+//     their event's SimVertices> parent_missing_sig=<signal SimVertices whose parent track id names no SimTrack of the
+//     event>/<with a parent> parent_missing_pu=<likewise, pileup> sig_prefix_mismatch=<signal entries of the pileup
+//     vectors that differ from the signal collections> simhits_pu_own=.. simhits_pu_sec=.. simhits_pu_orph=..
+//   MKFITHITORIGIN-PUEVENTS <key> per bunch crossing: <bcr>:<event ids with SimTracks>/<largest event number>/<event
+//     ids with tracker sim hits>
+//   MKFITHITORIGIN-PLAYBACK <key> <InputTag> min_bunch=.. bunches=.. sources=.. events=<n> per_bcr=<source 0's count
+//     per bunch crossing> same_as_first=<1|0: sizes and event ids equal those of the first playbackInfo>
+//   MKFITHITORIGIN-PUSECTYPES <key> as -SECTYPES, for the pileup's secondary sim hits on hits
+//   MKFITHITORIGIN-PUUNMATCHED <key> pixel: no_simhit_of_event_on_module=.. out_of_range=.. other_module=..
+//     other_track=..; outer: ...  (pileup links on hits whose sim hit was not found, with the pileup's sim hits)
+// With printPileupSecondary > 0, for every printStride-th hit of class cls_all secondary whose secondary charge is
+// mostly the pileup's, up to printPileupSecondary of them, the hit and the pileup sim hits behind it
+// (MKFITHITORIGIN-PUHIT, -PUSIMHIT lines).
 // With printSecondary > 0, for every printStride-th hit whose class is secondary, up to printSecondary of them, the
 // hit and each sim hit behind its signal charge (MKFITHITORIGIN-HIT, -SIMHIT lines) and every sim hit of the same
 // SimTracks on the same module (-ONMODULE lines), with their local positions against the cluster's. With
@@ -88,6 +124,7 @@
 //   <listPrefix>simtracks.csv  one row per SimTrack of the event: index, track id (Geant4's), type, charge, four-momentum
 //     (GeV), its vertex (index, position, time in ns, process type, the parent's track id: SimVertex::parentIndex(),
 //     -1 for a primary), the generator particle index, and its signal sim hits in the tracker collections read.
+//   The list is of the signal only: f_pu is the whole pileup's charge, also when the pileup's sim hits are given.
 // Process types are Geant4 sub-types (PSimHit::processType(), SimVertex::processType()). One MKFITHITLIST line per
 // event gives the counts.
 
@@ -113,6 +150,7 @@
 #include "Geometry/CommonTopologies/interface/PixelTopology.h"
 #include "Geometry/Records/interface/TrackerDigiGeometryRecord.h"
 #include "Geometry/TrackerGeometryBuilder/interface/TrackerGeometry.h"
+#include "SimDataFormats/CrossingFrame/interface/CrossingFramePlaybackInfoNew.h"
 #include "SimDataFormats/Track/interface/SimTrackContainer.h"
 #include "SimDataFormats/TrackerDigiSimLink/interface/PixelDigiSimLink.h"
 #include "SimDataFormats/TrackingAnalysis/interface/TrackingParticle.h"
@@ -136,6 +174,7 @@
 #include <iostream>
 #include <map>
 #include <mutex>
+#include <set>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -172,9 +211,16 @@ namespace mkfit_fwff {
     const bool useTrackingParticles_;
     edm::EDGetTokenT<TrackingParticleRefVector> trackingParticlesToken_;
     LinkIndex linkIndex_;
+    // The pileup's sim hits (per entry of simHits), SimTracks and SimVertices, signal first; empty: none.
+    std::vector<edm::EDGetTokenT<std::vector<PSimHit>>> puSimHitTokens_;
+    edm::EDGetTokenT<edm::SimTrackContainer> puSimTracksToken_;
+    edm::EDGetTokenT<edm::SimVertexContainer> puSimVerticesToken_;
+    std::vector<edm::InputTag> playbackTags_;
+    std::vector<edm::EDGetTokenT<CrossingFramePlaybackInfoNew>> playbackTokens_;
     const int printSecondary_;
     const int printStride_;
     const int printUnmatched_;
+    const int printPileupSecondary_;
     const edm::ESGetToken<MkFitGeometry, TrackerRecoGeometryRecord> mkFitGeomToken_;
     // The per-hit list: the files, written by one event at a time.
     const std::string listPrefix_;
@@ -217,6 +263,7 @@ namespace mkfit_fwff {
         printSecondary_(iConfig.getUntrackedParameter<int>("printSecondary")),
         printStride_(std::max(1, iConfig.getUntrackedParameter<int>("printStride"))),
         printUnmatched_(iConfig.getUntrackedParameter<int>("printUnmatched")),
+        printPileupSecondary_(iConfig.getUntrackedParameter<int>("printPileupSecondary")),
         mkFitGeomToken_(esConsumes()),
         listPrefix_(iConfig.getUntrackedParameter<std::string>("listPrefix")),
         listTag_(iConfig.getUntrackedParameter<std::string>("listTag")),
@@ -254,6 +301,26 @@ namespace mkfit_fwff {
     if (useTrackingParticles_)
       trackingParticlesToken_ =
           consumes<TrackingParticleRefVector>(iConfig.getParameter<edm::InputTag>("trackingParticles"));
+    const auto puHits = iConfig.getParameter<std::vector<edm::InputTag>>("pileupSimHits");
+    const auto puTracks = iConfig.getParameter<edm::InputTag>("pileupSimTracks");
+    const auto puVertices = iConfig.getParameter<edm::InputTag>("pileupSimVertices");
+    if (!puHits.empty()) {
+      if (puHits.size() != simHitTokens_.size() || puTracks.label().empty() || puVertices.label().empty())
+        throw cms::Exception("Configuration")
+            << "MkFitTraceHitOrigin: pileupSimHits needs one entry per simHits entry, "
+               "and pileupSimTracks and pileupSimVertices";
+      for (const edm::InputTag& t : puHits)
+        puSimHitTokens_.push_back(consumes<std::vector<PSimHit>>(t));
+      puSimTracksToken_ = consumes<edm::SimTrackContainer>(puTracks);
+      puSimVerticesToken_ = consumes<edm::SimVertexContainer>(puVertices);
+    } else if (!puTracks.label().empty() || !puVertices.label().empty()) {
+      throw cms::Exception("Configuration")
+          << "MkFitTraceHitOrigin: pileupSimTracks and pileupSimVertices need pileupSimHits";
+    }
+    for (const edm::InputTag& t : iConfig.getParameter<std::vector<edm::InputTag>>("playbackInfo")) {
+      playbackTags_.push_back(t);
+      playbackTokens_.push_back(consumes<CrossingFramePlaybackInfoNew>(t));
+    }
     const std::string li = iConfig.getParameter<std::string>("linkIndex");
     if (li == "auto")
       linkIndex_ = LinkIndex::kAuto;
@@ -291,10 +358,22 @@ namespace mkfit_fwff {
         ->setComment(
             "what a digi-sim link's sim hit index counts: global, perModule (digitizers before "
             "CMSSW_20_1_0_pre3), or auto (the one more of the event's signal links agree with)");
+    desc.add<std::vector<edm::InputTag>>("pileupSimHits", {})
+        ->setComment(
+            "per entry of simHits, in its order: the sim hits of the whole crossing, signal first, then the pileup "
+            "events in the mixing's order (MkFitTraceCrossingFramePSimHits); empty: the pileup is not classified");
+    desc.add<edm::InputTag>("pileupSimTracks", edm::InputTag(""))
+        ->setComment("the SimTracks of the whole crossing, signal first (MkFitTraceCrossingFrameSimTracks)");
+    desc.add<edm::InputTag>("pileupSimVertices", edm::InputTag(""))
+        ->setComment("the SimVertices of the whole crossing, signal first (MkFitTraceCrossingFrameSimVertices)");
+    desc.add<std::vector<edm::InputTag>>("playbackInfo", {})
+        ->setComment("mixing playback records (CrossingFramePlaybackInfoNew) to print and compare, e.g. mix::HLT");
     desc.addUntracked<int>("printSecondary", 0)->setComment("print up to this many secondary-dominated hits");
     desc.addUntracked<int>("printStride", 1)->setComment("print every printStride-th secondary-dominated hit");
     desc.addUntracked<int>("printUnmatched", 0)
         ->setComment("print up to this many signal links whose sim hit was not found, with the sim hits around");
+    desc.addUntracked<int>("printPileupSecondary", 0)
+        ->setComment("print up to this many hits whose charge is mostly a pileup secondary's (every printStride-th)");
     desc.addUntracked<std::string>("listPrefix", "")
         ->setComment("write the per-hit list to <listPrefix>hits.csv, simhits.csv and simtracks.csv; empty: none");
     desc.addUntracked<std::string>("listTag", "")->setComment("the first column of every list row, e.g. the sample");
@@ -353,6 +432,92 @@ namespace mkfit_fwff {
       return h.particleType() == t.type() && (int)h.processType() == creatorProc(ist) ? kShOwn : kShSec;
     };
 
+    // The pileup (with pileupSimHits): per collection the vector of the whole crossing, signal first; per (module,
+    // event id) its pileup sim hits' indices in that vector, in order; per (track id, event id) the pileup SimTrack's
+    // particle type and creating process (from the SimVertices of its own event).
+    const bool withPu = !puSimHitTokens_.empty();
+    std::vector<const std::vector<PSimHit>*> puColl(coll.size(), nullptr);
+    std::vector<std::unordered_map<std::uint64_t, std::vector<int>>> puHitsOfDetEvent(coll.size());
+    struct PuTrack {
+      int type, proc;
+      const SimTrack* st;
+    };
+    std::unordered_map<std::uint64_t, PuTrack> puTrackOf;
+    long long nPuSimHits = 0, nPuSimTracks = 0, nPuSimVertices = 0, nPuVertBad = 0, nSigPrefixMismatch = 0;
+    long long nParentSig = 0, nParentMissSig = 0, nParentPu = 0, nParentMissPu = 0;
+    // Per bunch crossing: the event numbers with SimTracks, with tracker sim hits.
+    std::map<int, std::set<int>> puEvTracks, puEvHits;
+    for (int c = 0; c < (int)coll.size() && withPu; ++c) {
+      const std::vector<PSimHit>& v = iEvent.get(puSimHitTokens_[c]);
+      puColl[c] = &v;
+      const std::size_t nSig = coll[c]->size();
+      if (v.size() < nSig)
+        throw cms::Exception("LogicError") << "MkFitTraceHitOrigin: pileupSimHits[" << c << "] has " << v.size()
+                                           << " sim hits, fewer than the signal's " << nSig;
+      for (std::size_t j = 0; j < nSig; ++j) {
+        const PSimHit &a = v[j], &b = (*coll[c])[j];
+        nSigPrefixMismatch += a.detUnitId() != b.detUnitId() || a.trackId() != b.trackId() ||
+                              a.eventId().rawId() != b.eventId().rawId() || a.energyLoss() != b.energyLoss();
+      }
+      for (int j = nSig; j < (int)v.size(); ++j) {
+        const PSimHit& h = v[j];
+        puHitsOfDetEvent[c][detKey(h.detUnitId(), h.eventId().rawId())].push_back(j);
+        puEvHits[h.eventId().bunchCrossing()].insert(h.eventId().event());
+        ++nPuSimHits;
+      }
+    }
+    if (withPu) {
+      const edm::SimTrackContainer& tr = iEvent.get(puSimTracksToken_);
+      const edm::SimVertexContainer& vx = iEvent.get(puSimVerticesToken_);
+      if (tr.size() < simTracks.size() || vx.size() < simVertices.size())
+        throw cms::Exception("LogicError") << "MkFitTraceHitOrigin: pileupSimTracks or pileupSimVertices shorter than "
+                                              "the signal's";
+      for (std::size_t j = 0; j < simTracks.size(); ++j)
+        nSigPrefixMismatch += tr[j].trackId() != simTracks[j].trackId() || tr[j].type() != simTracks[j].type();
+      for (std::size_t j = 0; j < simVertices.size(); ++j)
+        nSigPrefixMismatch += vx[j].processType() != simVertices[j].processType();
+      // The SimVertices of each pileup event, in order: a pileup SimTrack's vertex index counts in them.
+      std::unordered_map<std::uint32_t, std::vector<const SimVertex*>> vertsOf;
+      for (std::size_t j = simVertices.size(); j < vx.size(); ++j) {
+        vertsOf[vx[j].eventId().rawId()].push_back(&vx[j]);
+        ++nPuSimVertices;
+      }
+      for (std::size_t j = simTracks.size(); j < tr.size(); ++j) {
+        const SimTrack& t = tr[j];
+        const EncodedEventId eid = t.eventId();
+        const auto& vs = vertsOf[eid.rawId()];
+        const int vi = t.vertIndex();
+        int proc = -1;
+        if (vi >= 0 && vi < (int)vs.size())
+          proc = (int)vs[vi]->processType();
+        else
+          ++nPuVertBad;
+        puTrackOf.emplace(simTrackKey(t.trackId(), eid), PuTrack{t.type(), proc, &t});
+        puEvTracks[eid.bunchCrossing()].insert(eid.event());
+        ++nPuSimTracks;
+      }
+      // Is the grouping by event right: does a vertex's parent track id name a SimTrack of the same event?
+      for (const SimVertex& v : simVertices)
+        if (v.parentIndex() >= 0) {
+          ++nParentSig;
+          nParentMissSig += stOfId.count(v.parentIndex()) == 0;
+        }
+      for (std::size_t j = simVertices.size(); j < vx.size(); ++j)
+        if (vx[j].parentIndex() >= 0) {
+          ++nParentPu;
+          nParentMissPu += puTrackOf.count(simTrackKey(vx[j].parentIndex(), vx[j].eventId())) == 0;
+        }
+    }
+    auto classifyPu = [&](const PSimHit& h, const PuTrack*& pt) -> SimHitClass {
+      auto f = puTrackOf.find(simTrackKey(h.trackId(), h.eventId()));
+      if (f == puTrackOf.end()) {
+        pt = nullptr;
+        return kShOrph;
+      }
+      pt = &f->second;
+      return h.particleType() == pt->type && (int)h.processType() == pt->proc ? kShOwn : kShSec;
+    };
+
     // The sim hit a signal link names, under either decoding of its index: (collection, index), or (-1, -1).
     auto resolve = [&](unsigned int detId, const PixelDigiSimLink& l, bool perModule) -> std::pair<int, int> {
       const unsigned int pos = l.CFposition();
@@ -376,13 +541,46 @@ namespace mkfit_fwff {
       return {-1, -1};
     };
 
-    // Which decoding: count the signal links of the event each one resolves.
-    long long nEvLinksSig = 0, nFound[2] = {0, 0};
+    // The pileup sim hit a pileup link names, under either decoding of its index: (collection, index into the
+    // collection's vector of the whole crossing), or (-1, -1). Without the pileup's sim hits always (-1, -1).
+    auto resolvePu = [&](unsigned int detId, const PixelDigiSimLink& l, bool perModule) -> std::pair<int, int> {
+      if (!withPu)
+        return {-1, -1};
+      const unsigned int pos = l.CFposition();
+      const std::uint32_t eid = l.eventId().rawId();
+      for (int c = 0; c < (int)coll.size(); ++c) {
+        if (simHitTof_[c] != l.TofBin())
+          continue;
+        auto hs = puHitsOfDetEvent[c].find(detKey(detId, eid));
+        if (hs == puHitsOfDetEvent[c].end())
+          continue;
+        const std::vector<PSimHit>& v = *puColl[c];
+        int j = -1;
+        if (perModule) {
+          const long long k = (long long)pos - hs->second.front();
+          if (k >= 0 && k < (long long)hs->second.size())
+            j = hs->second[k];
+        } else if (pos >= coll[c]->size() && pos < v.size() && v[pos].detUnitId() == detId &&
+                   v[pos].eventId().rawId() == eid) {
+          j = pos;
+        }
+        if (j >= 0 && v[j].trackId() == l.SimTrackId())
+          return {c, j};
+      }
+      return {-1, -1};
+    };
+
+    // Which decoding: count the signal links of the event each one resolves (and the pileup links, for the log).
+    long long nEvLinksSig = 0, nFound[2] = {0, 0}, nEvLinksPu = 0, nFoundPu[2] = {0, 0};
     for (const SimLinks* links : {&pixelLinks, &phase2Links})
       for (const auto& ds : *links)
         for (const PixelDigiSimLink& l : ds.data) {
-          if (!isSignal(l.eventId()))
+          if (!isSignal(l.eventId())) {
+            ++nEvLinksPu;
+            for (int pm = 0; pm < 2 && withPu; ++pm)
+              nFoundPu[pm] += resolvePu(ds.detId(), l, pm == 1).first >= 0;
             continue;
+          }
           ++nEvLinksSig;
           for (int pm = 0; pm < 2; ++pm)
             nFound[pm] += resolve(ds.detId(), l, pm == 1).first >= 0;
@@ -421,6 +619,15 @@ namespace mkfit_fwff {
     // 1 the index out of the module's (perModule) or the collection's (global) range, 2 the sim hit at the index on
     // another module (global), 3 another track id; and whether the module has a sim hit of the link's track id.
     long long nUnm[2][4] = {{0, 0, 0, 0}, {0, 0, 0, 0}}, nUnmTrackHere[2] = {0, 0};
+    // The pileup's part: unmatched pileup links on hits (with the pileup's sim hits; reasons as nUnm, 0 meaning no sim
+    // hit of the link's event on the module in its tof bin), cls_all, charge, sim hits by class, secondary types.
+    long long nLinksPuUnm = 0, nPuUnm[2][4] = {{0, 0, 0, 0}, {0, 0, 0, 0}};
+    long long nClsAll[4] = {0, 0, 0, 0}, nClsAllSecPu = 0, nClsAllOwnPu = 0;
+    double qPuOwn = 0, qPuSec = 0, qPuOrph = 0, qPuUnm = 0;
+    long long nShClassPu[3] = {0, 0, 0};
+    std::map<std::pair<int, int>, std::pair<long long, double>> puSecTypes;
+    int nPuPrinted = 0;
+    long long nPuSecSeen = 0;
 
     // The per-hit list: rows without their key (tag, run, lumi, event, pass), written at the end of the event.
     const bool listing = !listPrefix_.empty();
@@ -441,6 +648,10 @@ namespace mkfit_fwff {
       std::vector<std::pair<unsigned int, const PixelDigiSimLink*>> chanLinks;
       // Per hit: charge per contributing signal sim hit; per (track id, event id), for the TrackingParticle.
       std::map<std::pair<int, int>, double> shCharge;
+      // The same for the pileup's sim hits (collection, index into its vector of the whole crossing), and the charge
+      // per (track id, event id) over the signal and the pileup, for sim_all.
+      std::map<std::pair<int, int>, double> puShCharge;
+      std::unordered_map<std::uint64_t, double> keyChargeAll;
       std::unordered_map<std::uint64_t, double> keyCharge;
 
       for (int i = 0; i < (int)layerOf.size(); ++i) {
@@ -478,9 +689,12 @@ namespace mkfit_fwff {
         }
 
         double tot = 0, own = 0, sec = 0, orph = 0, pu = 0, unm = 0, noise = 0;
+        double puOwn = 0, puSec = 0, puOrph = 0, puUnm = 0;
         bool anyLink = false;
         shCharge.clear();
         keyCharge.clear();
+        puShCharge.clear();
+        keyChargeAll.clear();
         for (const auto& [chan, w] : chans) {
           tot += w;
           auto range = std::equal_range(chanLinks.begin(),
@@ -500,6 +714,40 @@ namespace mkfit_fwff {
             if (!isSignal(eid)) {
               ++nLinksPu;
               pu += q;
+              const auto [cPu, jPu] = resolvePu(detId, l, perModule);
+              if (cPu < 0) {
+                puUnm += q;
+                if (withPu) {
+                  ++nLinksPuUnm;
+                  int reason = 0;
+                  for (int c = 0; c < (int)coll.size(); ++c) {
+                    if (simHitTof_[c] != l.TofBin())
+                      continue;
+                    auto hs = puHitsOfDetEvent[c].find(detKey(detId, eid.rawId()));
+                    if (hs == puHitsOfDetEvent[c].end())
+                      continue;
+                    const unsigned int pos = l.CFposition();
+                    const std::vector<PSimHit>& v = *puColl[c];
+                    if (perModule)
+                      reason = pos < (unsigned int)hs->second.front() || pos - hs->second.front() >= hs->second.size()
+                                   ? 1
+                                   : 3;
+                    else
+                      reason = pos >= v.size() || pos < coll[c]->size()                                 ? 1
+                               : v[pos].detUnitId() != detId || v[pos].eventId().rawId() != eid.rawId() ? 2
+                                                                                                        : 3;
+                    break;
+                  }
+                  ++nPuUnm[pixel ? 0 : 1][reason];
+                }
+                continue;
+              }
+              const PSimHit& h = (*puColl[cPu])[jPu];
+              const PuTrack* pt;
+              const SimHitClass k = classifyPu(h, pt);
+              (k == kShOwn ? puOwn : k == kShSec ? puSec : puOrph) += q;
+              puShCharge[{cPu, jPu}] += q;
+              keyChargeAll[simTrackKey(l.SimTrackId(), eid)] += q;
               continue;
             }
             ++nLinksSig;
@@ -546,6 +794,7 @@ namespace mkfit_fwff {
             (k == kShOwn ? own : k == kShSec ? sec : orph) += q;
             shCharge[{cFound, jFound}] += q;
             keyCharge[simTrackKey(l.SimTrackId(), eid)] += q;
+            keyChargeAll[simTrackKey(l.SimTrackId(), eid)] += q;
           }
           noise += w * std::max(0., 1. - sumf);
         }
@@ -615,6 +864,139 @@ namespace mkfit_fwff {
         L.cls.push_back(cls);
         L.sec_pdg.push_back(secPdg);
         L.sec_proc.push_back(secProc);
+
+        // The pileup's part and the class over all the charge. Without the pileup's sim hits puUnm is pu, summed in
+        // the same order, and these equal the signal's fields (cls_all = cls, ...).
+        qPuOwn += puOwn;
+        qPuSec += puSec;
+        qPuOrph += puOrph;
+        qPuUnm += puUnm;
+        const double fOwnAll = (own + puOwn) / tot, fSecAll = ((sec + orph) + (puSec + puOrph)) / tot,
+                     fUnkAll = (unm + puUnm) / tot;
+        std::uint8_t clsAll = TraceHitOriginTables::kNone;
+        if (fOwnAll > 0 || fSecAll > 0 || fUnkAll > 0) {
+          if (fOwnAll >= fSecAll && fOwnAll >= fUnkAll)
+            clsAll = TraceHitOriginTables::kOwn;
+          else if (fSecAll >= fUnkAll)
+            clsAll = TraceHitOriginTables::kSecondary;
+          else
+            clsAll = TraceHitOriginTables::kUnknown;
+        }
+        ++nClsAll[clsAll];
+        const bool secMostlyPu = puSec + puOrph > sec + orph;
+        nClsAllSecPu += clsAll == TraceHitOriginTables::kSecondary && secMostlyPu;
+        nClsAllOwnPu += clsAll == TraceHitOriginTables::kOwn && puOwn > own;
+        // The largest secondary sim hit over the signal (first, as above) and the pileup.
+        int secPdgAll = secPdg, secProcAll = secProc;
+        for (const auto& [ci, q] : puShCharge) {
+          const PSimHit& h = (*puColl[ci.first])[ci.second];
+          const PuTrack* pt;
+          const SimHitClass k = classifyPu(h, pt);
+          ++nShClassPu[k];
+          if (k == kShOwn)
+            continue;
+          auto& st = puSecTypes[{h.particleType(), (int)h.processType()}];
+          ++st.first;
+          st.second += q;
+          if (q > secBest) {
+            secBest = q;
+            secPdgAll = h.particleType();
+            secProcAll = h.processType();
+          }
+        }
+        int simAll = -1;
+        if (useTrackingParticles_) {
+          double best = -1;
+          std::uint64_t bestKey = 0;
+          for (const auto& [k, q] : keyChargeAll)
+            if (q > best || (q == best && k < bestKey)) {
+              best = q;
+              bestKey = k;
+            }
+          auto f = tpOfTrack.find(bestKey);
+          if (best > 0 && f != tpOfTrack.end())
+            simAll = f->second;
+        }
+        L.f_pu_own.push_back(puOwn / tot);
+        L.f_pu_sec.push_back((puSec + puOrph) / tot);
+        L.f_pu_unm.push_back(puUnm / tot);
+        L.cls_all.push_back(clsAll);
+        L.sim_all.push_back(simAll);
+        L.sec_pdg_all.push_back(secPdgAll);
+        L.sec_proc_all.push_back(secProcAll);
+
+        // Evidence for the pileup's secondary class: the hit and the pileup sim hits behind its charge.
+        if (clsAll == TraceHitOriginTables::kSecondary && secMostlyPu) {
+          if (printPileupSecondary_ > 0 && nPuPrinted < printPileupSecondary_ && nPuSecSeen % printStride_ == 0) {
+            ++nPuPrinted;
+            std::ostringstream os;
+            char buf[512];
+            const LocalPoint lp = rh->localPosition();
+            std::snprintf(buf,
+                          sizeof(buf),
+                          "MKFITHITORIGIN-PUHIT %u:%u:%llu layer=%d idx=%d detid=%u %s channels=%zu charge=%.0f "
+                          "f_own=%.3f f_sec=%.3f f_pu_own=%.3f f_pu_sec=%.3f f_pu_unm=%.3f f_unm=%.3f sim_all=%d "
+                          "cluster_local=(%.5f,%.5f)",
+                          T.run,
+                          T.lumi,
+                          T.event,
+                          ilay,
+                          i,
+                          detId,
+                          pixel ? "pixel" : "outer",
+                          chans.size(),
+                          tot,
+                          fOwn,
+                          fSec,
+                          puOwn / tot,
+                          (puSec + puOrph) / tot,
+                          puUnm / tot,
+                          unm / tot,
+                          simAll,
+                          lp.x(),
+                          lp.y());
+            os << buf << "\n";
+            for (const auto& [ci, q] : puShCharge) {
+              const PSimHit& h = (*puColl[ci.first])[ci.second];
+              const PuTrack* pt;
+              const SimHitClass k = classifyPu(h, pt);
+              std::snprintf(buf,
+                            sizeof(buf),
+                            "  MKFITHITORIGIN-PUSIMHIT %s[%d] class=%s charge_share=%.3f bcr=%d event=%d trackId=%u "
+                            "pdg=%d proc=%d eloss_keV=%.2f p_GeV=%.5f tof_ns=%.3f mid_to_cluster_um=%.1f",
+                            simHitNames_[ci.first].c_str(),
+                            ci.second,
+                            kShClassName[k],
+                            q / tot,
+                            h.eventId().bunchCrossing(),
+                            h.eventId().event(),
+                            h.trackId(),
+                            h.particleType(),
+                            (int)h.processType(),
+                            h.energyLoss() * 1e6,
+                            h.pabs(),
+                            h.tof(),
+                            1e4 * std::hypot(h.localPosition().x() - lp.x(), h.localPosition().y() - lp.y()));
+              os << buf;
+              if (pt) {
+                std::snprintf(buf,
+                              sizeof(buf),
+                              " | SimTrack pdg=%d creator_proc=%d p_GeV=%.4f pt_GeV=%.4f eta=%.3f",
+                              pt->type,
+                              pt->proc,
+                              pt->st->momentum().P(),
+                              pt->st->momentum().Pt(),
+                              pt->st->momentum().Eta());
+                os << buf;
+              } else {
+                os << " | no SimTrack with this id in its event";
+              }
+              os << "\n";
+            }
+            std::cout << os.str();
+          }
+          ++nPuSecSeen;
+        }
 
         if (listing) {
           const bool hasOwn = own > 0, hasSec = sec + orph > 0;
@@ -1016,6 +1398,121 @@ namespace mkfit_fwff {
                     nUnm[po][2],
                     nUnm[po][3],
                     nUnmTrackHere[po]);
+      os << buf;
+    }
+    os << "\n";
+
+    // The pileup's lines.
+    const std::string key =
+        std::to_string(T.run) + ":" + std::to_string(T.lumi) + ":" + std::to_string(T.event) + " " + module_;
+    std::snprintf(
+        buf,
+        sizeof(buf),
+        "MKFITHITORIGIN-PU %s pileup=%d cls_all_own=%lld cls_all_sec=%lld cls_all_unk=%lld cls_all_none=%lld "
+        "cls_all_sec_pu=%lld cls_all_own_pu=%lld q_pu_own=%.4f q_pu_sec=%.4f q_pu_orph=%.4f q_pu_unm=%.4f "
+        "links_pu=%lld links_pu_unmatched=%lld event_links_pu=%lld found_pu_global=%lld "
+        "found_pu_perModule=%lld pu_simhits=%lld pu_simtracks=%lld pu_simvertices=%lld pu_events=%zu "
+        "pu_vert_bad=%lld parent_missing_sig=%lld/%lld parent_missing_pu=%lld/%lld sig_prefix_mismatch=%lld "
+        "simhits_pu_own=%lld simhits_pu_sec=%lld simhits_pu_orph=%lld",
+        key.c_str(),
+        withPu ? 1 : 0,
+        nClsAll[1],
+        nClsAll[2],
+        nClsAll[3],
+        nClsAll[0],
+        nClsAllSecPu,
+        nClsAllOwnPu,
+        share(qPuOwn),
+        share(qPuSec),
+        share(qPuOrph),
+        share(qPuUnm),
+        nLinksPu,
+        nLinksPuUnm,
+        nEvLinksPu,
+        nFoundPu[0],
+        nFoundPu[1],
+        nPuSimHits,
+        nPuSimTracks,
+        nPuSimVertices,
+        [&] {
+          std::size_t n = 0;
+          for (const auto& [b, evs] : puEvTracks)
+            n += evs.size();
+          return n;
+        }(),
+        nPuVertBad,
+        nParentMissSig,
+        nParentSig,
+        nParentMissPu,
+        nParentPu,
+        nSigPrefixMismatch,
+        nShClassPu[kShOwn],
+        nShClassPu[kShSec],
+        nShClassPu[kShOrph]);
+    os << buf << "\n";
+    // Pileup events per bunch crossing: event ids with SimTracks, the largest event number, event ids with sim hits.
+    os << "MKFITHITORIGIN-PUEVENTS " << key;
+    {
+      std::set<int> bcrs;
+      for (const auto& [b, evs] : puEvTracks)
+        bcrs.insert(b);
+      for (const auto& [b, evs] : puEvHits)
+        bcrs.insert(b);
+      for (int b : bcrs) {
+        const auto& et = puEvTracks[b];
+        os << " " << b << ":" << et.size() << "/" << (et.empty() ? 0 : *et.rbegin()) << "/" << puEvHits[b].size();
+      }
+    }
+    os << "\n";
+    // The playback records: per bunch crossing the number of pileup events of source 0, and whether a record equals
+    // the first one given (sizes and event ids).
+    const CrossingFramePlaybackInfoNew* pbFirst = nullptr;
+    for (std::size_t k = 0; k < playbackTokens_.size(); ++k) {
+      const CrossingFramePlaybackInfoNew& pb = iEvent.get(playbackTokens_[k]);
+      os << "MKFITHITORIGIN-PLAYBACK " << key << " " << playbackTags_[k].encode() << " min_bunch=" << pb.minBunch_
+         << " bunches=" << pb.nBcrossings_ << " sources=" << pb.maxNbSources_ << " events=" << pb.eventInfo_.size()
+         << " per_bcr=";
+      for (int b = 0; b < pb.nBcrossings_; ++b)
+        os << (b ? "," : "") << (pb.minBunch_ + b) << ":" << pb.getNumberOfEvents(pb.minBunch_ + b, 0);
+      if (pbFirst == nullptr) {
+        pbFirst = &pb;
+        os << " same_as_first=-";
+      } else {
+        bool same = pb.sizes_ == pbFirst->sizes_ && pb.eventInfo_.size() == pbFirst->eventInfo_.size();
+        for (std::size_t e = 0; same && e < pb.eventInfo_.size(); ++e)
+          same = pb.eventInfo_[e].eventID() == pbFirst->eventInfo_[e].eventID();
+        os << " same_as_first=" << (same ? 1 : 0);
+      }
+      os << "\n";
+    }
+    // The pileup's secondary types on hits, and its unmatched links.
+    st.assign(puSecTypes.begin(), puSecTypes.end());
+    std::sort(st.begin(), st.end(), [](const auto& a, const auto& b) { return a.second.first > b.second.first; });
+    qSecAll = 0;
+    for (const auto& e : st)
+      qSecAll += e.second.second;
+    os << "MKFITHITORIGIN-PUSECTYPES " << key;
+    for (std::size_t k = 0; k < std::min<std::size_t>(st.size(), 12); ++k) {
+      std::snprintf(buf,
+                    sizeof(buf),
+                    " %d/%d:%lld:%.3f",
+                    st[k].first.first,
+                    st[k].first.second,
+                    st[k].second.first,
+                    qSecAll > 0 ? st[k].second.second / qSecAll : 0.);
+      os << buf;
+    }
+    os << "\n";
+    os << "MKFITHITORIGIN-PUUNMATCHED " << key;
+    for (int po = 0; po < 2; ++po) {
+      std::snprintf(buf,
+                    sizeof(buf),
+                    " %s: no_simhit_of_event_on_module=%lld out_of_range=%lld other_module=%lld other_track=%lld;",
+                    po ? "outer" : "pixel",
+                    nPuUnm[po][0],
+                    nPuUnm[po][1],
+                    nPuUnm[po][2],
+                    nPuUnm[po][3]);
       os << buf;
     }
     os << "\n";

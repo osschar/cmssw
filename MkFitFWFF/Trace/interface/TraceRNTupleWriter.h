@@ -72,7 +72,19 @@
 //   cls (the largest of own, secondary and unknown = pileup + unmatched:
 //   1, 2, 3; 0 when all three are 0), sec_pdg and sec_proc (the particle type
 //   and the creating process of the secondary sim hit with most charge in the
-//   hit, 0 and 0 when none).
+//   hit, 0 and 0 when none). These fields describe the signal's charge only,
+//   whether or not the job had the pileup's sim hits.
+//   Then the pileup's part, appended after them: f_pu_own, f_pu_sec and
+//   f_pu_unm (the pileup's charge, f_pu, split by the same rule with the
+//   pileup event's own SimTracks: own, secondary, and pileup charge whose sim
+//   hit was not found or not given), cls_all (the largest of own, secondary
+//   and unknown over all the charge: f_own + f_pu_own, f_sec + f_pu_sec,
+//   f_unm + f_pu_unm; values as cls), sim_all (as sim, over the signal and the
+//   pileup SimTracks with classified charge) and sec_pdg_all, sec_proc_all (as
+//   sec_pdg, sec_proc, over the signal and the pileup sim hits). Without the
+//   pileup's sim hits f_pu_unm equals f_pu, f_pu_own and f_pu_sec are 0, and
+//   cls_all, sim_all, sec_pdg_all, sec_proc_all equal cls, sim, sec_pdg,
+//   sec_proc.
 //
 // "pass" counts how often the same (run, lumi, event, module) was written in
 // this job, from 0: a looper re-running an event gives passes 0, 1, ... The
@@ -187,6 +199,10 @@ namespace mkfit_fwff {
       std::vector<float> f_own, f_sec, f_pu, f_unm;
       std::vector<std::uint8_t> cls;
       std::vector<std::int32_t> sec_pdg, sec_proc;
+      // The pileup's part (see TruthHitOrigin above).
+      std::vector<float> f_pu_own, f_pu_sec, f_pu_unm;
+      std::vector<std::uint8_t> cls_all;
+      std::vector<std::int32_t> sim_all, sec_pdg_all, sec_proc_all;
     };
     std::vector<LayerHits> layers;
   };

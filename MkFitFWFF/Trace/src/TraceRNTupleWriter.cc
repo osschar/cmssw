@@ -482,6 +482,18 @@ namespace mkfit_fwff {
         model->MakeField<std::vector<std::uint8_t>>("cls", "the largest of 1 own, 2 secondary, 3 unknown; 0 none");
         model->MakeField<std::vector<std::int32_t>>("sec_pdg", "particle type of the largest secondary, 0 none");
         model->MakeField<std::vector<std::int32_t>>("sec_proc", "its creating process (G4 subtype), 0 none");
+        // The pileup's part, appended after the signal's fields so that they keep their place.
+        model->MakeField<std::vector<float>>("f_pu_own", "charge fraction from a pileup SimTrack's own particle");
+        model->MakeField<std::vector<float>>("f_pu_sec", "charge fraction from a pileup secondary that is no SimTrack");
+        model->MakeField<std::vector<float>>("f_pu_unm",
+                                             "pileup charge fraction whose sim hit was not found or not given");
+        model->MakeField<std::vector<std::uint8_t>>(
+            "cls_all", "the largest of 1 own, 2 secondary, 3 unknown over signal and pileup charge; 0 none");
+        model->MakeField<std::vector<std::int32_t>>(
+            "sim_all", "as sim, over the signal and the pileup SimTracks with classified charge");
+        model->MakeField<std::vector<std::int32_t>>("sec_pdg_all",
+                                                    "particle type of the largest signal or pileup secondary, 0 none");
+        model->MakeField<std::vector<std::int32_t>>("sec_proc_all", "its creating process (G4 subtype), 0 none");
         open(std::move(model), "TruthHitOrigin", dir, o);
       }
 
@@ -500,6 +512,13 @@ namespace mkfit_fwff {
           m_entry->BindRawPtr("cls", &l.cls);
           m_entry->BindRawPtr("sec_pdg", &l.sec_pdg);
           m_entry->BindRawPtr("sec_proc", &l.sec_proc);
+          m_entry->BindRawPtr("f_pu_own", &l.f_pu_own);
+          m_entry->BindRawPtr("f_pu_sec", &l.f_pu_sec);
+          m_entry->BindRawPtr("f_pu_unm", &l.f_pu_unm);
+          m_entry->BindRawPtr("cls_all", &l.cls_all);
+          m_entry->BindRawPtr("sim_all", &l.sim_all);
+          m_entry->BindRawPtr("sec_pdg_all", &l.sec_pdg_all);
+          m_entry->BindRawPtr("sec_proc_all", &l.sec_proc_all);
           fillOne(fileMutex);
         }
       }
