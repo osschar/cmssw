@@ -51,6 +51,19 @@
 //   decoding of the links' sim hit index that the event's links agree with, 0
 //   when not, -1 when the job did not check). A source's RNTuples are created
 //   with its first event, so a file without the source has none of them.
+//   A source whose sim tracks are not TrackingParticles (cmsRun:
+//   MkFitTraceTruthSim writes "sim", whose sim tracks are SimTracks) can also
+//   write "SimTrackMap_<source>", one entry per event: per sim track, in the
+//   order of SimTracks_<source>, g4_id (SimTrack::trackId()), bx and ev (its
+//   EncodedEventId: bunch crossing, and event number in it; 0 and 0 for the
+//   signal), pdg (SimTrack::type()), proc (the creating process, the
+//   processType() of its SimVertex; -1 when the vertex is not found),
+//   parent_g4 (that SimVertex's parentIndex(), the parent's g4_id; -1 none),
+//   gen (SimTrack::genpartIndex()), n_own_simhits (its own sim hits in the
+//   tracker), and one field tp_<name> per other source named by the writing
+//   module (the index of the TrackingParticle that lists the SimTrack among
+//   its g4Tracks, in that source's sim tracks; -1 none). It is created with
+//   the source's first event when that event's tables carry the map.
 //
 // - mkFit's inputs of an event, written by writeInputs() when a module gives
 //   them (TraceInputTables below; cmsRun: MkFitTraceInputs), keyed like the
@@ -186,6 +199,18 @@ namespace mkfit_fwff {
       std::vector<std::int8_t> linked;
     };
     std::vector<LayerSimHitStates> simHitStates;
+
+    // Each sim track's SimTrack and its TrackingParticles in other sources (SimTrackMap_<source>), for a named source
+    // whose sim tracks are SimTracks; written when present is set in the source's first event, and then required in
+    // every event of the source, with the same tp_names.
+    struct SimTrackMap {
+      bool present = false;
+      std::vector<std::uint32_t> g4_id;
+      std::vector<std::int32_t> bx, ev, pdg, proc, parent_g4, gen, n_own_simhits;
+      std::vector<std::string> tp_names;                // the other sources, one field tp_<name> each
+      std::vector<std::vector<std::int32_t>> tp_index;  // per name, per sim track: its TrackingParticle there, -1 none
+    };
+    SimTrackMap simTrackMap;
   };
 
   // mkFit's inputs of one traced event, for TraceRNTupleWriter::writeInputs(); the RNTuples Hits, Inputs and Geometry

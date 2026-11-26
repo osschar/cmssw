@@ -416,6 +416,56 @@ namespace mkfit_fwff {
       }
     };
 
+    // SimTrackMap_<source>: one entry per event of the batch's truth.simTrackMap.
+    class SimTrackMapTuple : public Tuple {
+    public:
+      SimTrackMapTuple(TDirectory& dir,
+                       const TraceRNTupleWriter::Options& o,
+                       const std::string& name,
+                       const std::vector<std::string>& tpNames)
+          : m_tpNames(tpNames) {
+        auto model = ROOT::RNTupleModel::Create();
+        makeKeyFields(*model);
+        model->MakeField<std::vector<std::uint32_t>>("g4_id", "per sim track, in order: SimTrack::trackId()");
+        model->MakeField<std::vector<std::int32_t>>("bx", "its EncodedEventId's bunch crossing");
+        model->MakeField<std::vector<std::int32_t>>("ev", "its EncodedEventId's event, 0 for the signal");
+        model->MakeField<std::vector<std::int32_t>>("pdg", "SimTrack::type()");
+        model->MakeField<std::vector<std::int32_t>>("proc", "its SimVertex's processType(), -1 when not found");
+        model->MakeField<std::vector<std::int32_t>>("parent_g4", "its SimVertex's parentIndex(), -1 none");
+        model->MakeField<std::vector<std::int32_t>>("gen", "SimTrack::genpartIndex()");
+        model->MakeField<std::vector<std::int32_t>>("n_own_simhits", "its own sim hits in the tracker");
+        for (const std::string& n : m_tpNames)
+          model->MakeField<std::vector<std::int32_t>>(
+              "tp_" + n, "the TrackingParticle listing the SimTrack among its g4Tracks, as a sim track of that source");
+        open(std::move(model), name.c_str(), dir, o);
+      }
+
+      const std::vector<std::string>& tpNames() const { return m_tpNames; }
+
+    private:
+      void fillRows(const Batch& b, std::mutex& fileMutex) override {
+        const auto& m = b.truth->simTrackMap;
+        if (!m.present || m.tp_names != m_tpNames || m.tp_index.size() != m_tpNames.size())
+          throw std::runtime_error(
+              "TraceRNTupleWriter::writeTruth: the source '" + b.truth->source +
+              "' has a SimTrackMap, but this event's tables do not carry it with the same tp_names");
+        bindKey(*m_entry, b);
+        m_entry->BindRawPtr("g4_id", &m.g4_id);
+        m_entry->BindRawPtr("bx", &m.bx);
+        m_entry->BindRawPtr("ev", &m.ev);
+        m_entry->BindRawPtr("pdg", &m.pdg);
+        m_entry->BindRawPtr("proc", &m.proc);
+        m_entry->BindRawPtr("parent_g4", &m.parent_g4);
+        m_entry->BindRawPtr("gen", &m.gen);
+        m_entry->BindRawPtr("n_own_simhits", &m.n_own_simhits);
+        for (std::size_t i = 0; i < m_tpNames.size(); ++i)
+          m_entry->BindRawPtr("tp_" + m_tpNames[i], &m.tp_index[i]);
+        fillOne(fileMutex);
+      }
+
+      const std::vector<std::string> m_tpNames;
+    };
+
     // Hits: one entry per layer of the batch's inputs.
     class HitsTuple : public Tuple {
     public:
@@ -608,6 +658,7 @@ namespace mkfit_fwff {
     struct SourceTuples {
       std::vector<std::unique_ptr<Tuple>> tuples;
       std::map<std::tuple<std::uint32_t, std::uint32_t, std::uint64_t, std::string>, int> passes;
+      bool hasMap = false;  // SimTrackMap_<source> is among the tuples
     };
     std::map<std::string, SourceTuples> sources;
     // The input RNTuples, filled by writeInputs() in its caller, one call at a time (inputMutex).
@@ -924,10 +975,24 @@ namespace mkfit_fwff {
             ("SimTracks_" + n).c_str(), "the sim track's index, also its label", &Batch::simTracks, dir, I.opt));
         st.tuples.push_back(std::make_unique<TruthSeedsTuple>(dir, I.opt, "TruthSeeds_" + n, true));
         st.tuples.push_back(std::make_unique<SimHitStatesTuple>(dir, I.opt, "SimHitStates_" + n));
+        if (truth.simTrackMap.present) {
+          for (const std::string& tn : truth.simTrackMap.tp_names)
+            if (tn.empty() || !std::all_of(tn.begin(), tn.end(), [](char c) {
+                  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9');
+                }))
+              throw std::runtime_error("TraceRNTupleWriter::writeTruth: a tp_names entry of the source '" + n +
+                                       "' is not letters and digits");
+          st.tuples.push_back(
+              std::make_unique<SimTrackMapTuple>(dir, I.opt, "SimTrackMap_" + n, truth.simTrackMap.tp_names));
+          st.hasMap = true;
+        }
         for (auto& t : st.tuples)
           I.fileOrder.push_back(t.get());
         it = I.sources.emplace(n, std::move(st)).first;
       }
+      if (truth.simTrackMap.present && !it->second.hasMap)
+        throw std::runtime_error("TraceRNTupleWriter::writeTruth: the source '" + truth.source +
+                                 "' was created without a SimTrackMap; its first event must carry it");
       b.pass = it->second.passes[{truth.run, truth.lumi, truth.event, b.module}]++;
       tuples = &it->second.tuples;
     } else {
