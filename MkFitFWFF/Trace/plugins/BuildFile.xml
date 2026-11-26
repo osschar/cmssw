@@ -28,6 +28,7 @@
   <use name="SimDataFormats/TrackingAnalysis"/>
   <use name="SimDataFormats/TrackingHit"/>
   <use name="SimDataFormats/Vertex"/>
+  <use name="SimGeneral/TrackingAnalysis"/>
   <use name="SimTracker/TrackAssociation"/>
   <use name="SimTracker/TrackerHitAssociation"/>
   <flags EDM_PLUGIN="1"/>

@@ -298,17 +298,17 @@ namespace mkfit_fwff {
       ROOT::RFieldToken m_tok[9];
     };
 
-    // TruthHits: one entry per layer of the batch's truth.
+    // TruthHits (TruthHits_<source>): one entry per layer of the batch's truth.
     class TruthHitsTuple : public Tuple {
     public:
-      TruthHitsTuple(TDirectory& dir, const TraceRNTupleWriter::Options& o) {
+      TruthHitsTuple(TDirectory& dir, const TraceRNTupleWriter::Options& o, const std::string& name = "TruthHits") {
         auto model = ROOT::RNTupleModel::Create();
         makeKeyFields(*model);
         model->MakeField<std::int32_t>("layer");
         model->MakeField<std::int32_t>("n_hits", "1 + the largest index of a hit in the layer");
         model->MakeField<std::vector<std::int32_t>>("hit", "indices of the hits that have a sim track");
         model->MakeField<std::vector<std::int32_t>>("sim", "their sim track, an index into SimTracks");
-        open(std::move(model), "TruthHits", dir, o);
+        open(std::move(model), name.c_str(), dir, o);
       }
 
     private:
@@ -324,18 +324,31 @@ namespace mkfit_fwff {
       }
     };
 
-    // TruthSeeds: one entry per input seed of the batch's truth.
+    // TruthSeeds: one entry per input seed of the batch's truth. TruthSeeds_<source> (withHits): also the seed's hits.
     class TruthSeedsTuple : public Tuple {
     public:
-      TruthSeedsTuple(TDirectory& dir, const TraceRNTupleWriter::Options& o) {
+      TruthSeedsTuple(TDirectory& dir,
+                      const TraceRNTupleWriter::Options& o,
+                      const std::string& name = "TruthSeeds",
+                      bool withHits = false)
+          : m_withHits(withHits) {
         auto model = ROOT::RNTupleModel::Create();
         makeKeyFields(*model);
         model->MakeField<std::int32_t>("seed", "index in the input seed collection, the mkFit seed's label");
-        model->MakeField<std::int32_t>("sim", "best sim track of the seed-to-TrackingParticle association, -1 none");
-        model->MakeField<float>("sim_frac", "its quality, the shared fraction");
+        if (withHits) {
+          model->MakeField<std::int32_t>("sim", "the seed's sim track as the truth source labels it, -1 none");
+          model->MakeField<float>("sim_frac", "its quality, when the source has one");
+        } else {
+          model->MakeField<std::int32_t>("sim", "best sim track of the seed-to-TrackingParticle association, -1 none");
+          model->MakeField<float>("sim_frac", "its quality, the shared fraction");
+        }
         model->MakeField<std::int32_t>("best_sim", "sim track with most of the seed's clusters, at least 3; -1 none");
         model->MakeField<float>("best_frac", "the fraction of the seed's clusters it has");
-        open(std::move(model), "TruthSeeds", dir, o);
+        if (withHits) {
+          model->MakeField<std::vector<std::int32_t>>("hit_lyr", "mkFit's layer of the input seed's hits, in order");
+          model->MakeField<std::vector<std::int32_t>>("hit_idx", "the hits' cluster indices, as the records use them");
+        }
+        open(std::move(model), name.c_str(), dir, o);
       }
 
     private:
@@ -347,6 +360,57 @@ namespace mkfit_fwff {
           m_entry->BindRawPtr("sim_frac", &t.sim_frac);
           m_entry->BindRawPtr("best_sim", &t.best_sim);
           m_entry->BindRawPtr("best_frac", &t.best_frac);
+          if (m_withHits) {
+            m_entry->BindRawPtr("hit_lyr", &t.hit_lyr);
+            m_entry->BindRawPtr("hit_idx", &t.hit_idx);
+          }
+          fillOne(fileMutex);
+        }
+      }
+
+      const bool m_withHits;
+    };
+
+    // SimHitStates_<source>: one entry per layer of the batch's truth.simHitStates.
+    class SimHitStatesTuple : public Tuple {
+    public:
+      SimHitStatesTuple(TDirectory& dir, const TraceRNTupleWriter::Options& o, const std::string& name) {
+        auto model = ROOT::RNTupleModel::Create();
+        makeKeyFields(*model);
+        model->MakeField<std::int32_t>("layer");
+        model->MakeField<std::int32_t>("n_hits", "1 + the largest index of a hit in the layer");
+        model->MakeField<std::vector<std::int32_t>>("hit", "indices of the hits with a sim hit chosen by the source");
+        model->MakeField<std::vector<std::int32_t>>("sh_idx", "the source's index of that sim hit");
+        for (const char* n : {"x", "y", "z"})
+          model->MakeField<std::vector<float>>(n, "the sim hit's global position (Event::simHitStates_)");
+        for (const char* n : {"px", "py", "pz"})
+          model->MakeField<std::vector<float>>(n, "the sim hit's global momentum at entry (Event::simHitStates_)");
+        model->MakeField<std::vector<std::int8_t>>("ts_q",
+                                                   "charge of the state at the sim hit (Event::simTrackStates_)");
+        model->MakeField<std::vector<std::array<float, 6>>>(
+            "ts_par", "its CCS parameters x, y, z, 1/pT, phi, theta; no covariance (Event::simTrackStates_)");
+        model->MakeField<std::vector<std::int8_t>>(
+            "linked", "1: a digi-sim link of the cluster names the sim hit; 0: none does; -1: not checked");
+        open(std::move(model), name.c_str(), dir, o);
+      }
+
+    private:
+      void fillRows(const Batch& b, std::mutex& fileMutex) override {
+        bindKey(*m_entry, b);
+        for (const auto& l : b.truth->simHitStates) {
+          m_entry->BindRawPtr("layer", &l.layer);
+          m_entry->BindRawPtr("n_hits", &l.n_hits);
+          m_entry->BindRawPtr("hit", &l.hit);
+          m_entry->BindRawPtr("sh_idx", &l.sh_idx);
+          m_entry->BindRawPtr("x", &l.x);
+          m_entry->BindRawPtr("y", &l.y);
+          m_entry->BindRawPtr("z", &l.z);
+          m_entry->BindRawPtr("px", &l.px);
+          m_entry->BindRawPtr("py", &l.py);
+          m_entry->BindRawPtr("pz", &l.pz);
+          m_entry->BindRawPtr("ts_q", &l.ts_q);
+          m_entry->BindRawPtr("ts_par", &l.ts_par);
+          m_entry->BindRawPtr("linked", &l.linked);
           fillOne(fileMutex);
         }
       }
@@ -539,6 +603,13 @@ namespace mkfit_fwff {
     std::vector<std::unique_ptr<Tuple>> truthTuples;
     std::mutex truthMutex;
     std::map<std::tuple<std::uint32_t, std::uint32_t, std::uint64_t, std::string>, int> truthPasses;
+    // The RNTuples of the named truth sources (not "tp"), created with a source's first event; also guarded by
+    // truthMutex.
+    struct SourceTuples {
+      std::vector<std::unique_ptr<Tuple>> tuples;
+      std::map<std::tuple<std::uint32_t, std::uint32_t, std::uint64_t, std::string>, int> passes;
+    };
+    std::map<std::string, SourceTuples> sources;
     // The input RNTuples, filled by writeInputs() in its caller, one call at a time (inputMutex).
     std::vector<std::unique_ptr<Tuple>> inputTuples;
     std::mutex inputMutex;
@@ -822,6 +893,12 @@ namespace mkfit_fwff {
 
   int TraceRNTupleWriter::writeTruth(const TraceTruthTables& truth) {
     Impl& I = *m_impl;
+    const bool named = !truth.source.empty() && truth.source != "tp";
+    if (named && !std::all_of(truth.source.begin(), truth.source.end(), [](char c) {
+          return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9');
+        }))
+      throw std::runtime_error("TraceRNTupleWriter::writeTruth: the truth source '" + truth.source +
+                               "' is not letters and digits");
     std::lock_guard<std::mutex> truthLock(I.truthMutex);
     Batch b;
     {
@@ -830,7 +907,30 @@ namespace mkfit_fwff {
         throw std::runtime_error("TraceRNTupleWriter::writeTruth after close");
       if (I.error)
         std::rethrow_exception(I.error);
-      b.module = truth.module;
+    }
+    b.module = truth.module;
+    std::vector<std::unique_ptr<Tuple>>* tuples = &I.truthTuples;
+    if (named) {
+      auto it = I.sources.find(truth.source);
+      if (it == I.sources.end()) {
+        // A new source: its RNTuples, appended to the file's order. Creating an RNTuple writes into the file.
+        std::lock_guard<std::mutex> fileLock(I.fileMutex);
+        TDirectory::TContext context;
+        TDirectory& dir = *I.file;
+        Impl::SourceTuples st;
+        const std::string& n = truth.source;
+        st.tuples.push_back(std::make_unique<TruthHitsTuple>(dir, I.opt, "TruthHits_" + n));
+        st.tuples.push_back(std::make_unique<TrackTuple>(
+            ("SimTracks_" + n).c_str(), "the sim track's index, also its label", &Batch::simTracks, dir, I.opt));
+        st.tuples.push_back(std::make_unique<TruthSeedsTuple>(dir, I.opt, "TruthSeeds_" + n, true));
+        st.tuples.push_back(std::make_unique<SimHitStatesTuple>(dir, I.opt, "SimHitStates_" + n));
+        for (auto& t : st.tuples)
+          I.fileOrder.push_back(t.get());
+        it = I.sources.emplace(n, std::move(st)).first;
+      }
+      b.pass = it->second.passes[{truth.run, truth.lumi, truth.event, b.module}]++;
+      tuples = &it->second.tuples;
+    } else {
       b.pass = I.truthPasses[{truth.run, truth.lumi, truth.event, b.module}]++;
     }
     b.run = truth.run;
@@ -838,7 +938,7 @@ namespace mkfit_fwff {
     b.event = truth.event;
     b.truth = &truth;
     setRows(b.simTracks, &truth.simTracks);
-    for (auto& t : I.truthTuples)
+    for (auto& t : *tuples)
       t->fill(b, I.fileMutex);
     return b.pass;
   }
@@ -922,6 +1022,7 @@ namespace mkfit_fwff {
       I.fileOrder.clear();
       I.tuples.clear();
       I.truthTuples.clear();
+      I.sources.clear();
       I.inputTuples.clear();
       I.originTuple.reset();
       I.file->Close();

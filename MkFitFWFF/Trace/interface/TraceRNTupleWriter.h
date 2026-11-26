@@ -32,6 +32,25 @@
 //   sim track of the seed-to-TrackingParticle association and its quality),
 //   best_sim and best_frac (the sim track with most of the seed's clusters, at
 //   least 3, and the fraction of the clusters it has).
+//   These three are the truth source "tp" (TraceTruthTables::source empty or
+//   "tp"; cmsRun: MkFitTraceTruth, TrackingParticles and the cluster charge).
+// - the truth of another source (TraceTruthTables::source, a name of letters
+//   and digits other than "tp"; cmsRun: MkFitTraceTruthNtuple writes
+//   "ntuple"), keyed like the records, with passes of its own per source:
+//   "TruthHits_<source>" and "SimTracks_<source>" with the fields of TruthHits
+//   and SimTracks; "TruthSeeds_<source>" with the fields of TruthSeeds and
+//   hit_lyr, hit_idx (the input seed's hits, as mkFit's layer and the
+//   cluster's index, so that a seed can be matched by its hits); and
+//   "SimHitStates_<source>", one entry per layer: layer, n_hits, and per hit
+//   that has a sim hit chosen by the source, in index order: hit, sh_idx (the
+//   source's index of the sim hit), x, y, z, px, py, pz (the sim hit's global
+//   position and momentum at entry: the standalone's Event::simHitStates_),
+//   ts_q and ts_par (charge and CCS parameters of the state at the sim hit:
+//   the standalone's Event::simTrackStates_, with no covariance), linked (1
+//   when a digi-sim link on the hit's cluster names the sim hit under the
+//   decoding of the links' sim hit index that the event's links agree with, 0
+//   when not, -1 when the job did not check). A source's RNTuples are created
+//   with its first event, so a file without the source has none of them.
 //
 // - mkFit's inputs of an event, written by writeInputs() when a module gives
 //   them (TraceInputTables below; cmsRun: MkFitTraceInputs), keyed like the
@@ -89,7 +108,7 @@
 // "pass" counts how often the same (run, lumi, event, module) was written in
 // this job, from 0: a looper re-running an event gives passes 0, 1, ... The
 // truth tables count their passes on their own, in the order of the
-// writeTruth() calls, and so do the input tables (writeInputs()) and the hit
+// writeTruth() calls and per truth source, and so do the input tables (writeInputs()) and the hit
 // origin (writeHitOrigin()).
 //
 // Writing. With Options::threads > 0, write() takes the store's seven record
@@ -129,6 +148,9 @@ namespace mkfit_fwff {
     unsigned int run = 0, lumi = 0;
     unsigned long long event = 0;
     std::string module;  // label of the MkFitProducer the truth is for
+    // The truth source: empty or "tp" writes TruthHits, SimTracks and TruthSeeds; another name (letters and digits)
+    // writes TruthHits_<source>, SimTracks_<source>, TruthSeeds_<source> and SimHitStates_<source>.
+    std::string source;
 
     struct LayerHits {
       int layer = -1;
@@ -147,8 +169,23 @@ namespace mkfit_fwff {
       float sim_frac = 0;
       int best_sim = -1;  // the sim track with most of the seed's clusters (at least 3), -1 none
       float best_frac = 0;
+      // The input seed's hits (mkFit's layer, the cluster's index); written for a named source only.
+      std::vector<std::int32_t> hit_lyr, hit_idx;
     };
     std::vector<SeedSim> seeds;
+
+    // The sim hit a named source chose for each hit (SimHitStates_<source>); not written for "tp".
+    struct LayerSimHitStates {
+      int layer = -1;
+      int n_hits = 0;                    // 1 + the largest index of a hit in the layer
+      std::vector<std::int32_t> hit;     // indices of the hits with a chosen sim hit
+      std::vector<std::int32_t> sh_idx;  // the source's index of that sim hit
+      std::vector<float> x, y, z, px, py, pz;
+      std::vector<std::int8_t> ts_q;
+      std::vector<std::array<float, 6>> ts_par;
+      std::vector<std::int8_t> linked;
+    };
+    std::vector<LayerSimHitStates> simHitStates;
   };
 
   // mkFit's inputs of one traced event, for TraceRNTupleWriter::writeInputs(); the RNTuples Hits, Inputs and Geometry
@@ -249,7 +286,9 @@ namespace mkfit_fwff {
     // (above); info is used only during the call.
     int write(const mkfit::TraceStore& store, const mkfit::TraceEventInfo& info);
 
-    // Appends the truth tables of one event, in the caller. Returns their pass. Thread safe.
+    // Appends the truth tables of one event, in the caller, into the RNTuples of truth.source (created with the
+    // source's first event). Returns their pass. Thread safe. Throws std::runtime_error for a source name that is not
+    // letters and digits.
     int writeTruth(const TraceTruthTables& truth);
 
     // Appends the input tables of one event, in the caller, and the geometry when its md5 is new to the file.
